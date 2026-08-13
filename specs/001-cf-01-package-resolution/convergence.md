@@ -5,66 +5,108 @@ Date: 2026-08-13
 
 ## Consistency result
 
-The implementation remains inside the approved CF-01 scope: two exercised Rust crates, transport-neutral resolution semantics, bounded archive parsing, content-addressed cache, deterministic commandF lockfile, public/local package acquisition, and no CF-02 canonical indexing or later feature work.
-
-The implementation advanced beyond the original plan in controlled ways:
-
-- public FHIR registry acquisition is now the CLI default;
-- local mirror acquisition remains available through `--source-dir`;
-- registry fallback behavior is grounded in the pinned FHIR package loader used by SUSHI;
-- source provenance is recorded per acquired archive;
-- a real registry smoke test resolves `hl7.fhir.r4.core@4.0.1` and verifies its cache offline;
-- cache verification validates SHA-256 syntax before cache lookup;
-- local-mirror provenance is logical rather than machine-path-specific;
-- root resolution is order-independent for equivalent exact/wildcard constraint sets;
-- CLI integration tests now prove exit behavior: success `0`, runtime/verification failure `1`, and Clap usage error `2`.
-
-No product requirement expanded into FHIR validation, snapshot generation, canonical indexing, structural diff, mapping execution, or AI runtime.
+The implementation remains inside CF-01 scope: two exercised Rust crates, deterministic FHIR package resolution, bounded public/local acquisition, bounded archive parsing, content-addressed caching, deterministic commandF locking, and offline verification. No CF-02 canonical indexing, structural diff, FHIR resource validation, mapping execution, or AI runtime has been introduced.
 
 ## Plan coverage reconciliation
 
-The commandF plan set now preserves prior discovery rather than relying on conversation memory:
+Before continuing implementation, prior commandF discovery was converted from conversation memory into an explicit plan set:
 
-- `docs/COMMAND_F_PLAN_INDEX.md` defines the plan layers;
-- `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md` retains standards, open-source candidates, product/tool inspirations, benchmarks, runtime candidates, and sixteen research tracks;
-- `docs/COMMAND_F_GAP_LEDGER_2026-08-13.md` preserves the 35 gap hypotheses and commandF response map;
-- `docs/PROVENANCE_AND_DONOR_POLICY.md` defines adoption/pinning/permission gates;
-- MLIR, GoFSH, and Open Concept Lab are explicitly retained as coverage corrections in the Plan Index.
+- `docs/COMMAND_F_MASTER_ARCHITECTURE_V2.md` — execution authority;
+- `docs/COMMAND_F_PLAN_INDEX.md` — plan-set index and no-silent-drop rule;
+- `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md` — retained standards, open-source candidates, tools, product inspirations, benchmarks, runtime candidates, and sixteen research tracks;
+- `docs/COMMAND_F_GAP_LEDGER_2026-08-13.md` — 35 interoperability gap hypotheses and response map;
+- `docs/PROVENANCE_AND_DONOR_POLICY.md` — pin/license/permission/adoption controls;
+- slice-specific manifests under `donors/`.
 
-This documentation expansion does not enlarge CF-01 runtime scope.
+The coverage set retains the previously discussed FHIR/openEHR/OMOP/HL7v2/CDA/DICOM ecosystems; independent validators and servers; Whistle, FHIRconnect, openFHIR, Eos, OMOCL, Microsoft FHIR Converter, FML/StructureMap and FHIRPath mapping prior art; terminology systems; query/analytics tooling; privacy/identity/policy tooling; edge/gateway/runtime candidates; provenance/supply-chain tooling; context/search systems; fuzz/differential testing; software-quality/review donors; and product inspirations including Greptile, Cubic, Graphite, Augment, Qodo, and SonarQube.
 
-## Evidence checkpoint
+MLIR, GoFSH, and Open Concept Lab are explicitly retained in the Plan Index as audit corrections. A retained candidate is not automatically adopted; exact provenance and rights gates still apply.
 
-GitHub Actions run `31717420374` passed format, Clippy with warnings denied, tests, real public FHIR package resolution, and offline cache verification.
+## Verified implementation state
 
-GitHub Actions run `31717736017` additionally exported the exact generated `Cargo.lock` artifact successfully.
+CF-01 now includes:
 
-That exact lockfile was committed in `147f7f61e26e638c4a94a6b169447275d16fd2f8`; its Git blob SHA is `0a82d71a67daf342c573b49718d03a4bbb1c053b`.
+- public FHIR registry acquisition by default with secondary-registry fallback;
+- local mirror acquisition through `--source-dir`;
+- exact and FHIR `major.minor.x` latest-patch selection semantics;
+- transitive dependency resolution and fail-closed concrete-version conflicts;
+- deterministic `commandf.lock`;
+- exact archive SHA-256 cache identity and offline verification;
+- exact generated `Cargo.lock` committed from CI-exported bytes;
+- CLI exit coverage for success `0`, runtime/verification failure `1`, and usage error `2`;
+- real public-registry resolution of `hl7.fhir.r4.core@4.0.1` followed by offline cache verification;
+- immutable CF-01 donor provenance;
+- bounded compressed HTTP bodies and bounded decompressed TAR traversal;
+- fail-closed malformed registry-version handling with secondary endpoint fallback;
+- temporary-path cache writes followed by rename to the final digest path.
 
-GitHub Actions run `31725045080` passed Format, Clippy, all tests including dedicated CLI exit-behavior integration tests, the real FHIR registry smoke, offline cache verification, and the temporary lockfile export step on head `fec2215b2fbb9112220698963c70b73413fe3c7c`.
+## Current exact CI evidence
 
-## Closed readiness items
+Commit `aa58fd7ffae95aa0b18239a85e17cbf09658e6af` changed CI to require the committed dependency graph and removed the temporary lockfile export step.
 
-1. Generated `Cargo.lock` is committed byte-for-byte from the CI-exported artifact.
-2. Bounded public FHIR registry acquisition is implemented.
-3. A pinned real FHIR package resolves end-to-end and verifies offline from cache.
-4. Dedicated CLI exit behavior is covered by integration tests.
-5. Spec/plan/tasks implementation consistency has been reviewed and this convergence record updated.
-6. CF-01 donor provenance is recorded for the package-resolution implementation sources/patterns used by this slice.
+GitHub Actions run `31728015491` passed on that exact head:
 
-## Remaining readiness blockers
+- Format — PASS;
+- `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` — PASS;
+- `cargo test --locked --workspace --all-features` — PASS;
+- real FHIR registry resolve using `cargo run --locked` — PASS;
+- offline cache verify using `cargo run --locked` — PASS.
 
-1. Switch Cargo CI gates and smoke commands to `--locked` and remove the temporary `Cargo.lock` export step. Multiple connector writes to `.github/workflows/ci.yml` were blocked before execution; this remains an explicit unresolved gate, not an assumed success.
-2. Retry CodeRabbit after its rate limit permits a fresh review.
-3. Run Qodo when Draft feedback is available or when the PR is otherwise ready for review.
-4. Re-run final convergence against the exact readiness candidate after the locked-CI change and reviewer findings are resolved.
+The committed workspace lockfile originated from the successful CI artifact and was added in `147f7f61e26e638c4a94a6b169447275d16fd2f8`; its Git blob SHA is `0a82d71a67daf342c573b49718d03a4bbb1c053b`.
 
-## Explicitly deferred quality items
+## CodeRabbit review disposition
 
-- atomic cache temp-write plus rename hardening;
-- moving the external registry smoke to a different cadence if per-PR registry availability proves flaky;
+CodeRabbit produced six Major findings and one Minor finding on the pre-hardening review state.
+
+### Fixed
+
+1. **CI did not enforce `Cargo.lock`.**
+   - Fixed in `aa58fd7ffae95aa0b18239a85e17cbf09658e6af`.
+   - Exact locked CI run: `31728015491`, PASS.
+
+2. **Archive traversal was not bounded after decompression.**
+   - Fixed in `8625a54aa2175bf525c63d7c3eed896e67a7f3e4` with formatting follow-up `0994b7c1a9ec85c08a219b449977fc57a6c26824`.
+   - Total decompressed TAR bytes and entry count are bounded; both limits have tests.
+
+3. **Cache object final path could be exposed during a direct write.**
+   - Fixed in `1afe6dcbcc7a8a1e2cb243fbb020cad89ace12c6` with formatting follow-up `24bf4443b8dc2d1f47b9b78f918da8ab42558019`.
+   - The final digest path is published by rename only after a temporary write completes.
+   - Rare orphan temporary files after a lost publication race/error remain a cleanup concern; they are not authoritative cache objects.
+
+4. **Malformed registry version keys were silently discarded.**
+   - Fixed and refined through `bcc6a2a1049fab8f0e45422e26e24b7372be63ec` and `726e7943a3a10e20b3e4a6022b5ece56544d4100`.
+   - Invalid metadata invalidates that endpoint response and preserves secondary-registry fallback.
+
+5. **Spec Kit donor used a mutable tag.**
+   - Fixed in `d99d027fe224ca88784394d54866a27010641882`.
+   - `v0.16.2` is supplementary metadata; immutable donor ref is `4871b485f97c7fa452ec58eba325d87536c55c34`.
+
+6. **README/spec showed unavailable `pkg add`.**
+   - Fixed in `33dba294bc710980d37ed50b04b16c2b49076834` and `8b4636bf722433a91b8f4313d2d119364fcb75f5`.
+   - User flow now uses `commandf pkg resolve`.
+
+### Not adopted: resolver range-intersection finding
+
+CodeRabbit suggested treating exact `1.2.3` plus `1.2.x` as compatible even when `1.2.x` would otherwise select `1.2.4`.
+
+CF-01 intentionally does not model `major.minor.x` as a generic semver range. The FHIR package specification states that `x` means the resolver should accept the package with the highest found patch number. The CF-01 specification now records that latest-patch-selector semantic explicitly. Therefore a lower exact request that differs from the concrete wildcard-selected version is an intentional fail-closed conflict in this slice.
+
+A future generalized constraint-intersection solver is possible, but it requires an explicit spec amendment rather than an implicit behavior change during review.
+
+## Remaining readiness items
+
+1. Reconcile/resolve CodeRabbit review threads according to the dispositions above.
+2. Determine Qodo status. Qodo has been requested, but no Qodo review result has yet been treated as evidence.
+3. Re-run final convergence if any reviewer-driven code change occurs after the current locked green head.
+4. Keep the PR Draft until the review gate is explicitly closed.
+
+## Explicit deferrals
+
+- cleanup of rare orphan cache temporary files;
+- deterministic injected-filesystem concurrency stress testing;
 - private/authenticated registries;
-- broader semver syntax;
-- CRMI release-manifest interoperability.
+- broader semver/range syntax or a generalized constraint solver;
+- CRMI release-manifest interoperability;
+- any CF-02 or later feature.
 
-These deferrals do not authorize silent behavior changes. Any later adoption requires a new slice or explicit CF-01 amendment.
+These deferrals do not authorize silent behavior changes. Later adoption requires a new slice or explicit CF-01 amendment.
