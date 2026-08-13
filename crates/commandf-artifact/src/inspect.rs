@@ -89,9 +89,7 @@ pub fn inspect_package(
             return Err(ArtifactError::ResourceTooLarge(filename.to_owned()));
         }
         let mut bytes = Vec::new();
-        entry
-            .take(MAX_RESOURCE_BYTES + 1)
-            .read_to_end(&mut bytes)?;
+        entry.take(MAX_RESOURCE_BYTES + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > MAX_RESOURCE_BYTES {
             return Err(ArtifactError::ResourceTooLarge(filename.to_owned()));
         }
