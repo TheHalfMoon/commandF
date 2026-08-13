@@ -13,7 +13,7 @@ A developer can declare one or more FHIR packages, resolve all transitive depend
 Target flow:
 
 ```bash
-commandf pkg add hl7.fhir.us.core@6.1.0
+commandf pkg resolve hl7.fhir.us.core@6.1.0
 commandf pkg verify
 ```
 
@@ -31,7 +31,8 @@ commandf pkg verify
 10. Validate archive package identity against requested/resolved identity before accepting it.
 11. Read package metadata from `package/package.json` without extracting the archive into the worktree.
 12. Keep acquisition behind a `PackageSource` abstraction so resolution logic is testable without network access.
-13. Initial implementation supports exact versions and the FHIR package ecosystem's common `major.minor.x` patch wildcard; any wider version syntax must be added by explicit spec amendment.
+13. Initial implementation supports exact versions and the FHIR package ecosystem's `major.minor.x` patch wildcard; any wider version syntax must be added by explicit spec amendment.
+14. In CF-01, `major.minor.x` is a latest-patch selector: it resolves to the highest stable available patch for that major/minor, matching the FHIR package specification. It is not treated as a generic semver range that may be narrowed by a separate lower exact request after selection.
 
 ## Success Criteria
 
@@ -47,6 +48,7 @@ commandf pkg verify
 - duplicate root request;
 - transitive dependency requested by multiple roots;
 - same package requested at incompatible versions;
+- exact request that differs from the concrete highest-patch result selected by `major.minor.x`;
 - missing version;
 - malformed package name;
 - unsupported local/file/alias dependency syntax;
@@ -54,7 +56,9 @@ commandf pkg verify
 - archive identity mismatch;
 - corrupt cached archive;
 - registry metadata identity mismatch;
-- prerelease versions when an `x` wildcard is used.
+- malformed registry version metadata;
+- prerelease versions when an `x` wildcard is used;
+- archives with excessive decompressed size or entry count.
 
 ## Non-Goals
 
@@ -72,9 +76,12 @@ commandf pkg verify
 
 - Registry metadata and archives are untrusted input.
 - Do not extract package archives merely to read `package/package.json`.
+- Bound compressed acquisition and decompressed archive traversal.
+- Reject malformed registry version metadata rather than silently selecting from a partial version set.
 - A package is not trusted solely because a registry returned it; archive identity and digest are recorded.
 - Resolver conflicts fail closed.
 - Cache verification is content-based, not path/name-based.
+- Cache objects are published through a completed temporary write before the final digest path becomes visible.
 
 ## Evidence Produced
 
