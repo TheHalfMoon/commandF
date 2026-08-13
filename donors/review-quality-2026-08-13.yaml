@@ -1,0 +1,178 @@
+schema_version: 1
+as_of: 2026-08-13
+status: candidate
+purpose: software-quality, review, compatibility, registry, testing, context, and evidence donors for commandF
+policy: docs/PROVENANCE_AND_DONOR_POLICY.md
+
+# Candidate means researched, not adopted.
+# Every candidate MUST be pinned to an immutable commit and source path before COPY/PORT/IMPORT.
+# Product behavior and commercial terms may differ from OSS repositories; only the pinned source governs code adoption.
+
+donors:
+  - id: openrewrite
+    repository: https://github.com/openrewrite/rewrite
+    license: Apache-2.0
+    mode: [STUDY, PORT]
+    fills: [safe-rewrite-recipes, typed-transformations, recipe-composition, idempotent-autofix]
+    adopt_for: commandF Recipe Engine architecture and safe-fix invariants
+    do_not_adopt_as: healthcare semantic model
+    ref: UNPINNED
+    status: candidate
+
+  - id: pr-agent
+    repository: https://github.com/The-PR-Agent/pr-agent
+    license: MIT
+    mode: [COPY, PORT, STUDY]
+    fills: [git-provider-plumbing, pr-review-ux, patch-compression, dynamic-context, commands, inline-comments]
+    adopt_for: GitHub/GitLab/Bitbucket/Azure/Gitea review integration patterns
+    do_not_adopt_as: semantic-review-authority
+    ref: UNPINNED
+    status: candidate
+
+  - id: buf
+    repository: https://github.com/bufbuild/buf
+    license: Apache-2.0
+    mode: [STUDY, PORT]
+    fills: [lint-workflow, breaking-change-detection, module-model, lockfile, registry-governance]
+    adopt_for: commandf lint/breaking/build/registry UX and compatibility architecture
+    do_not_adopt_as: healthcare schema engine
+    ref: UNPINNED
+    status: candidate
+
+  - id: semgrep
+    repository: https://github.com/semgrep/semgrep
+    license: LGPL-2.1
+    mode: [STUDY, DEPEND, ORACLE]
+    fills: [rule-engine-patterns, static-analysis-workflows, triage, remediation]
+    adopt_for: rule/workflow architecture patterns; prefer process boundary or clean implementation
+    ref: UNPINNED
+    status: candidate
+
+  - id: schemathesis
+    repository: https://github.com/schemathesis/schemathesis
+    license: MIT
+    mode: [DEPEND, PORT, ORACLE]
+    fills: [openapi-fuzzing, stateful-api-testing, dependency-inference, failure-minimization]
+    adopt_for: FHIR server compatibility lab and adversarial REST testing
+    ref: UNPINNED
+    status: candidate
+
+  - id: cargo-fuzz
+    repository: https://github.com/rust-fuzz/cargo-fuzz
+    license: VERIFY_DUAL_AT_PIN
+    verified_license_path: LICENSE-APACHE
+    mode: [DEPEND]
+    fills: [rust-parser-fuzzing, csir-fuzzing, minimization, coverage]
+    adopt_for: parser/compiler/serializer fuzz targets
+    ref: UNPINNED
+    status: candidate
+
+  - id: oras
+    repository: https://github.com/oras-project/oras
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [oci-artifact-distribution, registry-client, content-addressed-packages]
+    adopt_for: mapping/profile/ruleset/benchmark package distribution
+    ref: UNPINNED
+    status: candidate
+
+  - id: cosign
+    repository: https://github.com/sigstore/cosign
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [artifact-signing, signature-verification, in-toto-attestations, transparency]
+    adopt_for: signed mapping packages and Transformation Certificates
+    ref: UNPINNED
+    status: candidate
+
+  - id: openlineage
+    repository: https://github.com/OpenLineage/OpenLineage
+    license: Apache-2.0
+    mode: [DEPEND, EXPORT, STUDY]
+    fills: [run-lineage, job-lineage, dataset-lineage, extensible-facets]
+    adopt_for: external lineage interoperability; commandF retains richer semantic provenance internally
+    ref: UNPINNED
+    status: candidate
+
+  - id: oxigraph
+    repository: https://github.com/oxigraph/oxigraph
+    license: VERIFY_DUAL_AT_PIN
+    verified_license_path: LICENSE-APACHE
+    mode: [DEPEND, PROTOTYPE]
+    fills: [rdf-store, sparql, embedded-graph]
+    adopt_for: Context Graph prototype and exact relationship queries
+    ref: UNPINNED
+    status: candidate
+
+  - id: tantivy
+    repository: https://github.com/quickwit-oss/tantivy
+    license: MIT
+    mode: [DEPEND]
+    fills: [embedded-lexical-search, indexing]
+    adopt_for: local/private full-text search over standards, mappings, evidence, and documentation
+    ref: UNPINNED
+    status: candidate
+
+  - id: qdrant
+    repository: https://github.com/qdrant/qdrant
+    license: Apache-2.0
+    mode: [DEPEND, OPTIONAL]
+    fills: [semantic-retrieval, hybrid-vector-search, metadata-filtering]
+    adopt_for: semantic retrieval side-index, never authoritative graph truth
+    ref: UNPINNED
+    status: candidate
+
+reference_systems:
+  - id: greptile
+    source: https://www.greptile.com
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [context-graph, blast-radius, scoped-rules, confidence, diagrams, learning]
+
+  - id: cubic
+    source: https://www.cubic.dev
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [deep-review, incremental-review, custom-agents, background-fix, local-preflight, wiki]
+
+  - id: graphite
+    source: https://graphite.com
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [stacks, merge-queue, inbox, action-cards, metrics]
+
+  - id: augment
+    source: https://www.augmentcode.com
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [structured-context-engine, triage-author-review-verify, risk-analysis, test-planning]
+
+  - id: qodo
+    source: https://www.qodo.ai
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [multi-agent-review, judge-agent, requirement-gaps, rule-mining, cross-repo-conflicts, remediation]
+
+  - id: sonarqube
+    source: https://www.sonarsource.com/products/sonarqube/
+    mode: [PRODUCT_INSPIRATION]
+    ideas: [quality-gates, clean-new-change, severity, hotspots, policy-profiles]
+
+  - id: codeql-sarif
+    source: https://docs.github.com/en/code-security/code-scanning
+    mode: [INTERCHANGE_INSPIRATION]
+    ideas: [custom-rules, path-findings, sarif-export, github-native-annotations]
+
+decisions:
+  authoritative_truth:
+    - commandF typed models and provenance
+    - deterministic validators and compatibility checkers
+    - pinned standards/packages/terminology
+  retrieval_only:
+    - vector indexes
+    - generated summaries
+  ai_role:
+    - propose
+    - explain
+    - triage
+    - generate candidate tests and fixes
+  ai_must_not_be:
+    - sole validator
+    - terminology authority
+    - silent mutation authority
+    - source of unproven clinical facts
