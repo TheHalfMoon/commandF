@@ -1,0 +1,13 @@
+[package]
+name = "commandf-csir"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Typed clinical semantic intermediate representation for commandF"
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
