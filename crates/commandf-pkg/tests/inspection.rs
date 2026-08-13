@@ -46,7 +46,10 @@ fn rebuilds_inventory_from_resources_and_ignores_derived_index() {
         .collect::<Vec<_>>();
     assert_eq!(names, vec!["A.json", "B.json"]);
     assert_eq!(report.archive_sha256, PackageCache::digest(&bytes));
-    assert!(report.resources.iter().all(|resource| resource.sha256.len() == 64));
+    assert!(report
+        .resources
+        .iter()
+        .all(|resource| resource.sha256.len() == 64));
 }
 
 #[test]
