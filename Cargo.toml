@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/commandf-pkg",
+  "crates/commandf-artifact",
   "crates/commandf-cli",
 ]
 resolver = "2"
