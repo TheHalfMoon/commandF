@@ -6,7 +6,11 @@ use clap::{Parser, Subcommand};
 use commandf_pkg::{LocalMirrorSource, Lockfile, PackageCache, PackageRequest, Resolver};
 
 #[derive(Parser)]
-#[command(name = "commandf", version, about = "Healthcare interoperability change intelligence")]
+#[command(
+    name = "commandf",
+    version,
+    about = "Healthcare interoperability change intelligence"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -63,7 +67,11 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 let cache = PackageCache::new(cache);
                 let lockfile = Resolver::new(&source, &cache).resolve(vec![request])?;
                 fs::write(&lock, lockfile.to_bytes()?)?;
-                println!("wrote {} packages to {}", lockfile.packages.len(), lock.display());
+                println!(
+                    "wrote {} packages to {}",
+                    lockfile.packages.len(),
+                    lock.display()
+                );
             }
             PkgCommand::Verify { cache, lock } => {
                 let lockfile = Lockfile::from_slice(&fs::read(&lock)?)?;
