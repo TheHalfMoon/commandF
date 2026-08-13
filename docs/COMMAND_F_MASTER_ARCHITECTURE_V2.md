@@ -12,9 +12,9 @@ The long-term vision remains broader: healthcare interoperability change intelli
 
 The superseded bootstrap treated a future semantic compiler architecture as the immediate implementation plan. V2 separates the product critical path from research/future semantics.
 
-The first product does **not** require a universal clinical semantic IR, mapping execution engine, terminology server, EMPI, custom registry, or certification authority.
+The first product does **not** require a universal clinical semantic IR, mapping execution engine, terminology server, EMPI, custom registry, certification authority, or agent runtime.
 
-## Four planes
+## Four product planes
 
 ### 0. Artifact plane — build first
 
@@ -59,6 +59,24 @@ CodeRabbit and Qodo are build-time independent reviewers for commandF itself. Gr
 
 A future CSIR is **not deleted from the vision**, but it is not a V1 dependency. If justified, it must emerge from at least two implemented dialects and use dialect/conversion concepts closer to MLIR than a single universal LLVM-style IR.
 
+## Future agent plane — optional and replaceable
+
+The AI/agent layer is not part of the artifact critical path. When introduced, it follows a plugin/capability-seam architecture influenced by DeepSeek Harness rather than embedding one privileged model loop into commandF core.
+
+Required properties:
+
+- model adapters are replaceable;
+- every model-facing tool has typed input and canonical validated output contracts;
+- tool execution passes through explicit policy/guard stages;
+- per-agent capability restrictions are possible;
+- sandbox and approval policy are separate capabilities;
+- durable agent/session facts are append-only and replayable;
+- **model-visible means logged**: anything sent to a model must be reconstructable from durable execution evidence;
+- plugin registrations/effects must be reversible or isolated;
+- model output is never semantic authority.
+
+DeepSeek Harness is pinned as a developer-preview donor for selected patterns only. commandF does not make the Rust artifact/diff/check core depend on its TypeScript runtime.
+
 ## What commandF owns
 
 The strongest defensible assets are:
@@ -82,6 +100,8 @@ The strongest defensible assets are:
 - existing MPI/EMPI systems rather than patient matching
 - SARIF for findings interchange
 - OpenLineage/in-toto/SLSA/Sigstore/ORAS for mature lineage/attestation/signing plumbing where later required
+- GitHub Spec Kit for spec-driven development workflow
+- DeepSeek Harness patterns for future plugin/tool/session architecture only
 
 ## Oracle rule
 
@@ -94,6 +114,10 @@ The JVM oracle boundary is permanent and intentional.
 The primary review product analyzes conformance metadata, not patient data.
 
 Any future source profiler that touches instances must be a separate on-premises trust boundary and emit aggregate/statistical evidence only by default. Synthetic/public fixtures are mandatory in repository CI.
+
+## Spec-driven execution rule
+
+Each CF slice is a Spec Kit-style feature unit with `spec.md`, `plan.md`, and `tasks.md`, followed by consistency analysis, implementation, deterministic evidence, and a convergence pass. The specification states **what/why**; the plan states **how**; tasks are independently verifiable work items. Feature architecture must not be smuggled into the constitution or treated as completed merely because documentation exists.
 
 ## First execution stack
 
@@ -136,13 +160,15 @@ Every PR must satisfy:
 
 CF-01 owns only FHIR package acquisition, dependency resolution, content-addressed caching, and deterministic locking.
 
-It does not validate FHIR resources, build snapshots, index canonicals, diff artifacts, or execute mappings.
+It does not validate FHIR resources, build snapshots, index canonicals, diff artifacts, execute mappings, or run agents.
 
 ## References that constrain V2
 
 - HL7 FHIR NPM Packages: https://hl7.org/fhir/packages.html
-- HL7 CRMI STU1: https://hl7.org/fhir/uv/crmi/STU1/
+- HL7 CRMI: https://hl7.org/fhir/uv/crmi/
 - FHIR Shorthand / SUSHI: https://build.fhir.org/ig/HL7/fhir-shorthand/
 - SQL-on-FHIR v2: https://sql-on-fhir.org/ig/2.0.0/
+- GitHub Spec Kit: https://github.com/github/spec-kit
+- DeepSeek Harness: https://github.com/deepseek-ai/deepseek-harness
 
 Research hypotheses remain separate from product guarantees.
