@@ -4,10 +4,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use commandf_artifact::inspect_package;
 use commandf_pkg::{
-    FhirRegistrySource, LocalMirrorSource, Lockfile, PackageCache, PackageRequest, Resolver,
-    VersionConstraint,
+    inspect_package, FhirRegistrySource, LocalMirrorSource, Lockfile, PackageCache, PackageRequest,
+    Resolver, VersionConstraint,
 };
 
 #[derive(Parser)]
