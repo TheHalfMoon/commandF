@@ -1,0 +1,109 @@
+schema_version: 1
+as_of: 2026-08-13
+status: candidate
+purpose: big-tech healthcare and interoperability donor/reference pass
+policy: docs/PROVENANCE_AND_DONOR_POLICY.md
+
+donors:
+  - id: google-healthcare-data-harmonization
+    repository: https://github.com/GoogleCloudPlatform/healthcare-data-harmonization
+    license: Apache-2.0
+    mode: [PORT, IMPORT, COPY, ORACLE]
+    fills: [mapping-ir, transpiler, runtime, plugins, reconciliation, lineage-patterns, mapping-lsp]
+    ref: UNPINNED
+    status: candidate
+
+  - id: microsoft-fhir-converter
+    repository: https://github.com/microsoft/FHIR-Converter
+    license: MIT
+    mode: [IMPORT, PORT, ORACLE]
+    fills: [hl7v2-fhir, ccda-fhir, json-fhir, stu3-r4, liquid-mappings]
+    ref: UNPINNED
+    status: candidate
+
+  - id: microsoft-fhir-server
+    repository: https://github.com/microsoft/fhir-server
+    license: MIT
+    mode: [ORACLE, TEST_FIXTURE, STUDY]
+    fills: [fhir-server-behavior, search, bulk, persistence, convert-data, compatibility-testing]
+    ref: UNPINNED
+    status: candidate
+
+  - id: aws-mcp-healthlake
+    repository: https://github.com/awslabs/mcp
+    license: Apache-2.0
+    mode: [PORT, STUDY, ORACLE]
+    fills: [healthlake-agent-tools, fhir-search-tools, read-only-mode, provider-adapter-pattern]
+    ref: UNPINNED
+    status: candidate
+
+  - id: databricks-dbignite
+    repository: https://github.com/databricks-industry-solutions/dbignite
+    license: VERIFY_AT_PIN
+    mode: [STUDY, ORACLE, PORT]
+    fills: [fhir-r4-r5-schemas, ndjson, analytics, fhir-writing, omop]
+    ref: UNPINNED
+    status: candidate
+
+  - id: databricks-smolder
+    repository: https://github.com/databricks-industry-solutions/smolder
+    license: VERIFY_AT_PIN
+    mode: [STUDY, ORACLE]
+    fills: [hl7v2-spark-datasource, high-volume-hl7v2]
+    ref: UNPINNED
+    status: candidate
+
+  - id: databricks-x12-ember
+    repository: https://github.com/databricks-industry-solutions/x12-edi-parser
+    license: DATABRICKS_LICENSE_VERIFY_AT_PIN
+    mode: [STUDY]
+    fills: [x12-837i, x12-837p, x12-834, x12-835, arrow-large-file-patterns]
+    ref: UNPINNED
+    status: candidate
+
+references:
+  - id: intersystems-sda-dtl-bpl-fhir-sql
+    source: https://docs.intersystems.com/irisforhealthlatest/
+    mode: [PRODUCT_ARCHITECTURE_INSPIRATION]
+    ideas: [intermediate-clinical-format, mapping-vs-workflow-separation, virtual-sql-projection, source-profiling]
+
+  - id: deepmind-verifiable-data-audit
+    source: https://deepmind.google/blog/article/trust-confidence-verifiable-data-audit
+    mode: [ARCHITECTURE_INSPIRATION]
+    ideas: [append-only-audit, purpose-of-use, merkle-integrity, continuous-verification, decentralized-audit]
+
+  - id: apple-healthkit-fhir
+    source: https://developer.apple.com/documentation/healthkit/hkfhirresource
+    mode: [CONTRACT_INSPIRATION]
+    ideas: [source-url, exact-fhir-version, raw-payload, source-bound-identity]
+
+  - id: oracle-health-interoperability
+    source: https://www.oracle.com/health/interoperability/
+    mode: [PRODUCT_ARCHITECTURE_INSPIRATION]
+    ideas: [empi, record-location, endpoint-registry, qhin-hie, bulk-smart, vendor-lifecycle]
+
+  - id: ibm-app-connect-healthcare
+    source: https://www.ibm.com/docs/en/app-connect/
+    mode: [PRODUCT_ARCHITECTURE_INSPIRATION]
+    ideas: [message-flows, mllp, duplicate-detection, fhir-validation, dicom-routing]
+
+  - id: nvidia-monai-deploy
+    source: https://monai.io/
+    mode: [PRODUCT_ARCHITECTURE_INSPIRATION]
+    ideas: [application-package, informatics-gateway, workflow-manager, pluggable-execution, certification-lifecycle]
+
+  - id: openai-healthbench
+    source: https://openai.com/index/healthbench/
+    mode: [EVALUATION_INSPIRATION]
+    ideas: [expert-rubrics, adversarial-evals, reliability, worst-case-evaluation]
+
+  - id: anthropic-claude-science
+    source: https://www.anthropic.com/news/claude-science-ai-workbench
+    mode: [WORKBENCH_INSPIRATION]
+    ideas: [tool-integrated-workbench, auditable-artifacts, scientific-workflow]
+
+decisions:
+  - all_code_adoption_requires_immutable_commit_and_source_path
+  - proprietary_product_behavior_is_inspiration_not_source_code
+  - research_claims_live_under_research_not_product_requirements
+  - ai_is_never_semantic_authority
