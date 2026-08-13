@@ -9,8 +9,8 @@ use crate::{PackageArchive, PackageError, PackageName, PackageSource};
 
 const PRIMARY: &str = "https://packages.fhir.org";
 const SECONDARY: &str = "https://packages2.fhir.org/packages";
-const METADATA_LIMIT: usize = 4 * 1024 * 1024;
-const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
+const METADATA_LIMIT: u64 = 4 * 1024 * 1024;
+const ARCHIVE_LIMIT: u64 = 128 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Deserialize)]
