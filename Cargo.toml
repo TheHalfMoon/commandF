@@ -2,6 +2,10 @@
 members = [
   "crates/commandf-csir",
   "crates/commandf-evidence",
+  "crates/commandf-findings",
+  "crates/commandf-package",
+  "crates/commandf-oracle",
+  "crates/commandf-profiler",
 ]
 resolver = "2"
 
