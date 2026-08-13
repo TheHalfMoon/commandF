@@ -9,7 +9,7 @@ commandF starts with a CI-grade FHIR conformance package and breaking-change wor
 ## First slice: CF-01
 
 ```bash
-commandf pkg add hl7.fhir.us.core@6.1.0
+commandf pkg resolve hl7.fhir.us.core@6.1.0
 commandf pkg verify
 ```
 
