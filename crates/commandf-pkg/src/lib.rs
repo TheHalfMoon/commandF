@@ -11,4 +11,4 @@ pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
 pub use resolver::Resolver;
-pub use source::{LocalMirrorSource, PackageSource};
+pub use source::{LocalMirrorSource, PackageArchive, PackageSource};

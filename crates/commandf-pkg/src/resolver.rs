@@ -35,8 +35,8 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
                 });
             }
 
-            let archive = self.source.archive(&request.name, &version)?;
-            let manifest = read_manifest(&archive)?;
+            let archive = self.source.archive_with_source(&request.name, &version)?;
+            let manifest = read_manifest(&archive.bytes)?;
             let manifest_version = Version::parse(&manifest.version)?;
             let expected = format!("{}@{}", request.name, version);
             let found = format!("{}@{}", manifest.name, manifest_version);
@@ -44,7 +44,7 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
                 return Err(PackageError::IdentityMismatch { expected, found });
             }
 
-            let digest = self.cache.put(&archive)?;
+            let digest = self.cache.put(&archive.bytes)?;
             let dependencies = manifest.dependencies;
             selected.insert(
                 request.name.to_string(),
@@ -52,7 +52,7 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
                     name: request.name.to_string(),
                     version: version.to_string(),
                     sha256: digest,
-                    source: self.source.source_id(),
+                    source: archive.source,
                     dependencies: dependencies.clone(),
                 },
             );
