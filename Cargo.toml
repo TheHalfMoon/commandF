@@ -6,6 +6,7 @@ members = [
   "crates/commandf-package",
   "crates/commandf-validator",
   "crates/commandf-profiler",
+  "crates/commandf-review",
 ]
 resolver = "2"
 
