@@ -34,11 +34,9 @@ impl PackageCache {
 
     fn temp_path(&self, digest: &str) -> PathBuf {
         let sequence = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        self.root.join("sha256").join(format!(
-            ".{digest}.{}.{}.tmp",
-            std::process::id(),
-            sequence
-        ))
+        self.root
+            .join("sha256")
+            .join(format!(".{digest}.{}.{}.tmp", std::process::id(), sequence))
     }
 
     pub fn put(&self, bytes: &[u8]) -> Result<String, PackageError> {
