@@ -103,7 +103,10 @@ pub struct FindingSet {
 
 impl FindingSet {
     pub fn open_blocker_count(&self) -> usize {
-        self.findings.iter().filter(|finding| finding.is_blocker()).count()
+        self.findings
+            .iter()
+            .filter(|finding| finding.is_blocker())
+            .count()
     }
 
     pub fn maximum_open_severity(&self) -> Option<Severity> {
