@@ -93,13 +93,19 @@ pub fn evaluate_quality_gate(
     }
     for dimension in &policy.required_compatible_dimensions {
         if breaking.state_for(*dimension) != Some(CompatibilityState::Compatible) {
-            violations.push(format!("required compatibility check {dimension:?} did not pass"));
+            violations.push(format!(
+                "required compatibility check {dimension:?} did not pass"
+            ));
         }
     }
 
     GateResult {
         policy_id: policy.id.clone(),
-        status: if violations.is_empty() { GateStatus::Pass } else { GateStatus::Fail },
+        status: if violations.is_empty() {
+            GateStatus::Pass
+        } else {
+            GateStatus::Fail
+        },
         violations,
     }
 }
@@ -109,12 +115,18 @@ mod tests {
     use super::*;
 
     fn hash(value: &str) -> ContentHash {
-        ContentHash { algorithm: "sha256".into(), value: value.into() }
+        ContentHash {
+            algorithm: "sha256".into(),
+            value: value.into(),
+        }
     }
 
     #[test]
     fn unknown_required_semantics_fails_gate() {
-        let findings = FindingSet { finding_set_schema: "commandf.findings/0".into(), findings: vec![] };
+        let findings = FindingSet {
+            finding_set_schema: "commandf.findings/0".into(),
+            findings: vec![],
+        };
         let report = BreakingReport {
             report_schema: "commandf.breaking/0".into(),
             base: hash("a"),
@@ -131,6 +143,9 @@ mod tests {
             max_open_high: 0,
             required_compatible_dimensions: vec![CompatibilityDimension::Semantic],
         };
-        assert_eq!(evaluate_quality_gate(&policy, &findings, &report).status, GateStatus::Fail);
+        assert_eq!(
+            evaluate_quality_gate(&policy, &findings, &report).status,
+            GateStatus::Fail
+        );
     }
 }
