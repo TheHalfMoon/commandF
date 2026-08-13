@@ -1,0 +1,117 @@
+schema_version: 1
+as_of: 2026-08-13
+status: candidate
+parent_manifest: donors/manifest.yaml
+
+# Candidates discovered in the final gap-filling pass.
+# Exact immutable refs and source paths must be pinned before adoption.
+
+donors:
+  - id: ohs-fhir-data-pipes
+    repository: https://github.com/ohs-foundation/fhir-data-pipes
+    license: Apache-2.0
+    mode: [DEPEND, PORT, ORACLE]
+    fills: [fhir-to-sql, fhir-to-parquet, incremental-analytics, sql-on-fhir, bulk-data]
+    ref: UNPINNED
+    status: candidate
+
+  - id: ohs-fhir-gateway
+    repository: https://github.com/ohs-foundation/fhir-gateway
+    license: Apache-2.0
+    mode: [DEPEND, PORT, STUDY]
+    fills: [fhir-proxy, access-control, jwt-authentication, policy-plugin-pattern]
+    ref: UNPINNED
+    status: candidate
+
+  - id: miracum-fhir-pseudonymizer
+    repository: https://github.com/miracum/fhir-pseudonymizer
+    license: MIT
+    mode: [DEPEND, PORT, ORACLE]
+    fills: [fhir-deidentification, pseudonymization, depseudonymization, fhirpath-redaction-rules]
+    ref: UNPINNED
+    status: candidate
+
+  - id: cqframework-cql
+    repository: https://github.com/cqframework/clinical_quality_language
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [cql-compiler, elm, clinical-logic, fhir-cql-runtime]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhir-candle
+    repository: https://github.com/FHIR/fhir-candle
+    license: MIT
+    mode: [ORACLE, TEST_FIXTURE, STUDY]
+    fills: [multi-version-fhir-server, r4-r4b-r5-testing, capability-lab]
+    ref: UNPINNED
+    status: candidate
+
+  - id: hl7ch-cda-fhir-maps
+    repository: https://github.com/hl7ch/cda-fhir-maps
+    license: Apache-2.0
+    mode: [IMPORT, ORACLE]
+    fills: [cda-fhir, fhir-cda, fml-mapping-corpus]
+    ref: UNPINNED
+    status: candidate
+
+  - id: hl7-cda-examples
+    repository: https://github.com/HL7/CDA-examples
+    license: VERIFY_ARTIFACT_AT_PIN
+    mode: [IMPORT, ORACLE]
+    fills: [cda-ccda-fixtures, schematron-validation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: linuxforhealth-csv-to-fhir
+    repository: https://github.com/LinuxForHealth/CsvToFHIR
+    license: VERIFY_AT_PIN
+    mode: [PORT, STUDY, TEST_FIXTURE]
+    fills: [streaming-csv-ingestion, data-contract-mapping]
+    ref: UNPINNED
+    status: candidate
+
+  - id: tuva-empi
+    repository: https://github.com/tuva-health/tuva_empi
+    license: Apache-2.0
+    mode: [DEPEND, PORT, ORACLE]
+    fills: [patient-identity, probabilistic-matching, empi-api]
+    ref: UNPINNED
+    status: candidate
+
+  - id: microsoft-presidio
+    repository: https://github.com/microsoft/presidio
+    license: VERIFY_AT_PIN
+    mode: [DEPEND, ORACLE, STUDY]
+    fills: [pii-detection, redaction, structured-data-anonymization]
+    ref: UNPINNED
+    status: candidate
+
+  - id: microsoft-fhir-server
+    repository: https://github.com/microsoft/fhir-server
+    license: VERIFY_AT_PIN
+    mode: [TEST_FIXTURE, ORACLE, STUDY]
+    fills: [fhir-server-internals, sql-persistence, search-behavior, interoperability-testing]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhir-resources-python
+    repository: https://github.com/nazrulworld/fhir.resources
+    license: VERIFY_AT_PIN
+    mode: [DEPEND, ORACLE]
+    fills: [python-fhir-models, typed-research-sdk]
+    ref: UNPINNED
+    status: candidate
+
+  - id: google-healthcare-archive
+    repository: https://github.com/GoogleCloudPlatform/healthcare
+    license: VERIFY_PATH_AT_PIN
+    mode: [STUDY]
+    fills: [hl7-message-conversion-archaeology, fhir-utilities, imaging-utilities]
+    ref: UNPINNED
+    status: candidate
+
+notes:
+  - Current OpenEMPI offerings were not selected as a foundation donor; current public information is commercial while old OSS mirrors appear stale. Tuva EMPI is the preferred open identity candidate for audit.
+  - Current Mirth Connect releases are not a foundation donor. Historical open-source versions may be studied only after exact version/license review.
+  - No unverifiable leaked/proprietary code is eligible for this manifest. Founder-authorized private source must be supplied through an authorized repository/source and accompanied by permission evidence.
