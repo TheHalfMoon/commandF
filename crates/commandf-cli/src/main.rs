@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use commandf_pkg::{LocalMirrorSource, Lockfile, PackageCache, PackageRequest, Resolver};
+use commandf_pkg::{
+    FhirRegistrySource, LocalMirrorSource, Lockfile, PackageCache, PackageRequest, Resolver,
+};
 
 #[derive(Parser)]
 #[command(
@@ -27,9 +29,10 @@ enum Command {
 #[derive(Subcommand)]
 enum PkgCommand {
     Resolve {
-        package: String,
-        #[arg(long, default_value = ".commandf/source")]
-        source_dir: PathBuf,
+        #[arg(required = true)]
+        packages: Vec<String>,
+        #[arg(long)]
+        source_dir: Option<PathBuf>,
         #[arg(long, default_value = ".commandf/cache")]
         cache: PathBuf,
         #[arg(long, default_value = "commandf.lock")]
@@ -57,15 +60,21 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Command::Pkg { command } => match command {
             PkgCommand::Resolve {
-                package,
+                packages,
                 source_dir,
                 cache,
                 lock,
             } => {
-                let request = PackageRequest::parse(&package)?;
-                let source = LocalMirrorSource::new(source_dir);
+                let requests = packages
+                    .iter()
+                    .map(|package| PackageRequest::parse(package))
+                    .collect::<Result<Vec<_>, _>>()?;
                 let cache = PackageCache::new(cache);
-                let lockfile = Resolver::new(&source, &cache).resolve(vec![request])?;
+                let lockfile = if let Some(source_dir) = source_dir {
+                    Resolver::new(&LocalMirrorSource::new(source_dir), &cache).resolve(requests)?
+                } else {
+                    Resolver::new(&FhirRegistrySource::new(), &cache).resolve(requests)?
+                };
                 fs::write(&lock, lockfile.to_bytes()?)?;
                 println!(
                     "wrote {} packages to {}",
