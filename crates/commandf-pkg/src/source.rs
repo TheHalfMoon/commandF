@@ -5,10 +5,27 @@ use semver::Version;
 
 use crate::{PackageError, PackageName};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackageArchive {
+    pub bytes: Vec<u8>,
+    pub source: String,
+}
+
 pub trait PackageSource {
     fn source_id(&self) -> String;
     fn available_versions(&self, name: &PackageName) -> Result<Vec<Version>, PackageError>;
     fn archive(&self, name: &PackageName, version: &Version) -> Result<Vec<u8>, PackageError>;
+
+    fn archive_with_source(
+        &self,
+        name: &PackageName,
+        version: &Version,
+    ) -> Result<PackageArchive, PackageError> {
+        Ok(PackageArchive {
+            bytes: self.archive(name, version)?,
+            source: self.source_id(),
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
