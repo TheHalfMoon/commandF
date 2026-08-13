@@ -1,0 +1,78 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-13
+
+sources:
+  - id: github-spec-kit
+    repository: https://github.com/github/spec-kit
+    ref: v0.16.2
+    license: MIT
+    mode:
+      - DEPEND_PROCESS
+      - ADAPT_TEMPLATES
+    scope:
+      - constitution-driven development
+      - specify-plan-tasks-analyze-implement-converge workflow
+      - project-local template overrides
+      - agent-agnostic development process
+    exclusions:
+      - no commandF runtime dependency
+      - no replacement of healthcare-specific acceptance gates
+
+  - id: deepseek-harness
+    repository: https://github.com/deepseek-ai/deepseek-harness
+    ref: 47f943859bef60e4160492346772ded9b24f765a
+    license: MIT
+    maturity: developer-preview
+    mode:
+      - STUDY
+      - PORT_SELECTED_PATTERNS
+      - FUTURE_OPTIONAL_ADAPTER
+    scope:
+      - plugin-first agent composition
+      - service-definition/provider/consumer capability seams
+      - typed tool schemas and canonical output contracts
+      - guarded tool execution pipeline
+      - append-only durable session events
+      - model-visible-means-logged invariant
+      - per-agent tool restrictions
+      - sandbox and approval policy seams
+      - replayable execution evidence
+      - reversible plugin effects
+    exclusions:
+      - do not make commandf-check depend on DeepSeek Harness
+      - do not adopt DeepSeek models as semantic authority
+      - do not couple Rust artifact/diff core to TypeScript plugin runtime
+      - do not copy developer-preview APIs without pinning and provenance
+
+adoption_decisions:
+  commandf_core:
+    use: none
+    rationale: deterministic FHIR package/diff/check path must remain independent of agent runtimes
+
+  commandf_agent_plane:
+    use:
+      - capability seam pattern
+      - typed tools with canonical validated outputs
+      - guarded pre-execute/execute/post-execute lifecycle
+      - durable session/event log
+      - per-agent scoped capability restrictions
+    rationale: these patterns support auditable AI-assisted mapping, review, and autofix without making the model authoritative
+
+  commandf_evidence:
+    use:
+      - model-visible-means-logged invariant
+      - replayable tool-call/result projection
+    rationale: any model-visible input or authoritative tool result should be reconstructable for audit and reproducibility
+
+  commandf_plugins:
+    use:
+      - plugin composition inspiration
+      - reversible registration/effects
+    rationale: future connectors, validators, mapping analyzers, and agent capabilities should be replaceable behind narrow contracts
+
+review_before_copy:
+  - verify exact source path and commit
+  - preserve MIT notice where required
+  - inspect THIRD_PARTY_NOTICES.md for copied subtrees
+  - prefer porting small contracts/patterns over vendoring the full harness
+  - re-audit on every pin change because upstream explicitly warns about breaking changes
