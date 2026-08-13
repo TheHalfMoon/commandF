@@ -20,6 +20,8 @@ pub enum PackageError {
     },
     #[error("package not found in source: {name}@{version}")]
     PackageNotFound { name: String, version: String },
+    #[error("FHIR package registry operation failed: {0}")]
+    Registry(String),
     #[error("package archive is missing package/package.json")]
     MissingManifest,
     #[error("package manifest exceeds the maximum supported size")]
