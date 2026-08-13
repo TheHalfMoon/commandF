@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feat/cf-01-package-resolution
+      - feat/cf-02-canonical-inspect
 
 permissions:
   contents: read
@@ -19,21 +20,27 @@ jobs:
           components: rustfmt, clippy
       - name: Format
         run: cargo fmt --all -- --check
-      - name: Generate CF-02 Cargo.lock
-        run: cargo generate-lockfile
-      - name: Export CF-02 Cargo.lock
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: commandf-cf02-cargo-lock
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace --all-features
-      - name: Real FHIR registry smoke
+      - name: Real FHIR registry and inspect smoke
         run: |
           rm -rf /tmp/commandf-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
+          cargo run --locked --quiet -p commandf -- inspect hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock --format json > /tmp/commandf-smoke/inspect.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("/tmp/commandf-smoke/inspect.json").read_text())
+          assert report["schema"] == 1
+          assert report["package_name"] == "hl7.fhir.r4.core"
+          assert report["package_version"] == "4.0.1"
+          assert report["resources"]
+          assert any(
+              item["resource_type"] == "StructureDefinition" and item["elements"]
+              for item in report["resources"]
+          )
+          PY
