@@ -22,9 +22,10 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
         let mut selected: BTreeMap<String, LockedPackage> = BTreeMap::new();
 
         while let Some(request) = queue.pop_front() {
+            let version = self.select_version(&request)?;
+
             if let Some(existing) = selected.get(request.name.as_str()) {
-                let selected_version = Version::parse(&existing.version)?;
-                if request.constraint.matches(&selected_version) {
+                if existing.version == version.to_string() {
                     continue;
                 }
                 return Err(PackageError::VersionConflict {
@@ -34,7 +35,6 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
                 });
             }
 
-            let version = self.select_version(&request)?;
             let archive = self.source.archive(&request.name, &version)?;
             let manifest = read_manifest(&archive)?;
             let manifest_version = Version::parse(&manifest.version)?;
