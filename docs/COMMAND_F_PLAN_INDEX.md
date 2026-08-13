@@ -2,7 +2,7 @@
 
 Status: **authoritative plan-set index**
 
-commandF is intentionally planned as a small execution spine plus a larger preserved discovery/research envelope. No single document should mix immediate implementation authority with every candidate donor and every research hypothesis.
+commandF is intentionally planned as a small execution spine plus a larger preserved product/discovery/research envelope. No single document should mix immediate implementation authority with every candidate donor, product capability, and research hypothesis.
 
 The commandF plan therefore consists of the following layers.
 
@@ -26,13 +26,31 @@ Coverage corrections explicitly retained in addition to the named annex entries:
 - **GoFSH** — FSH ecosystem tooling/reference alongside SUSHI and IG Publisher.
 - **Open Concept Lab (OCL)** — terminology-service/reference candidate alongside Snowstorm, TermX, Hades, and OHDSI vocabulary tooling.
 
-## C. Problem/gap authority
+## C. Product-family authority
+
+`docs/COMMAND_F_PRODUCT_FAMILY.md`
+
+Preserves the long-term commandF capability family discussed during discovery:
+
+- commandF Core
+- commandF Studio
+- commandF Registry
+- commandF Verify
+- commandF Gateway
+- commandF Query
+- commandF Bench
+- commandF Copilot
+- commandF Trust
+
+These are capability groupings, not authorization to create separate services or repositories now. The V2 execution sequence still decides what is built and when.
+
+## D. Problem/gap authority
 
 `docs/COMMAND_F_GAP_LEDGER_2026-08-13.md`
 
 Preserves the 35 interoperability gap hypotheses that motivate the product and research program, and maps them to the commandF response.
 
-## D. Donor/provenance authority
+## E. Donor/provenance authority
 
 `docs/PROVENANCE_AND_DONOR_POLICY.md`
 
@@ -45,11 +63,13 @@ Current slice-specific donor records remain under `donors/`, including:
 
 Future slice plans must add or update donor records rather than relying on conversation memory.
 
-## E. Research authority
+## F. Research authority
 
-The research program is currently retained in Sections 21–23 of `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md`.
+`research/RESEARCH_CHARTER.md`
 
-It includes sixteen tracks:
+Preserves the candidate master's thesis, core research question, H1–H3, initial standards/models, baseline families, measurement framework, experiment sequence, reproducibility artifact, and evidence/data governance.
+
+The broader research inventory remains in Sections 21–23 of `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md` and includes sixteen retained tracks:
 
 1. Semantic Conservation across FHIR/openEHR/OMOP
 2. Semantic Conservation measurement
@@ -70,7 +90,7 @@ It includes sixteen tracks:
 
 Master's priority remains R1–R4. Research hypotheses never become product guarantees without executed evidence.
 
-## F. Feature execution units
+## G. Feature execution units
 
 Every `CF-*` slice is a Spec Kit-style feature unit:
 
@@ -82,7 +102,7 @@ CF-01 is the current feature unit under `specs/001-cf-01-package-resolution/`.
 
 ## Coverage rule
 
-Before a future architecture supersedes V2, its review must reconcile this entire plan set. A candidate, gap, or research track may be:
+Before a future architecture supersedes V2, its review must reconcile this entire plan set. A candidate, product capability, gap, or research track may be:
 
 - adopted
 - retained for later
@@ -93,4 +113,4 @@ It may **not** disappear silently.
 
 ## Build-order rule
 
-Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool is activated only when a concrete slice requires it and its provenance/adoption gate is satisfied.
+Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool/capability is activated only when a concrete slice requires it and its provenance/adoption gate is satisfied.
