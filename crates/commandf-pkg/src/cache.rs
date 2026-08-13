@@ -25,7 +25,7 @@ impl PackageCache {
         format!("{:x}", hasher.finalize())
     }
 
-    pub fn object_path(&self, digest: &str) -> PathBuf {
+    fn object_path(&self, digest: &str) -> PathBuf {
         self.root.join("sha256").join(format!("{digest}.tgz"))
     }
 
@@ -45,6 +45,7 @@ impl PackageCache {
     }
 
     pub fn verify(&self, digest: &str) -> Result<(), PackageError> {
+        validate_digest(digest)?;
         let path = self.object_path(digest);
         let bytes = fs::read(&path).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -62,5 +63,17 @@ impl PackageCache {
             });
         }
         Ok(())
+    }
+}
+
+fn validate_digest(digest: &str) -> Result<(), PackageError> {
+    let valid = digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    if valid {
+        Ok(())
+    } else {
+        Err(PackageError::InvalidDigest(digest.to_owned()))
     }
 }

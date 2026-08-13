@@ -28,6 +28,8 @@ pub enum PackageError {
     IdentityMismatch { expected: String, found: String },
     #[error("unsupported commandf.lock schema {found}; expected {expected}")]
     UnsupportedLockSchema { found: u32, expected: u32 },
+    #[error("invalid SHA-256 digest: {0}")]
+    InvalidDigest(String),
     #[error("cache object missing: {0}")]
     CacheMissing(String),
     #[error("cache object digest mismatch for {path:?}: expected {expected}, found {found}")]
