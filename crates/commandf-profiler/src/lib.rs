@@ -181,7 +181,10 @@ mod tests {
             .expect("active field");
         assert_eq!(active.present_documents, 2);
         assert_eq!(active.null_values, 1);
-        assert_eq!(active.presence_basis_points(profile.sampled_documents), 10_000);
+        assert_eq!(
+            active.presence_basis_points(profile.sampled_documents),
+            10_000
+        );
         assert_eq!(active.type_counts.get("boolean"), Some(&1));
         assert_eq!(active.type_counts.get("null"), Some(&1));
 
@@ -191,6 +194,9 @@ mod tests {
             .find(|field| field.path == "$.identifier[].value")
             .expect("identifier value");
         assert_eq!(identifier_value.present_documents, 1);
-        assert_eq!(identifier_value.presence_basis_points(profile.sampled_documents), 5_000);
+        assert_eq!(
+            identifier_value.presence_basis_points(profile.sampled_documents),
+            5_000
+        );
     }
 }
