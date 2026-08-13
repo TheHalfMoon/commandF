@@ -45,9 +45,17 @@ impl FhirRegistrySource {
         [PRIMARY, SECONDARY]
     }
 
-    fn metadata_from(&self, endpoint: &str, name: &PackageName) -> Result<RegistryMetadata, String> {
+    fn metadata_from(
+        &self,
+        endpoint: &str,
+        name: &PackageName,
+    ) -> Result<RegistryMetadata, String> {
         let url = format!("{endpoint}/{name}");
-        let mut response = self.agent.get(&url).call().map_err(|error| error.to_string())?;
+        let mut response = self
+            .agent
+            .get(&url)
+            .call()
+            .map_err(|error| error.to_string())?;
         let bytes = response
             .body_mut()
             .with_config()
@@ -64,7 +72,11 @@ impl FhirRegistrySource {
         version: &Version,
     ) -> Result<PackageArchive, String> {
         let url = format!("{endpoint}/{name}/{version}");
-        let mut response = self.agent.get(&url).call().map_err(|error| error.to_string())?;
+        let mut response = self
+            .agent
+            .get(&url)
+            .call()
+            .map_err(|error| error.to_string())?;
         let bytes = response
             .body_mut()
             .with_config()
