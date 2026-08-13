@@ -26,6 +26,9 @@ impl<R> BoundedReader<R> {
 
 impl<R: Read> Read for BoundedReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         if self.read == MAX_ARCHIVE_BYTES {
             let mut probe = [0_u8; 1];
             return match self.inner.read(&mut probe)? {
@@ -37,7 +40,8 @@ impl<R: Read> Read for BoundedReader<R> {
             };
         }
         let remaining = (MAX_ARCHIVE_BYTES - self.read) as usize;
-        let count = self.inner.read(&mut buf[..buf.len().min(remaining)])?;
+        let allowed = buf.len().min(remaining);
+        let count = self.inner.read(&mut buf[..allowed])?;
         self.read += count as u64;
         Ok(count)
     }
@@ -67,11 +71,11 @@ pub fn inspect_package(
         if entry_count > MAX_ARCHIVE_ENTRIES {
             return Err(ArtifactError::TooManyEntries);
         }
-        let mut entry = entry?;
+        let entry = entry?;
         if !entry.header().entry_type().is_file() {
             continue;
         }
-        let path = entry.path()?;
+        let path = entry.path()?.into_owned();
         let normalized = path.strip_prefix(Path::new("./")).unwrap_or(path.as_ref());
         if normalized.parent() != Some(Path::new("package")) {
             continue;
@@ -79,21 +83,21 @@ pub fn inspect_package(
         let Some(filename_os) = normalized.file_name() else {
             continue;
         };
-        let Some(filename) = filename_os.to_str() else {
+        let Some(filename) = filename_os.to_str().map(str::to_owned) else {
             continue;
         };
         if filename == "package.json" || filename == ".index.json" || !filename.ends_with(".json") {
             continue;
         }
         if entry.size() > MAX_RESOURCE_BYTES {
-            return Err(ArtifactError::ResourceTooLarge(filename.to_owned()));
+            return Err(ArtifactError::ResourceTooLarge(filename));
         }
         let mut bytes = Vec::new();
         entry.take(MAX_RESOURCE_BYTES + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > MAX_RESOURCE_BYTES {
-            return Err(ArtifactError::ResourceTooLarge(filename.to_owned()));
+            return Err(ArtifactError::ResourceTooLarge(filename));
         }
-        resources.push(parse_resource(filename, &bytes)?);
+        resources.push(parse_resource(&filename, &bytes)?);
     }
 
     resources.sort_by(|left, right| left.filename.cmp(&right.filename));
