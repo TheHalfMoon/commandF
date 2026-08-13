@@ -122,6 +122,26 @@ donors:
     ref: UNPINNED
     status: candidate
 
+  - id: oasdiff
+    repository: https://github.com/oasdiff/oasdiff
+    license: Apache-2.0
+    mode: [DEPEND, PORT, STUDY]
+    fills: [api-semantic-diff, breaking-change-rules, severity-policy, machine-readable-changelog]
+    adopt_for: API contract compatibility patterns and REST/FHIR facade change review
+    do_not_adopt_as: FHIR semantic compatibility authority
+    ref: UNPINNED
+    status: candidate
+
+  - id: pact-broker
+    repository: https://github.com/pact-foundation/pact_broker
+    license: VERIFY_AT_PIN
+    mode: [STUDY, ORACLE]
+    fills: [consumer-driven-contracts, verification-matrix, environment-awareness, can-i-deploy]
+    adopt_for: commandF Consumer Compatibility Matrix and can-i-certify architecture
+    do_not_adopt_as: healthcare registry
+    ref: UNPINNED
+    status: candidate
+
 reference_systems:
   - id: greptile
     source: https://www.greptile.com
