@@ -1,0 +1,370 @@
+schema_version: 1
+status: candidate
+as_of: 2026-08-13
+policy: docs/PROVENANCE_AND_DONOR_POLICY.md
+
+# `ref` values must be replaced by exact immutable commit SHAs before code/import adoption.
+# `candidate` means researched but not yet adopted.
+
+donors:
+  - id: hl7-fhir-core
+    repository: https://github.com/hapifhir/org.hl7.fhir.core
+    license: Apache-2.0
+    mode: [ORACLE, DEPEND, IMPORT]
+    fills: [fhir-validation, fhirpath, package-loading, terminology-hooks]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhir-codegen
+    repository: https://github.com/FHIR/fhir-codegen
+    license: MIT
+    mode: [PORT, IMPORT, ORACLE]
+    fills: [fhir-cross-version, conceptmap-export, spec-diff]
+    source_paths:
+      - src/Fhir.CodeGen.CrossVersionLoader/
+      - src/Fhir.CodeGen.CrossVersionExporter/
+      - src/Fhir.CodeGen.Comparison/CrossVersionSource/
+    ref: UNPINNED
+    status: candidate
+
+  - id: hapi-fhir
+    repository: https://github.com/hapifhir/hapi-fhir
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [fhir-runtime, parser, serializer, fhirpath, validation, terminology]
+    ref: UNPINNED
+    status: candidate
+
+  - id: firely-net-sdk
+    repository: https://github.com/FirelyTeam/firely-net-sdk
+    license: VERIFY_AT_PIN
+    mode: [ORACLE]
+    fills: [differential-parsing, differential-fhirpath, profile-validation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: google-whistle
+    repository: https://github.com/GoogleCloudPlatform/healthcare-data-harmonization
+    license: Apache-2.0
+    mode: [PORT, COPY, IMPORT]
+    fills: [mapping-ir, mapping-runtime, transpiler, plugins, reconciliation, mapping-lsp]
+    source_paths:
+      - proto/
+      - transpiler/
+      - runtime/
+      - plugins/harmonization/
+      - plugins/reconciliation/
+      - plugins/test/
+      - tools/languageserver/
+      - tools/linter/
+      - mappings/
+    ref: UNPINNED
+    status: candidate
+
+  - id: microsoft-fhir-converter
+    repository: https://github.com/microsoft/FHIR-Converter
+    license: MIT
+    mode: [IMPORT, PORT]
+    fills: [hl7v2-fhir, ccda-fhir, json-fhir, liquid-mapping, stu3-r4]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhirconnect-spec
+    repository: https://github.com/SevKohler/FHIRconnect-spec
+    license: Apache-2.0
+    mode: [IMPORT]
+    fills: [openehr-fhir-mapping-language, bidirectional-mapping]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openfhir
+    repository: https://github.com/openFHIR/openfhir
+    license: Apache-2.0
+    mode: [PORT, ORACLE, IMPORT]
+    fills: [openehr-fhir-runtime, fhirconnect-execution]
+    ref: UNPINNED
+    status: candidate
+
+  - id: eos
+    repository: https://github.com/SevKohler/Eos
+    license: Apache-2.0
+    mode: [PORT, ORACLE]
+    fills: [openehr-omop-etl, aql-driven-mapping]
+    ref: UNPINNED
+    status: candidate
+
+  - id: omocl
+    repository: https://github.com/SevKohler/OMOCL
+    license: VERIFY_AT_PIN
+    mode: [IMPORT]
+    fills: [openehr-omop-mapping-corpus]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openehr-archie
+    repository: https://github.com/openEHR/archie
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [openehr-rm, adl2, aom2, bmm, validation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openehr-specifications
+    repository: https://github.com/openEHR
+    license: ARTIFACT_SPECIFIC
+    mode: [IMPORT, ORACLE]
+    fills: [openehr-rm, archetypes, aql, rest-contracts]
+    ref: UNPINNED
+    status: candidate
+
+  - id: omop-cdm
+    repository: https://github.com/OHDSI/CommonDataModel
+    license: VERIFY_AT_PIN
+    mode: [IMPORT, ORACLE]
+    fills: [omop-5-4-schema]
+    ref: UNPINNED
+    status: candidate
+
+  - id: ohdsi-dqd
+    repository: https://github.com/OHDSI/DataQualityDashboard
+    license: Apache-2.0
+    mode: [ORACLE, PORT]
+    fills: [omop-data-quality, omop-conformance]
+    ref: UNPINNED
+    status: candidate
+
+  - id: ohdsi-whiterabbit
+    repository: https://github.com/OHDSI/WhiteRabbit
+    license: Apache-2.0
+    mode: [DEPEND, PORT]
+    fills: [source-profiling, etl-discovery]
+    ref: UNPINNED
+    status: candidate
+
+  - id: snowstorm
+    repository: https://github.com/IHTSDO/snowstorm
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [snomed, terminology-fhir-api, ecl]
+    content_license: SEPARATE
+    ref: UNPINNED
+    status: candidate
+
+  - id: snowstorm-lite
+    repository: https://github.com/IHTSDO/snowstorm-lite
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [edge-terminology, terminology-fhir-api, conceptmap]
+    content_license: SEPARATE
+    ref: UNPINNED
+    status: candidate
+
+  - id: termx
+    repository: https://github.com/termx-health/termx-server
+    license: MIT
+    mode: [DEPEND, PORT, STUDY]
+    fills: [terminology-registry, terminology-authoring, conceptmap, fml-tooling]
+    content_license: SEPARATE
+    ref: UNPINNED
+    status: candidate
+
+  - id: hades-terminology
+    repository: https://github.com/wardle/hades
+    license: EPL-2.0
+    mode: [ORACLE, STUDY]
+    fills: [terminology-conformance, ftrm-container, high-performance-terminology]
+    content_license: SEPARATE
+    ref: UNPINNED
+    status: candidate
+
+  - id: sushi
+    repository: https://github.com/FHIR/sushi
+    license: Apache-2.0
+    mode: [DEPEND, ORACLE]
+    fills: [fsh, ig-authoring, profile-normalization]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhirpath-mapping-language
+    repository: https://github.com/beda-software/FHIRPathMappingLanguage
+    license: MIT
+    mode: [IMPORT, STUDY]
+    fills: [mapping-language-import]
+    ref: UNPINNED
+    status: candidate
+
+  - id: inferno
+    repository: https://github.com/inferno-framework
+    license: VERIFY_COMPONENT_AT_PIN
+    mode: [ORACLE, PORT]
+    fills: [fhir-conformance, smart-testing, empirical-capabilities]
+    ref: UNPINNED
+    status: candidate
+
+  - id: synthea
+    repository: https://github.com/synthetichealth/synthea
+    license: Apache-2.0
+    mode: [DEPEND, IMPORT]
+    fills: [synthetic-data, fhir, ccda, bulk-fhir, benchmark]
+    ref: UNPINNED
+    status: candidate
+
+  - id: sql-on-fhir
+    repository: https://github.com/FHIR/sql-on-fhir-v2
+    license: VERIFY_AT_PIN
+    mode: [IMPORT, ORACLE]
+    fills: [viewdefinition, tabular-fhir]
+    ref: UNPINNED
+    status: candidate
+
+  - id: pathling
+    repository: https://github.com/aehrc/pathling
+    license: VERIFY_AT_PIN
+    mode: [DEPEND, ORACLE]
+    fills: [fhir-analytics, viewdefinition, sqlquery]
+    ref: UNPINNED
+    status: candidate
+
+  - id: apache-arrow-rs
+    repository: https://github.com/apache/arrow-rs
+    license: Apache-2.0
+    mode: [DEPEND]
+    fills: [columnar-ir, parquet]
+    ref: UNPINNED
+    status: candidate
+
+  - id: apache-datafusion
+    repository: https://github.com/apache/datafusion
+    license: Apache-2.0
+    mode: [DEPEND]
+    fills: [query-planning, execution-engine]
+    ref: UNPINNED
+    status: candidate
+
+  - id: substrait
+    repository: https://github.com/substrait-io/substrait
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [query-ir, portable-plans]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openlineage
+    repository: https://github.com/OpenLineage/OpenLineage
+    license: Apache-2.0
+    mode: [DEPEND, PORT]
+    fills: [lineage, run-job-dataset-model]
+    ref: UNPINNED
+    status: candidate
+
+  - id: debezium
+    repository: https://github.com/debezium/debezium
+    license: Apache-2.0
+    mode: [DEPEND]
+    fills: [cdc, legacy-ehr-database-streaming]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openhim
+    repository: https://github.com/jembi/openhim-core-js
+    license: MPL-2.0
+    mode: [STUDY, DEPEND]
+    fills: [health-integration-gateway, mediation, transaction-audit]
+    ref: UNPINNED
+    status: candidate
+
+  - id: wasmtime
+    repository: https://github.com/bytecodealliance/wasmtime
+    license: Apache-2.0_WITH_LLVM_EXCEPTION
+    mode: [DEPEND]
+    fills: [sandboxed-plugins, wasi-component-model]
+    ref: UNPINNED
+    status: candidate
+
+  - id: cedar
+    repository: https://github.com/cedar-policy/cedar
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [policy-evaluation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: opa
+    repository: https://github.com/open-policy-agent/opa
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [policy-evaluation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openfga
+    repository: https://github.com/openfga/openfga
+    license: Apache-2.0
+    mode: [DEPEND, STUDY]
+    fills: [relationship-authorization]
+    ref: UNPINNED
+    status: candidate
+
+  - id: spire
+    repository: https://github.com/spiffe/spire
+    license: Apache-2.0
+    mode: [DEPEND]
+    fills: [workload-identity]
+    ref: UNPINNED
+    status: candidate
+
+  - id: pydicom
+    repository: https://github.com/pydicom/pydicom
+    license: VERIFY_AT_PIN
+    mode: [DEPEND, ORACLE]
+    fills: [dicom-parsing, imaging-fixtures]
+    ref: UNPINNED
+    status: candidate
+
+  - id: dcm4che
+    repository: https://github.com/dcm4che/dcm4che
+    license: VERIFY_AT_PIN
+    mode: [DEPEND, ORACLE]
+    fills: [dicom, dicomweb]
+    ref: UNPINNED
+    status: candidate
+
+  - id: ohif
+    repository: https://github.com/OHIF/Viewers
+    license: MIT
+    mode: [DEPEND, STUDY]
+    fills: [imaging-inspection-ui]
+    ref: UNPINNED
+    status: candidate
+
+  - id: openmrs
+    repository: https://github.com/openmrs/openmrs-core
+    license: MPL-2.0
+    mode: [TEST_FIXTURE, STUDY]
+    fills: [real-emr-integration]
+    ref: UNPINNED
+    status: candidate
+
+  - id: medplum
+    repository: https://github.com/medplum/medplum
+    license: Apache-2.0
+    mode: [TEST_FIXTURE, STUDY, DEPEND]
+    fills: [fhir-server-fixture, typescript-fhir-dx, hl7-fixtures]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhir-agentbench
+    repository: https://github.com/glee4810/FHIR-AgentBench
+    license: CC-BY-4.0
+    mode: [RESEARCH_BENCHMARK]
+    fills: [ai-fhir-retrieval-benchmark]
+    ref: UNPINNED
+    status: candidate
+
+  - id: fhirbench
+    repository: https://github.com/JacquelineChong/fhirbench
+    license: VERIFY_AT_PIN
+    mode: [RESEARCH_BENCHMARK]
+    fills: [ai-fhir-serialization-benchmark]
+    ref: UNPINNED
+    status: candidate
