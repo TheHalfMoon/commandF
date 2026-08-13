@@ -45,7 +45,14 @@ impl Lockfile {
     }
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self, PackageError> {
-        Ok(serde_json::from_slice(bytes)?)
+        let lockfile: Self = serde_json::from_slice(bytes)?;
+        if lockfile.schema != Self::SCHEMA_V1 {
+            return Err(PackageError::UnsupportedLockSchema {
+                found: lockfile.schema,
+                expected: Self::SCHEMA_V1,
+            });
+        }
+        Ok(lockfile)
     }
 
     pub fn verify_cache(&self, cache: &PackageCache) -> Result<(), PackageError> {

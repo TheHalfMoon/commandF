@@ -26,6 +26,8 @@ pub enum PackageError {
     ManifestTooLarge,
     #[error("package identity mismatch: expected {expected}, found {found}")]
     IdentityMismatch { expected: String, found: String },
+    #[error("unsupported commandf.lock schema {found}; expected {expected}")]
+    UnsupportedLockSchema { found: u32, expected: u32 },
     #[error("cache object missing: {0}")]
     CacheMissing(String),
     #[error("cache object digest mismatch for {path:?}: expected {expected}, found {found}")]
