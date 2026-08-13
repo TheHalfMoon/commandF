@@ -28,7 +28,7 @@ impl LocalMirrorSource {
 
 impl PackageSource for LocalMirrorSource {
     fn source_id(&self) -> String {
-        format!("local-mirror:{}", self.root.display())
+        "local-mirror".to_owned()
     }
 
     fn available_versions(&self, name: &PackageName) -> Result<Vec<Version>, PackageError> {
