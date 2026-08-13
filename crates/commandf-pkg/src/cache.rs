@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha2::{Digest, Sha256};
 
 use crate::PackageError;
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Debug)]
 pub struct PackageCache {
@@ -29,6 +32,15 @@ impl PackageCache {
         self.root.join("sha256").join(format!("{digest}.tgz"))
     }
 
+    fn temp_path(&self, digest: &str) -> PathBuf {
+        let sequence = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        self.root.join("sha256").join(format!(
+            ".{digest}.{}.{}.tmp",
+            std::process::id(),
+            sequence
+        ))
+    }
+
     pub fn put(&self, bytes: &[u8]) -> Result<String, PackageError> {
         let digest = Self::digest(bytes);
         let path = self.object_path(&digest);
@@ -39,7 +51,18 @@ impl PackageCache {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&path, bytes)?;
+
+        let temp_path = self.temp_path(&digest);
+        fs::write(&temp_path, bytes)?;
+
+        if let Err(error) = fs::rename(&temp_path, &path) {
+            if path.exists() {
+                self.verify(&digest)?;
+                return Ok(digest);
+            }
+            return Err(PackageError::Io(error));
+        }
+
         self.verify(&digest)?;
         Ok(digest)
     }
