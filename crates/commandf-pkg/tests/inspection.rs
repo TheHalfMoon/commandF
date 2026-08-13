@@ -63,6 +63,48 @@ fn rejects_duplicate_versioned_canonical_identity() {
 }
 
 #[test]
+fn allows_distinct_explicit_versions_for_one_canonical_url() {
+    let first = br#"{"resourceType":"ValueSet","id":"a","url":"https://example.org/ValueSet/shared","version":"1.0.0"}"#;
+    let second = br#"{"resourceType":"ValueSet","id":"b","url":"https://example.org/ValueSet/shared","version":"2.0.0"}"#;
+    let bytes = archive_with_entries(&[("package/a.json", first), ("package/b.json", second)]);
+
+    let report = inspect(&bytes).unwrap();
+    assert_eq!(report.resources.len(), 2);
+}
+
+#[test]
+fn rejects_malformed_identity_field_type() {
+    let resource = br#"{"resourceType":"ValueSet","id":"a","url":42}"#;
+    let bytes = archive_with_entries(&[("package/a.json", resource)]);
+
+    let error = inspect(&bytes).unwrap_err();
+    assert!(matches!(error, ArtifactError::InvalidStringField { .. }));
+}
+
+#[test]
+fn rejects_archive_digest_mismatch_before_parsing() {
+    let bytes = archive_with_entries(&[(
+        "package/a.json",
+        br#"{"resourceType":"Patient","id":"a"}"#,
+    )]);
+
+    let error = inspect_package("example.pkg", "1.0.0", "0".repeat(64), &bytes).unwrap_err();
+    assert!(matches!(error, ArtifactError::ArchiveDigestMismatch { .. }));
+}
+
+#[test]
+fn serializes_identical_inputs_byte_identically() {
+    let bytes = archive_with_entries(&[(
+        "package/a.json",
+        br#"{"resourceType":"Patient","id":"a"}"#,
+    )]);
+
+    let first = inspect(&bytes).unwrap().to_json_bytes().unwrap();
+    let second = inspect(&bytes).unwrap().to_json_bytes().unwrap();
+    assert_eq!(first, second);
+}
+
+#[test]
 fn rejects_duplicate_element_id_within_structure_view() {
     let structure = br#"{
       "resourceType":"StructureDefinition",
