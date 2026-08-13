@@ -97,13 +97,18 @@ impl PackageSource for FhirRegistrySource {
         for endpoint in Self::endpoints() {
             match self.metadata_from(endpoint, name) {
                 Ok(metadata) => {
-                    let mut versions = metadata
+                    let parsed = metadata
                         .versions
                         .keys()
                         .map(|raw| Version::parse(raw))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    versions.sort();
-                    return Ok(versions);
+                        .collect::<Result<Vec<_>, _>>();
+                    match parsed {
+                        Ok(mut versions) => {
+                            versions.sort();
+                            return Ok(versions);
+                        }
+                        Err(error) => errors.push(format!("{endpoint}: {error}")),
+                    }
                 }
                 Err(error) => errors.push(format!("{endpoint}: {error}")),
             }
