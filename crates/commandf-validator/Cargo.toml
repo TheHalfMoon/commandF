@@ -1,0 +1,11 @@
+[package]
+name = "commandf-validator"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+commandf-csir = { path = "../commandf-csir" }
+commandf-findings = { path = "../commandf-findings" }
+serde.workspace = true
