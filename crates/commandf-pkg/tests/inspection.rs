@@ -83,10 +83,8 @@ fn rejects_malformed_identity_field_type() {
 
 #[test]
 fn rejects_archive_digest_mismatch_before_parsing() {
-    let bytes = archive_with_entries(&[(
-        "package/a.json",
-        br#"{"resourceType":"Patient","id":"a"}"#,
-    )]);
+    let bytes =
+        archive_with_entries(&[("package/a.json", br#"{"resourceType":"Patient","id":"a"}"#)]);
 
     let error = inspect_package("example.pkg", "1.0.0", "0".repeat(64), &bytes).unwrap_err();
     assert!(matches!(error, ArtifactError::ArchiveDigestMismatch { .. }));
@@ -94,10 +92,8 @@ fn rejects_archive_digest_mismatch_before_parsing() {
 
 #[test]
 fn serializes_identical_inputs_byte_identically() {
-    let bytes = archive_with_entries(&[(
-        "package/a.json",
-        br#"{"resourceType":"Patient","id":"a"}"#,
-    )]);
+    let bytes =
+        archive_with_entries(&[("package/a.json", br#"{"resourceType":"Patient","id":"a"}"#)]);
 
     let first = inspect(&bytes).unwrap().to_json_bytes().unwrap();
     let second = inspect(&bytes).unwrap().to_json_bytes().unwrap();
