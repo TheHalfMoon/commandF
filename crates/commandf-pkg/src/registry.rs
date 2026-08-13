@@ -100,8 +100,8 @@ impl PackageSource for FhirRegistrySource {
                     let mut versions = metadata
                         .versions
                         .keys()
-                        .filter_map(|raw| Version::parse(raw).ok())
-                        .collect::<Vec<_>>();
+                        .map(|raw| Version::parse(raw))
+                        .collect::<Result<Vec<_>, _>>()?;
                     versions.sort();
                     return Ok(versions);
                 }
