@@ -52,11 +52,7 @@ impl<R: Read> Read for BoundedReader<R> {
 }
 
 pub(crate) fn read_manifest(bytes: &[u8]) -> Result<PackageManifest, PackageError> {
-    read_manifest_with_limits(
-        bytes,
-        MAX_ARCHIVE_DECOMPRESSED_BYTES,
-        MAX_ARCHIVE_ENTRIES,
-    )
+    read_manifest_with_limits(bytes, MAX_ARCHIVE_DECOMPRESSED_BYTES, MAX_ARCHIVE_ENTRIES)
 }
 
 fn read_manifest_with_limits(
@@ -101,8 +97,6 @@ fn read_manifest_with_limits(
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use tar::{Builder, Header};
