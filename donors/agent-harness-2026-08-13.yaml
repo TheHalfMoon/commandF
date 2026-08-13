@@ -4,7 +4,8 @@ updated: 2026-08-13
 sources:
   - id: github-spec-kit
     repository: https://github.com/github/spec-kit
-    ref: v0.16.2
+    ref: 4871b485f97c7fa452ec58eba325d87536c55c34
+    tag: v0.16.2
     license: MIT
     mode:
       - DEPEND_PROCESS
