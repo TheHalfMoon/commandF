@@ -28,3 +28,10 @@ jobs:
           rm -rf /tmp/commandf-smoke
           cargo run --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
           cargo run --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
+      - name: Export generated Cargo.lock
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: commandf-cargo-lock
+          path: Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
