@@ -23,3 +23,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace --all-features
+      - name: Real FHIR registry smoke
+        run: |
+          rm -rf /tmp/commandf-smoke
+          cargo run --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
+          cargo run --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
