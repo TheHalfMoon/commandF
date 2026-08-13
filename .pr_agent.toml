@@ -1,0 +1,14 @@
+[config]
+repo_context_files = ["AGENTS.md", "best_practices.md"]
+
+[pr_reviewer]
+require_tests_review = true
+extra_instructions = """
+Focus on semantic preservation, explicit provenance, deterministic verification, failure-path coverage, compatibility impact, and unsafe assumptions. Flag any path that treats AI output as authoritative evidence or permits silent information loss.
+"""
+
+[pr_code_suggestions]
+focus_only_on_problems = true
+extra_instructions = """
+Prefer minimal, verifiable fixes. Suggestions that affect transformation meaning, validation, compatibility, or certification must include or request tests and must not invent source facts.
+"""
