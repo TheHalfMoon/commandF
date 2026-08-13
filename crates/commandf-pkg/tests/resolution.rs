@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use commandf_pkg::{PackageCache, PackageError, PackageName, PackageRequest, PackageSource, Resolver};
+use commandf_pkg::{
+    PackageCache, PackageError, PackageName, PackageRequest, PackageSource, Resolver,
+};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use semver::Version;
