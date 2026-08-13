@@ -13,7 +13,7 @@ pub(crate) fn read_manifest(bytes: &[u8]) -> Result<PackageManifest, PackageErro
     let mut archive = Archive::new(decoder);
 
     for entry in archive.entries()? {
-        let mut entry = entry?;
+        let entry = entry?;
         let path = entry.path()?;
         let normalized = path.strip_prefix(Path::new("./")).unwrap_or(path.as_ref());
         if normalized != Path::new("package/package.json") {
