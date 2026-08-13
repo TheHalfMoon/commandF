@@ -7,4 +7,5 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
+commandf-artifact = { path = "../commandf-artifact" }
 commandf-pkg = { path = "../commandf-pkg" }
