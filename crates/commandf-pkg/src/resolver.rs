@@ -64,10 +64,7 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
             }
         }
 
-        Ok(Lockfile::new(
-            root_labels,
-            selected.into_values().collect(),
-        ))
+        Ok(Lockfile::new(root_labels, selected.into_values().collect()))
     }
 
     fn select_version(&self, request: &PackageRequest) -> Result<Version, PackageError> {
