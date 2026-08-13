@@ -23,6 +23,22 @@ donors:
     ref: UNPINNED
     status: candidate
 
+  - id: ohs-android-fhir
+    repository: https://github.com/ohs-foundation/android-fhir
+    license: VERIFY_AT_PIN
+    mode: [STUDY, DEPEND, TEST_FIXTURE]
+    fills: [offline-fhir, local-fhir-engine, synchronization, structured-data-capture]
+    ref: UNPINNED
+    status: candidate
+
+  - id: opensrp-fhircore
+    repository: https://github.com/opensrp/fhircore
+    license: VERIFY_AT_PIN
+    mode: [STUDY, TEST_FIXTURE]
+    fills: [offline-first-health-workflows, android-fhir-integration, who-smart-guidelines]
+    ref: UNPINNED
+    status: candidate
+
   - id: miracum-fhir-pseudonymizer
     repository: https://github.com/miracum/fhir-pseudonymizer
     license: MIT
@@ -36,6 +52,38 @@ donors:
     license: Apache-2.0
     mode: [DEPEND, ORACLE]
     fills: [cql-compiler, elm, clinical-logic, fhir-cql-runtime]
+    ref: UNPINNED
+    status: candidate
+
+  - id: cqf-ruler
+    repository: https://github.com/DBCG/cqf-ruler
+    license: VERIFY_AT_PIN
+    mode: [ORACLE, STUDY]
+    fills: [cql-on-hapi, clinical-reasoning, measure-evaluation]
+    ref: UNPINNED
+    status: candidate
+
+  - id: cql-on-omop
+    repository: https://github.com/PheMA/cql-on-omop
+    license: VERIFY_AT_PIN
+    mode: [ORACLE, STUDY]
+    fills: [cql-elm-to-omop, clinical-query-bridge]
+    ref: UNPINNED
+    status: candidate
+
+  - id: blaze-fhir
+    repository: https://github.com/samply/blaze
+    license: Apache-2.0
+    mode: [ORACLE, TEST_FIXTURE, STUDY]
+    fills: [fhir-server, fast-cql, terminology, performance-benchmark]
+    ref: UNPINNED
+    status: candidate
+
+  - id: linuxforhealth-fhir
+    repository: https://github.com/LinuxForHealth/FHIR
+    license: Apache-2.0
+    mode: [ORACLE, STUDY, DEPEND]
+    fills: [high-performance-r4-r4b-parser, validator, server, conformance]
     ref: UNPINNED
     status: candidate
 
@@ -65,7 +113,7 @@ donors:
 
   - id: linuxforhealth-csv-to-fhir
     repository: https://github.com/LinuxForHealth/CsvToFHIR
-    license: VERIFY_AT_PIN
+    license: Apache-2.0
     mode: [PORT, STUDY, TEST_FIXTURE]
     fills: [streaming-csv-ingestion, data-contract-mapping]
     ref: UNPINNED
@@ -111,7 +159,17 @@ donors:
     ref: UNPINNED
     status: candidate
 
+  - id: beda-fhir-emr
+    repository: https://github.com/beda-software/fhir-emr
+    license: MIT
+    mode: [TEST_FIXTURE, STUDY]
+    fills: [fhir-native-emr-fixture, workflow-ux, server-portability-gaps]
+    ref: UNPINNED
+    status: candidate
+
 notes:
   - Current OpenEMPI offerings were not selected as a foundation donor; current public information is commercial while old OSS mirrors appear stale. Tuva EMPI is the preferred open identity candidate for audit.
   - Current Mirth Connect releases are not a foundation donor. Historical open-source versions may be studied only after exact version/license review.
+  - Google/OHS Android FHIR and OpenSRP FHIR Core are valuable for offline/sync architecture but are not commandF core dependencies until an explicit edge-runtime decision is made.
+  - Blaze, LinuxForHealth FHIR, FHIR Candle, HAPI, Firely, Microsoft FHIR Server and Medplum should be treated as a differential implementation matrix rather than choosing one as universal truth.
   - No unverifiable leaked/proprietary code is eligible for this manifest. Founder-authorized private source must be supplied through an authorized repository/source and accompanied by permission evidence.
