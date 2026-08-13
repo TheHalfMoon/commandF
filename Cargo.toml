@@ -4,7 +4,7 @@ members = [
   "crates/commandf-evidence",
   "crates/commandf-findings",
   "crates/commandf-package",
-  "crates/commandf-oracle",
+  "crates/commandf-validator",
   "crates/commandf-profiler",
 ]
 resolver = "2"
