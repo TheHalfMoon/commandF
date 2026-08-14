@@ -1,0 +1,48 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-14
+
+sources:
+  - id: sushi-fsh-source-index
+    repository: https://github.com/FHIR/sushi
+    ref: 31daab4b486915c2650bcde6649c34b019937777
+    release_context: 3.20.0 is the latest tagged release commit observed before this pinned master ref
+    license: Apache-2.0
+    mode: [STUDY, ORACLE_BEHAVIOR]
+    source_paths:
+      - src/utils/Processing.ts
+      - src/import/FSHImporter.ts
+      - src/export/StructureDefinitionExporter.ts
+    observed_contract:
+      - SUSHI writes fsh-generated/data/fsh-index.json for machine usage
+      - each exported mapping contains outputFile, fshFile, fshName, fshType, startLine, endLine
+      - fshFile is relative to the SUSHI input directory used when the index is written
+      - outputFile is populated from the generated package file name
+      - exported startLine/endLine describe the containing FSH definition range, not per-rule source positions
+    adopted_patterns:
+      - consume SUSHI's machine index rather than implement a commandF FSH parser
+      - map generated artifact filename to authored FSH definition range
+    exclusions:
+      - no TypeScript source copied
+      - no runtime dependency on SUSHI
+      - no automatic SUSHI download or execution in CF-09
+      - no claim of exact rule-line mapping from fsh-index.json
+
+standards:
+  - id: fhir-shorthand
+    reference: https://build.fhir.org/ig/HL7/fhir-shorthand/
+    mode: AUTHORING_STANDARD
+
+reviewers:
+  - id: codex-security
+    provider: OpenAI
+    mode: OPTIONAL_SECURITY_REVIEW
+    boundary:
+      - separate repository enablement is required
+      - security findings are advisory evidence, not compatibility authority
+      - unavailability does not waive deterministic CI or other reviewer gates
+      - Codex Code Review security guidance is tracked separately from Codex Security
+
+rules:
+  - exact SUSHI ref is required for source-format study claims
+  - repository path evidence must be proven; no fuzzy or canonical-name fallback
+  - generated source mapping must never alter CF-04/CF-05 compatibility or policy truth
