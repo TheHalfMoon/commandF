@@ -1,28 +1,37 @@
 # CF-04 Implementation Plan
 
-Status: Approved for implementation
+Status: Implemented — founder review candidate
 
 ## Architecture
 
-CF-04 remains inside the existing `commandf-pkg` crate and `commandf` CLI. No new workspace crate is required.
+CF-04 stays inside the existing `commandf-pkg` crate and `commandf` CLI. No new workspace crate was required.
 
-The classifier consumes the in-memory `StructuralDiffReport` produced by CF-03. It does not reopen archives or duplicate structural parsing. This keeps CF-03 as the single authority for deterministic artifact matching and structural facts.
+The public classifier consumes the in-memory `StructuralDiffReport` produced by CF-03. It does not reopen archives or duplicate structural parsing. CF-03 remains the single authority for deterministic resource matching and structural facts.
+
+The public path is layered as:
+
+1. validate the CF-03 schema and CF-04-owned evidence codes;
+2. pre-index snapshot field identities and resources with precise structural facts;
+3. suppress duplicate differential evidence and subsumed byte-only facts;
+4. dispatch each remaining structural fact through the versioned rule corpus;
+5. stable-sort the resulting findings.
 
 ## Public model
 
-Add a versioned compatibility report with:
+`CompatibilityReport` contains:
 
-- schema version;
-- ruleset id (`cf04-rules-v1`);
-- package name and before/after package evidence copied from CF-03;
+- schema version `1`;
+- ruleset `cf04-rules-v1`;
+- package name;
+- before/after package evidence copied from CF-03;
 - ordered compatibility findings.
 
 Each finding contains:
 
 - stable `rule_id`;
-- `severity` (`BREAKING`, `RISKY`, `ADDITIVE`);
-- `direction` (`producer`, `consumer`);
-- source structural change kind;
+- severity (`BREAKING`, `RISKY`, `ADDITIVE`);
+- direction (`producer`, `consumer`);
+- source `StructuralChangeKind`;
 - resource key and filenames;
 - optional view, element id, and field;
 - normalized before/after evidence;
@@ -30,85 +39,89 @@ Each finding contains:
 
 ## Classifier boundary
 
-Expose:
+Public API:
 
 ```text
-classify_structural_diff(&StructuralDiffReport) -> Result<CompatibilityReport, CompatibilityError>
+classify_structural_diff(&StructuralDiffReport)
+    -> Result<CompatibilityReport, CompatibilityError>
 ```
 
-The classifier accepts only CF-03 schema v1. Unsupported input schema fails closed.
+The classifier accepts only CF-03 schema v1. Unsupported schema or unknown future structural fields fail closed.
 
-The engine must exhaustively handle every `StructuralChangeKind`. `ElementFieldChanged` and `StructureFieldChanged` are further dispatched by the CF-03 field name. An unknown future structural field returns `CompatibilityError::UnsupportedStructuralField` rather than receiving a fallback severity.
+Before rule dispatch it also fails closed on duplicate `constraint.key` values and on present non-string or unknown `binding.strength` / `slicing.rules` values.
 
-## Directional rules
+## Directional variance
 
-The engine uses contract variance rather than a single undirected severity:
+Producer compatibility detects tightening of what may be emitted. Consumer compatibility detects widening or relaxation that may allow after-valid output outside the assumptions of a before-consumer.
 
-- producer compatibility detects tightening of what may be emitted;
-- consumer compatibility detects widening of what may be received.
+Cardinality and maximum-length rules compare ordered bounds, including `*` as unbounded maximum.
 
-Cardinality and finite max/maxLength changes are therefore classified by comparing ordered bounds.
+## Type rules
 
-Type arrays are already normalized by CF-03. Convert their entries to canonical JSON set identities and compare set inclusion:
+CF-03 already normalizes type arrays. CF-04 separates:
 
-- after strict subset of before -> producer BREAKING;
-- after strict superset of before -> consumer BREAKING;
-- incomparable replacement -> BREAKING in both directions.
+- direct type-code set variance, which can support `BREAKING` claims;
+- profile/targetProfile/aggregation qualifier changes, which remain `RISKY` when the type-code set itself is unchanged.
+
+This avoids false `BREAKING` claims where qualifier subset/overlap has not been proven.
 
 ## Binding rules
 
-Parse binding strength when available using the R4 order:
+Use the FHIR R4 strength order:
 
 ```text
 example < preferred < extensible < required
 ```
 
-Strengthening is producer-breaking; weakening is consumer-breaking.
+Strengthening is producer-breaking and weakening is consumer-breaking.
 
-If the ValueSet canonical changes, emit RISKY findings for both directions because terminology set inclusion is CF-07 work. If binding payload changes in another unmodeled way, emit RISKY in both directions.
+A bound ValueSet change emits `RISKY` findings for both directions because terminology set inclusion is CF-07 work. Unknown present binding strengths fail closed.
 
 ## Constraint rules
 
-For `constraint` arrays, inspect error/warning severity when additions/removals are unambiguous:
+Constraint arrays are keyed by `constraint.key`. Duplicate keys fail closed.
 
-- added error constraint -> producer BREAKING;
-- removed error constraint -> consumer BREAKING;
-- warning-only additions/removals -> directional RISKY;
-- non-identical replacement when implication is unknown -> RISKY both.
+- add error invariant -> producer `BREAKING`;
+- remove error invariant -> consumer `BREAKING`;
+- add/remove warning -> directional `RISKY`;
+- warning -> error -> producer `BREAKING`;
+- error -> warning -> consumer `BREAKING`;
+- same-key expression/metadata rewrite -> `RISKY` both unless a later oracle proves implication/equivalence.
 
-No FHIRPath equivalence solver is introduced.
+No FHIRPath implication solver is introduced.
 
 ## Slicing rules
 
-Read `slicing.rules` using `open < openAtEnd < closed` as increasing restrictiveness and inspect `ordered` when present.
+Use `open < openAtEnd < closed` as increasing restrictiveness and inspect `ordered` when present.
 
-- increasing restrictiveness or false->true ordering -> producer BREAKING;
-- relaxing the rule or true->false ordering -> consumer RISKY;
-- discriminator or other slicing payload changes -> RISKY both.
+- more restrictive -> producer `BREAKING`;
+- relaxed -> consumer `RISKY`;
+- false -> true ordering -> producer `BREAKING`;
+- true -> false -> consumer `RISKY`;
+- discriminator/residual slicing change -> `RISKY` both;
+- unknown present `slicing.rules` -> fail closed.
 
 ## Must Support and modifiers
 
-Any `mustSupport` change is RISKY both because R4 defines support obligations as contextual and distinct from cardinality.
+Any Must Support change is `RISKY` both because R4 support obligations are context-dependent and distinct from cardinality.
 
-Newly setting `isModifier=true` emits consumer BREAKING plus producer RISKY. Other modifier-semantic changes emit RISKY both.
+New `isModifier=true` emits consumer `BREAKING` plus producer `RISKY`. Other modifier-semantic changes remain `RISKY` both.
 
 ## Residual structural facts
 
-To avoid silent gaps:
+CF-04 does not silently drop CF-03 facts:
 
-- resource byte changes remain explicit RISKY findings;
-- package filename/id/version changes are RISKY;
-- resource additions are ADDITIVE;
-- resource removals and type/FHIR-version identity changes are BREAKING where the contract implication is direct;
-- fields whose semantic subset relation is not established by CF-04 are RISKY rather than guessed safe.
+- resource addition/removal and direct identity/target rules are classified explicitly;
+- filename/id/version, view, element, default, representation, extension-order, and other non-proven relations remain explicit `RISKY`/`ADDITIVE`/`BREAKING` according to the stable rule;
+- resource byte changes emit residual `RISKY` findings **only if the same resource has no more precise structural fact**. A precise structural fact subsumes the generic byte-hash fact.
 
-## Duplicate snapshot/differential facts
+## Snapshot/differential deduplication
 
-Before classification, a differential element-field change that is byte-for-byte equivalent to a snapshot element-field change for the same resource/element/field/kind/before/after tuple may be skipped. Snapshot evidence wins. View add/remove changes are never deduplicated this way.
+The public classifier precomputes a `BTreeSet` of snapshot element-field identities before the classification loop. Equivalent differential facts are removed through indexed membership checks and snapshot evidence wins.
+
+This replaces public-path nested per-change scanning and avoids O(n²) deduplication behavior on large real diffs.
 
 ## CLI
-
-Add:
 
 ```text
 commandf classify <package-name> \
@@ -117,29 +130,43 @@ commandf classify <package-name> \
   --format json
 ```
 
-Refactor the existing Diff CLI loading into one internal helper returning `StructuralDiffReport`, then use it for both `diff` and `classify`.
+`diff` and `classify` share the same internal `build_diff_report` two-state loader. `classify` performs no package acquisition.
 
-CF-04 does not set policy exit codes based on findings. That quality-gate behavior belongs to CF-05.
+CF-04 intentionally does **not** change the process exit code based on findings. Policy gates and SARIF belong to CF-05.
+
+The repeated CLI path arguments remain explicit in CF-04; consolidating Clap argument structs was reviewed as optional cleanup and not adopted because it adds refactor churn without changing the public contract or correctness.
 
 ## Validation
 
 Synthetic tests cover:
 
-- empty report -> empty findings and byte-stable JSON;
+- empty report and repeated byte-identical classification;
 - min/max/maxLength directionality;
-- type narrowing/widening/incomparable replacement;
-- fixed and pattern add/remove/change;
-- binding strength direction and ValueSet-change RISKY behavior;
-- constraint addition/removal/change behavior;
-- Must Support and modifier behavior;
-- slicing restriction/relaxation;
-- resource/view/element and residual byte rules;
-- unknown future field fail-closed behavior;
+- type-code narrowing/widening/incomparable replacement and qualifier-only RISKY behavior;
+- fixed, pattern, and value-bound add/remove/change;
+- binding-strength direction and ValueSet-change RISKY behavior;
+- constraint additions/removals/severity/rewrite behavior;
+- Must Support, modifier, and slicing behavior;
+- resource/view/element/residual rules;
+- unknown field/schema failure;
+- duplicate constraint-key failure;
+- unknown/malformed binding-strength and slicing-rule failure;
 - snapshot/differential deduplication;
-- CLI help, missing-path errors, corrupted cache behavior, and offline classify success.
+- residual-byte subsumption;
+- corrupted-cache failure reason at the CLI boundary;
+- offline classify success.
 
-Real CI extends the current official R4 smoke by running `commandf classify` against the same independently resolved before/after states and requiring an empty finding list for self-equivalent content.
+Real CI independently resolves and verifies published `hl7.fhir.r4.core@4.0.1` into explicit before/after states, runs CF-02 inspect, CF-03 self-diff, and CF-04 self-classify, and requires both changes and findings to be empty.
+
+## Reviewer reconciliation
+
+CodeRabbit returned two actionable implementation findings:
+
+1. unknown binding/slicing code values could degrade to `RISKY` instead of failing closed — fixed with public pre-dispatch validation and regressions;
+2. differential deduplication used a nested scan — fixed with a precomputed snapshot-identity index on the public path.
+
+Reviewer nitpicks were also considered: corrupted-cache reason assertion, rule-family/determinism coverage, and removal of the temporary CF-04 push trigger were adopted; byte-change subsumption is documented here; sharing the repeated Clap args was intentionally not adopted as non-functional churn.
 
 ## Deferred semantics
 
-Do not add terminology expansion, validator judgments, SARIF, source mapping, baselines, graph impact, mapping execution, or AI authority in CF-04.
+Do not add terminology expansion, validator-oracle judgments, SARIF, source mapping, baselines, ecosystem graph impact, mapping execution, or AI authority in CF-04.
