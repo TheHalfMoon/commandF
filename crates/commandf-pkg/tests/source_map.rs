@@ -136,8 +136,8 @@ fn exact_after_filename_maps_to_sushi_definition_range_and_renders_location() {
     assert_eq!(location.line, 3);
     assert_eq!(location.end_line, 6);
 
-    let text = String::from_utf8(render_mapped(&report, &first, &index, repo.path()).unwrap())
-        .unwrap();
+    let text =
+        String::from_utf8(render_mapped(&report, &first, &index, repo.path()).unwrap()).unwrap();
     assert!(text.starts_with(
         "::error title=commandF CF04-CARD-001,file=input/fsh/nested/example.fsh,line=3,endLine=6::"
     ));
@@ -175,8 +175,8 @@ fn current_tree_unmapped_states_do_not_fabricate_locations() {
     );
     assert!(mapped.mappings.iter().all(|entry| entry.location.is_none()));
 
-    let text = String::from_utf8(render_mapped(&report, &mapped, &index, repo.path()).unwrap())
-        .unwrap();
+    let text =
+        String::from_utf8(render_mapped(&report, &mapped, &index, repo.path()).unwrap()).unwrap();
     assert!(!text.contains(",file="));
     assert!(text.contains("no proven current FSH source mapping"));
 }
