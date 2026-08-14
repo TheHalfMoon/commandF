@@ -192,12 +192,13 @@ fn hierarchical_expansion_duplicate_is_deduplicated_for_membership() {
             "contains": [
                 {
                     "system": "http://example.org/CodeSystem/test",
+                    "version": "1",
                     "code": "a",
                     "contains": [
-                        {"system": "http://example.org/CodeSystem/test", "code": "b"}
+                        {"system": "http://example.org/CodeSystem/test", "version": "1", "code": "b"}
                     ]
                 },
-                {"system": "http://example.org/CodeSystem/test", "code": "b"}
+                {"system": "http://example.org/CodeSystem/test", "version": "1", "code": "b"}
             ]
         }
     });
