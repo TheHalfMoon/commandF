@@ -1,6 +1,6 @@
 # CF-02 Convergence Review
 
-Status: Implementation converged — final exact-head gate pending
+Status: Implementation and convergence complete — founder review candidate
 Date: 2026-08-14
 
 ## Scope result
@@ -60,24 +60,21 @@ The CF-02 contract tests cover:
 8. duplicate `ElementDefinition.id` rejection per view;
 9. slice-aware id and snapshot/differential preservation.
 
-## Implementation candidate evidence
+## Green implementation evidence
 
-Implementation/test candidate:
-
-`6cfd653f56d69aeebdcc6345a4e16ec755ae7f4b`
-
-GitHub Actions run:
-
-`31755422949`
-
-Result:
+Implementation/test candidate `6cfd653f56d69aeebdcc6345a4e16ec755ae7f4b` passed GitHub Actions run `31755422949`:
 
 - Format — PASS;
 - `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` — PASS;
 - `cargo test --locked --workspace --all-features` — PASS;
 - real registry resolve/verify — PASS;
-- real `commandf inspect hl7.fhir.r4.core@4.0.1 --format json` smoke — PASS;
-- emitted JSON parsed successfully and contained at least one StructureDefinition with indexed elements.
+- real `commandf inspect hl7.fhir.r4.core@4.0.1 --format json` smoke — PASS.
+
+Convergence documentation head `e544523e46ae43901faad4fec78258ebfeaf99fe` then passed run `31755709606` with the same complete gate set.
+
+Task-close head `ced2506895e94f35c582a403b556533cb5ebff5d` then passed run `31755783850` with the same complete gate set.
+
+The final PR head after this status-only convergence update must also be green; that exact-head result is recorded in PR metadata rather than causing another self-referential repository documentation commit.
 
 ## Reviewer evidence
 
@@ -95,11 +92,11 @@ Disposition: **NO EVIDENCE / NOT RETURNED**.
 
 Reviewer unavailability does not replace deterministic CI evidence and is recorded explicitly rather than silently treated as success.
 
-## Remaining gate
+## Convergence decision
 
-After this convergence documentation and task reconciliation are committed, run the full locked CI and real-package inspect smoke on the exact final head. Only an exact-head green result may close T011.
+**CF-02 implementation is converged and may be presented for founder review once the exact final PR head is green.**
 
-PR #3 must remain Draft and unmerged. No merge or auto-merge is authorized.
+PR #3 remains Draft and unmerged. No merge or auto-merge is authorized. CF-03 work is not part of this PR.
 
 ## Explicit deferrals
 
