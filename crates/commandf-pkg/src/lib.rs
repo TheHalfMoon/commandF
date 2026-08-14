@@ -1,4 +1,7 @@
 mod archive;
+mod artifact_error;
+mod artifact_inspect;
+mod artifact_model;
 mod cache;
 mod error;
 mod lock;
@@ -7,6 +10,9 @@ mod registry;
 mod resolver;
 mod source;
 
+pub use artifact_error::ArtifactError;
+pub use artifact_inspect::inspect_package;
+pub use artifact_model::{ElementAddress, ElementView, PackageInspection, ResourceArtifact};
 pub use cache::PackageCache;
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
