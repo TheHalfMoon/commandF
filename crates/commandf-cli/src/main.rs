@@ -1,3 +1,5 @@
+mod oracle;
+
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
@@ -97,6 +99,23 @@ enum Command {
         after_lock: PathBuf,
         #[arg(long)]
         after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+    Oracle {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long)]
+        oracle_adapter: PathBuf,
+        #[arg(long)]
+        oracle_java: Option<PathBuf>,
         #[arg(long, value_enum, default_value = "json")]
         format: OutputFormat,
     },
@@ -353,6 +372,29 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             )?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
+            }
+        }
+        Command::Oracle {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            oracle_adapter,
+            oracle_java,
+            format,
+        } => {
+            let bytes = oracle::run(
+                package,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
+                oracle_adapter,
+                oracle_java,
+            )?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&bytes)?,
             }
         }
         Command::GithubAnnotations { input } => {

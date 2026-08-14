@@ -22,6 +22,10 @@ mod compatibility_validate;
 mod error;
 mod lock;
 mod model;
+mod oracle_error;
+mod oracle_model;
+mod oracle_process;
+mod oracle_reconcile;
 mod registry;
 mod resolver;
 mod source;
@@ -31,7 +35,9 @@ mod terminology_index;
 mod terminology_model;
 mod terminology_set;
 
-pub use artifact_diff::diff_package_archives;
+pub use artifact_diff::{
+    diff_package_archives, matched_structure_definition_pairs, MatchedStructureDefinitionPair,
+};
 pub use artifact_diff_error::StructuralDiffError;
 pub use artifact_diff_model::{
     PackageEvidence, ResourceKey, ResourceKeyKind, StructuralChange, StructuralChangeKind,
@@ -54,6 +60,20 @@ pub use compatibility_validate::classify_structural_diff;
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
+pub use oracle_error::OracleError;
+pub use oracle_model::{
+    Hl7OracleReport, OracleChangeState, OracleDivergenceReport, OracleIdentity, OracleMessage,
+    OracleMessageLevel, OracleResourceIdentity, OracleResourceResult, OracleResourceStatus,
+    OracleStates, HL7_ORACLE_PROJECT, HL7_ORACLE_RELEASE, HL7_ORACLE_SOURCE_COMMIT,
+    HL7_VALIDATOR_JAR_SHA256,
+};
+pub use oracle_process::{
+    run_hl7_oracle_adapter, validate_hl7_oracle_adapter, Hl7OracleInvocation,
+    DEFAULT_ORACLE_TIMEOUT_SECS, MAX_ORACLE_STDERR_BYTES, MAX_ORACLE_STDOUT_BYTES,
+};
+pub use oracle_reconcile::{
+    parse_hl7_oracle_report, reconcile_hl7_oracle, validate_hl7_oracle_report,
+};
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};

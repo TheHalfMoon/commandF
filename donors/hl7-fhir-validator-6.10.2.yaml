@@ -1,0 +1,48 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-14
+
+sources:
+  - id: hl7-fhir-core-validator
+    repository: https://github.com/hapifhir/org.hl7.fhir.core
+    ref: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+    tag: 6.10.2
+    license: Apache-2.0
+    maturity: official-release
+    mode:
+      - DEPEND_EXTERNAL_PROCESS
+      - DEPEND_MAVEN_LIBRARY
+      - DIFFERENTIAL_ORACLE
+    release_artifact:
+      name: validator_cli.jar
+      sha256: a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6
+      size_bytes: 187697077
+      redistributed: false
+    scope:
+      - authoritative HL7 FHIR validator/core comparison behavior
+      - StructureDefinition comparison through public structured APIs
+      - differential evidence against commandF CF-03 structural facts
+    exclusions:
+      - no vendored validator jar
+      - no renderer HTML parsing
+      - no reflection into private HL7 comparison internals
+      - no oracle output may silently mutate CF-03 or CF-04 authority
+      - no terminology content redistribution
+
+adoption_decisions:
+  commandf_cf06:
+    use:
+      - exact 6.10.2 Java libraries in isolated tools/hl7-oracle Maven adapter
+      - ComparisonSession and public comparison evidence surfaces
+      - explicit process-boundary oracle invocation from commandF
+    rationale: commandF measures divergence from the authoritative HL7 implementation instead of reimplementing the JVM oracle
+
+  validator_cli_release_artifact:
+    use: provenance-only
+    rationale: published artifact digest anchors the official release identity; the fat jar is not committed to commandF
+
+review_before_upgrade:
+  - verify the new official release tag resolves to an exact source commit
+  - verify published release artifact digest
+  - inspect public comparison API changes
+  - rerun adapter regressions and real R4 differential smoke
+  - record any oracle behavior drift as evidence rather than silently changing commandF rules

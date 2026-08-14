@@ -28,6 +28,15 @@ pub(crate) struct MatchedResourcePair {
     pub after_value: Value,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchedStructureDefinitionPair {
+    pub resource: ResourceKey,
+    pub before_filename: String,
+    pub after_filename: String,
+    pub before_json: Vec<u8>,
+    pub after_json: Vec<u8>,
+}
+
 pub fn diff_package_archives(
     package_name: impl Into<String>,
     before_version: impl Into<String>,
@@ -147,6 +156,52 @@ pub(crate) fn matched_resource_pairs(
         });
     }
     Ok(pairs)
+}
+
+pub fn matched_structure_definition_pairs(
+    package_name: &str,
+    before_version: &str,
+    before_digest: &str,
+    before_bytes: &[u8],
+    after_version: &str,
+    after_digest: &str,
+    after_bytes: &[u8],
+) -> Result<Vec<MatchedStructureDefinitionPair>, StructuralDiffError> {
+    let pairs = matched_resource_pairs(
+        package_name,
+        before_version,
+        before_digest,
+        before_bytes,
+        after_version,
+        after_digest,
+        after_bytes,
+    )?;
+    let mut output = Vec::new();
+    for pair in pairs {
+        if pair.before.resource_type != "StructureDefinition"
+            || pair.after.resource_type != "StructureDefinition"
+        {
+            continue;
+        }
+        let before_json =
+            serde_json::to_vec(&pair.before_value).map_err(|source| StructuralDiffError::Json {
+                file: pair.before.filename.clone(),
+                source,
+            })?;
+        let after_json =
+            serde_json::to_vec(&pair.after_value).map_err(|source| StructuralDiffError::Json {
+                file: pair.after.filename.clone(),
+                source,
+            })?;
+        output.push(MatchedStructureDefinitionPair {
+            resource: pair.key,
+            before_filename: pair.before.filename,
+            after_filename: pair.after.filename,
+            before_json,
+            after_json,
+        });
+    }
+    Ok(output)
 }
 
 fn load_side(
