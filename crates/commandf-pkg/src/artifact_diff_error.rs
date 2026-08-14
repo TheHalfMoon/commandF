@@ -12,6 +12,10 @@ pub enum StructuralDiffError {
         first: String,
         second: String,
     },
+    #[error("duplicate package resource filename: {file}")]
+    DuplicateResourceFilename { file: String },
+    #[error("inspected resource is missing from the scanned archive inventory: {file}")]
+    MissingScannedResource { file: String },
     #[error("invalid structural field {field} in {file}: {message}")]
     InvalidStructuralField {
         file: String,
