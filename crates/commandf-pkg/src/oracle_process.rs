@@ -20,10 +20,7 @@ pub struct Hl7OracleInvocation<'a> {
     pub right_version: Option<&'a str>,
 }
 
-pub fn validate_hl7_oracle_adapter(
-    adapter: &Path,
-    java: Option<&Path>,
-) -> Result<(), OracleError> {
+pub fn validate_hl7_oracle_adapter(adapter: &Path, java: Option<&Path>) -> Result<(), OracleError> {
     if !adapter.is_file() {
         return Err(OracleError::AdapterPath {
             path: adapter.display().to_string(),
