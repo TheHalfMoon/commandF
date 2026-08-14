@@ -1,64 +1,15 @@
-name: ci
+name: cf06-oracle
 
 on:
   pull_request:
   push:
     branches:
-      - feat/cf-01-package-resolution
-      - feat/cf-02-canonical-inspect
-      - feat/cf-03-structural-diff
       - feat/cf-06-hl7-oracle-divergence
 
 permissions:
   contents: read
 
 jobs:
-  rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          components: rustfmt, clippy
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-      - name: Test
-        run: cargo test --locked --workspace --all-features
-      - name: Real FHIR registry, inspect, and self-diff smoke
-        run: |
-          rm -rf /tmp/commandf-smoke
-          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
-          cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
-          cargo run --locked --quiet -p commandf -- inspect hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock --format json > /tmp/commandf-smoke/inspect.json
-
-          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
-          cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
-          cargo run --locked --quiet -p commandf -- diff hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/diff.json
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          inspect = json.loads(Path("/tmp/commandf-smoke/inspect.json").read_text())
-          assert inspect["schema"] == 1
-          assert inspect["package_name"] == "hl7.fhir.r4.core"
-          assert inspect["package_version"] == "4.0.1"
-          assert inspect["resources"]
-          assert any(
-              item["resource_type"] == "StructureDefinition" and item["elements"]
-              for item in inspect["resources"]
-          )
-
-          diff = json.loads(Path("/tmp/commandf-smoke/diff.json").read_text())
-          assert diff["schema"] == 1
-          assert diff["package_name"] == "hl7.fhir.r4.core"
-          assert diff["before"]["version"] == "4.0.1"
-          assert diff["after"]["version"] == "4.0.1"
-          assert diff["changes"] == []
-          PY
-
   oracle-adapter:
     runs-on: ubuntu-latest
     steps:

@@ -1,26 +1,29 @@
 # CF-06 Convergence
 
-Status: Converged implementation; exact final documentation-head CI is recorded in GitHub PR metadata
+Status: Reconciled with canonical main; implementation behavior green; exact final documentation-head CI is recorded in GitHub PR metadata
 
 ## Decision
 
 ```text
-CF-06_COMPLETE_READY_FOR_FOUNDER_REVIEW
+CF-06_COMPLETE_READY_FOR_FOUNDER_MERGE_DECISION
 ```
 
-CF-06 is implemented as a parallel slice directly above converged CF-03. It remains advisory evidence only: CF-03 owns deterministic structural facts, while CF-06 measures agreement/divergence with a pinned official HL7 comparison oracle. No CF-04/CF-05 compatibility severity, policy, SARIF, or exit semantics are imported into this slice.
+CF-06 remains an advisory evidence slice. CF-03 owns deterministic structural facts; CF-06 measures agreement/divergence with a pinned official HL7 comparison oracle. The repository now also contains already-canonical CF-04/CF-05 compatibility policy and SARIF/check behavior, CF-07 terminology evidence, and CF-08 GitHub Action integration. Their presence in the reconciled branch does not change CF-06 authority: oracle states remain evidence relationships only and never become compatibility severity, policy, terminology proof, or source-mapping authority.
 
-## Stack identity
+## Reconciled stack identity
 
 ```text
 repository: TheHalfMoon/commandF
 PR: #7
-base branch: feat/cf-03-structural-diff
-base SHA: aa212b108e05fa0e22312f244f393c59602192b9
+base branch: main
+canonical base SHA: 45a78a8cc8dd0e2f575a56fa79d3a275c0e0fc36
 head branch: feat/cf-06-hl7-oracle-divergence
+prior CF-06 head: 53598f14505387e7c80c7415212820e314c43c54
+reconciliation merge commit: 28612ae46b78c6a7be483dd140e0aa7d16cdb2ce
+style-only follow-up: 8f8afdbd515d2f0be60f663226889cf2d0d10ee2
 ```
 
-The PR must remain Draft, open, and unmerged. CF-07 is not part of this convergence.
+The reconciliation used no force-push or history rewrite. It preserves canonical main and adds the CF-06 oracle implementation, tests, donor provenance, Spec Kit authority files, and Java adapter.
 
 ## Pinned oracle provenance
 
@@ -34,49 +37,72 @@ R4 core context: hl7.fhir.r4.core@4.0.1
 
 The validator fat jar is not vendored. The Java adapter builds against exact `6.10.2` libraries and consumes public structured comparison objects before rendering. `ComparisonRenderer` HTML is not parsed and private comparer nodes are not accessed through reflection.
 
-## Implemented contract
+## Reconciliation architecture
 
-CF-06 now provides:
+The current canonical main already exposes the CF-07 matched-resource path used by terminology. CF-06 requires matched StructureDefinition pairs for the HL7 oracle. Reconciliation therefore keeps one matching authority:
+
+- `matched_resource_pairs(...)` remains the internal shared matcher;
+- `matched_structure_definition_pairs(...)` is a narrow public projection over those matched pairs;
+- no second resource matcher was introduced;
+- corrected CF-03 fail-closed structural validation remains intact;
+- current `check`, SARIF, GitHub annotations, composite Action, and terminology commands remain intact;
+- `commandf oracle` is added alongside them without changing their semantics.
+
+The general mainline workflow remains `.github/workflows/ci.yml`. Oracle-specific Java/HL7 integration gates live separately in `.github/workflows/cf06-oracle.yml`; the final form intentionally contains the `oracle-adapter` job only, avoiding a duplicate Rust/mainline CI job.
+
+## Implemented CF-06 contract
+
+CF-06 provides:
 
 - isolated Java 17 adapter under `tools/hl7-oracle/`;
 - explicit local R4 core/before/after package context with no oracle-time package acquisition;
 - commandF-owned schema-v1 oracle evidence with exact provenance validation;
 - deterministic message sorting/de-duplication and bounded evidence strings/counts;
-- reuse of CF-03 matched canonical StructureDefinition pairs rather than a second matcher;
+- reuse of CF-03 canonical matching rather than a second matcher;
 - evidence relationships `agreement`, `commandf_only`, `authority_only`, `both_changed`, and `uncomparable`;
-- complete unmodified CF-03 structural report embedded in the CF-06 report;
+- complete unmodified structural diff evidence embedded in the CF-06 report;
 - `commandf oracle` with explicit lock/cache/adapter/Java inputs;
 - no implicit PATH lookup for the adapter/Java boundary;
-- 60-second per-pair timeout, 8 MiB stdout cap, 1 MiB stderr cap;
+- 60-second per-pair timeout, 8 MiB stdout cap, and 1 MiB stderr cap;
 - fail-closed malformed JSON, wrong provenance, non-zero exit, timeout, corrupted cache, missing context, and invalid snapshot behavior;
 - Unix process-group termination and Windows process-tree termination fallback so descendants cannot retain inherited pipes past timeout.
 
-CF-06 remains evidence-only. `both_changed` does not claim field-level semantic equivalence, and no status is a compatibility severity judgment.
+`both_changed` does not claim field-level semantic equivalence, and no CF-06 status is a compatibility severity judgment.
 
-## Implementation evidence
+## Reconciled implementation evidence
 
-Exact implementation head:
-
-```text
-fae23c8b555ae2ecaa5feb9fd30f2c095575738a
-```
-
-GitHub Actions run:
+Exact reconciled implementation head:
 
 ```text
-31815040530
+8f8afdbd515d2f0be60f663226889cf2d0d10ee2
 ```
 
-That run completed successfully with both jobs green.
+Mainline GitHub Actions run:
 
-### Rust job
+```text
+31848197442
+```
+
+CF-06 oracle GitHub Actions run:
+
+```text
+31848197445
+```
+
+Both runs completed successfully.
+
+### Mainline `ci`
 
 - Format — PASS
 - locked workspace Clippy with `-D warnings` — PASS
 - full workspace tests — PASS
-- existing real FHIR registry / inspect / independent CF-03 self-diff smoke — PASS
+- CF-08 Action runner security regression — PASS
+- real FHIR inspect / self-diff / self-classify / self-check — PASS
+- real FHIR self-terminology — PASS
+- local composite GitHub Action self-check — PASS
+- Action output verification — PASS
 
-### Oracle-adapter job
+### `cf06-oracle`
 
 - build pinned HL7 oracle adapter — PASS
 - resolve pinned real R4 oracle context — PASS
@@ -88,63 +114,56 @@ That run completed successfully with both jobs green.
 - real HL7 changed-profile evidence is deterministic — PASS
 - real `commandf oracle` changed-profile reconciliation — PASS
 
-The real changed-profile reconciliation proves a positive oracle/CF-03 change relationship while an unchanged control proves `agreement`; the self-equivalence gate proves the pinned HL7 comparer does not create a false divergence for identical R4 input.
+This proves both directions of composition: the oracle works on the current canonical product surface, and the existing check/terminology/Action surfaces remain green with the oracle present.
 
 ## Reviewer reconciliation
 
 ### CodeRabbit
 
-A substantive review produced three actionable inline findings:
+Historical substantive CF-06 review produced three actionable inline findings:
 
 1. unused `Path` import causing configured Rust checks to fail — **valid / fixed / thread resolved**;
 2. timeout killed only the direct child, allowing descendants to retain output pipes — **valid Major / fixed with process-tree termination / regression-tested / thread resolved**;
 3. implementation-plan CLI omitted the required `--oracle-java` path for a JAR adapter — **valid / fixed / thread resolved**.
 
-All three CodeRabbit inline review threads are resolved. Exact implementation run `31815040530` validates the fixes. CodeRabbit commit status at the implementation head is `success`.
+All three historical inline threads remain resolved. The reconciled implementation head reports CodeRabbit commit status `success`, but that status context is not represented as a fresh substantive full re-review PASS.
 
-CodeRabbit's high-level walkthrough still contains historical risk wording generated against earlier heads, including earlier CI/process concerns. That text is not treated as a fresh final manual PASS or as current exact-head evidence. The resolved inline threads plus exact implementation CI are the authoritative disposition evidence.
-
-The generic CodeRabbit docstring-coverage warning is non-functional reviewer metadata and is not represented as a CF-06 behavioral PASS requirement.
+The generic CodeRabbit docstring-coverage warning remains non-functional reviewer metadata and is not a CF-06 behavioral acceptance gate.
 
 ### Qodo
 
-No substantive Qodo review result was observed during convergence. **No Qodo PASS is claimed.**
+No substantive Qodo review result was observed. **No Qodo PASS is claimed.**
 
 ### Cubic
 
-Cubic generated PR summaries describing the implementation. They are informational and are not treated as oracle correctness or merge certification.
+Cubic-generated summaries are informational and are not treated as oracle correctness or merge certification.
 
 ## Spec Kit reconciliation
 
-The canonical CF-06 authority set is:
+The canonical CF-06 authority set remains:
 
 - `specs/006-cf-06-hl7-oracle-divergence/spec.md`
 - `specs/006-cf-06-hl7-oracle-divergence/plan.md`
 - `specs/006-cf-06-hl7-oracle-divergence/tasks.md`
 - `specs/006-cf-06-hl7-oracle-divergence/convergence.md`
 
-The specification and plan are reconciled to the implemented structured HL7 API, explicit local context, structured Java/Rust schema, hardened process tree, CLI inputs, real R4 gates, and CF-07+ deferrals. The task checklist records T001-T014 complete subject to the exact final documentation-head GitHub Actions gate described below.
+CF-06 semantics remain advisory and independent even though its reconciled branch necessarily contains sibling capabilities already canonical on `main`.
 
 ## Final documentation-head validation rule
 
-This file intentionally does not embed the SHA or Actions run created by its own documentation commit. Doing so would create an endless self-referential commit chain.
+This file intentionally records the reconciled implementation head and its two successful workflow runs, not the SHA/run generated by this documentation cleanup commit itself. Embedding the latter would create an endless self-referential commit chain.
 
-Therefore convergence uses two evidence layers:
+The exact final documentation head must independently pass both configured workflows. Those exact final head/run identifiers are recorded in PR metadata after the workflows settle. Any final-head failure reopens convergence.
 
-1. the implementation behavior is certified by exact implementation head `fae23c8b555ae2ecaa5feb9fd30f2c095575738a` and run `31815040530`;
-2. the final documentation head must independently pass the same configured Rust and oracle-adapter workflow, and that exact head/run is recorded in PR metadata after the workflow settles.
+## Explicit non-authority boundaries
 
-A final documentation-head CI failure reopens convergence and must be corrected before founder review.
-
-## Explicit deferrals
-
-CF-06 does not introduce:
+CF-06 does not own or alter:
 
 - CF-04 compatibility severity or producer/consumer rules;
-- CF-05 SARIF or policy-failure exits;
-- CF-07 terminology expansion/set inclusion;
-- GitHub source annotations/upload;
-- FSH/repository source mapping;
+- CF-05 SARIF/check policy-failure semantics;
+- CF-07 terminology expansion/set-inclusion evidence;
+- CF-08 GitHub annotations or Action behavior;
+- CF-09 FSH/repository source mapping;
 - ecosystem dependency graph or blast radius;
 - mapping execution;
 - AI/agent semantic authority.
@@ -152,8 +171,8 @@ CF-06 does not introduce:
 ## Stop condition
 
 ```text
-CF-06: COMPLETE, SUBJECT TO EXACT FINAL DOCUMENTATION-HEAD CI PASS
-PR #7: MUST REMAIN DRAFT / OPEN / UNMERGED
-AUTO-MERGE: MUST REMAIN DISABLED
-CF-07 STARTED: NO
+CF-06: COMPLETE, SUBJECT TO EXACT FINAL DOCUMENTATION-HEAD DUAL-WORKFLOW PASS
+PR #7: OPEN / DRAFT / UNMERGED UNTIL THAT PASS
+AUTO-MERGE: DISABLED
+CF-09: SEPARATE / IN PROGRESS / NOT AUTHORIZED BY CF-06
 ```
