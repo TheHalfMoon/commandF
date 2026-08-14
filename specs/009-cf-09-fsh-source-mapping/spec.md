@@ -138,7 +138,7 @@ unmapped_no_after_filename
 unmapped_no_index_entry
 ```
 
-An invalid, stale, ambiguous, escaping, or oversized index is an operational failure rather than an unmapped success state.
+An invalid, ambiguous, escaping, oversized, or **detectably stale** index (for example, an exported `endLine` beyond the current source EOF) is an operational failure rather than an unmapped success state. A same-length or range-preserving FSH edit can remain numerically compatible with an older range; CF-09 does not claim to detect that case without changed current index/map evidence.
 
 The serialized source map is deterministic derived evidence, not a cryptographic freshness attestation and not standalone physical-location authority. Before mapped GitHub projection commandF MUST:
 

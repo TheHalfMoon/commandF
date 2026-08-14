@@ -13,6 +13,7 @@ use crate::{
 
 pub const MAX_SUSHI_INDEX_INPUT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_SUSHI_INDEX_ENTRIES: usize = 100_000;
+pub const MAX_SOURCE_MAPPED_REPORT_BYTES: usize = 80 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +69,9 @@ pub fn build_source_mapped_check_report(
 
     let index = parse_sushi_index(index_bytes)?;
     let mut mappings = Vec::with_capacity(report.compatibility.findings.len());
+    // A compatibility report can contain many findings for one generated artifact.
+    // Validate each distinct output/source identity once, then reuse the proven location.
+    let mut location_cache = BTreeMap::<String, SourceLocation>::new();
 
     for (finding_index, finding) in report.compatibility.findings.iter().enumerate() {
         let Some(after_filename) = finding.after_filename.as_deref() else {
@@ -88,43 +92,49 @@ pub fn build_source_mapped_check_report(
             continue;
         };
 
-        let source_canonical = fs::canonicalize(fsh_root_canonical.join(&entry.fsh_file))
-            .map_err(|_| SourceMapError::MissingSource(entry.fsh_file.display().to_string()))?;
-        if !source_canonical.starts_with(&fsh_root_canonical)
-            || !source_canonical.starts_with(&repo_root)
-        {
-            return Err(SourceMapError::SourceEscape(
-                entry.fsh_file.display().to_string(),
-            ));
-        }
-        if !fs::metadata(&source_canonical)?.is_file() {
-            return Err(SourceMapError::MissingSource(
-                entry.fsh_file.display().to_string(),
-            ));
-        }
-        let line_count = source_line_count(&source_canonical)?;
-        if u64::from(entry.end_line) > line_count {
-            return Err(SourceMapError::InvalidIndex(format!(
-                "line range for {} ends at {}, but current source has {} lines",
-                entry.fsh_file.display(),
-                entry.end_line,
-                line_count
-            )));
-        }
+        let location = if let Some(location) = location_cache.get(after_filename) {
+            location.clone()
+        } else {
+            let source_canonical = fs::canonicalize(fsh_root_canonical.join(&entry.fsh_file))
+                .map_err(|_| SourceMapError::MissingSource(entry.fsh_file.display().to_string()))?;
+            if !source_canonical.starts_with(&fsh_root_canonical)
+                || !source_canonical.starts_with(&repo_root)
+            {
+                return Err(SourceMapError::SourceEscape(
+                    entry.fsh_file.display().to_string(),
+                ));
+            }
+            if !fs::metadata(&source_canonical)?.is_file() {
+                return Err(SourceMapError::MissingSource(
+                    entry.fsh_file.display().to_string(),
+                ));
+            }
+            let line_count = source_line_count(&source_canonical)?;
+            if u64::from(entry.end_line) > line_count {
+                return Err(SourceMapError::InvalidIndex(format!(
+                    "line range for {} ends at {}, but current source has {} lines",
+                    entry.fsh_file.display(),
+                    entry.end_line,
+                    line_count
+                )));
+            }
 
-        let repo_relative = source_canonical
-            .strip_prefix(&repo_root)
-            .map_err(|_| SourceMapError::SourceEscape(entry.fsh_file.display().to_string()))?;
-        let file = relative_path_to_slash(repo_relative)?;
+            let repo_relative = source_canonical
+                .strip_prefix(&repo_root)
+                .map_err(|_| SourceMapError::SourceEscape(entry.fsh_file.display().to_string()))?;
+            let location = SourceLocation {
+                file: relative_path_to_slash(repo_relative)?,
+                line: entry.start_line,
+                end_line: entry.end_line,
+            };
+            location_cache.insert(after_filename.to_owned(), location.clone());
+            location
+        };
 
         mappings.push(SourceMappingEntry {
             finding_index,
             status: SourceMappingStatus::Mapped,
-            location: Some(SourceLocation {
-                file,
-                line: entry.start_line,
-                end_line: entry.end_line,
-            }),
+            location: Some(location),
         });
     }
 
@@ -227,6 +237,21 @@ pub fn validate_source_mapped_check_report(
                 });
             }
         }
+    }
+    ensure_serialized_report_size(report, MAX_SOURCE_MAPPED_REPORT_BYTES)?;
+    Ok(())
+}
+
+fn ensure_serialized_report_size(
+    report: &SourceMappedCheckReport,
+    maximum: usize,
+) -> Result<(), SourceMapError> {
+    ensure_report_size(report.to_json_bytes()?.len(), maximum)
+}
+
+fn ensure_report_size(found: usize, maximum: usize) -> Result<(), SourceMapError> {
+    if found > maximum {
+        return Err(SourceMapError::ReportTooLarge { found, maximum });
     }
     Ok(())
 }
@@ -381,4 +406,21 @@ fn sha256_hex(bytes: &[u8]) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_map_report_size_limit_is_inclusive() {
+        assert!(ensure_report_size(80, 80).is_ok());
+        assert!(matches!(
+            ensure_report_size(81, 80),
+            Err(SourceMapError::ReportTooLarge {
+                found: 81,
+                maximum: 80
+            })
+        ));
+    }
 }

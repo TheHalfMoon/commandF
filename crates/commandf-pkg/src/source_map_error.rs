@@ -19,6 +19,9 @@ pub enum SourceMapError {
     #[error("SUSHI source index has {found} entries; maximum is {maximum}")]
     TooManyEntries { found: usize, maximum: usize },
 
+    #[error("source-mapped report has {found} bytes; maximum is {maximum}")]
+    ReportTooLarge { found: usize, maximum: usize },
+
     #[error("invalid SUSHI source index: {0}")]
     InvalidIndex(String),
 
@@ -52,6 +55,9 @@ pub enum SourceMapError {
         "persisted source-map evidence does not match the current SUSHI index and source tree"
     )]
     SourceEvidenceMismatch,
+
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),

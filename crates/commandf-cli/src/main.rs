@@ -15,11 +15,11 @@ use commandf_pkg::{
     CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage,
     Lockfile, PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
     StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState, VersionConstraint,
+    MAX_SOURCE_MAPPED_REPORT_BYTES,
 };
 
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_SUSHI_INDEX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_SOURCE_MAP_INPUT_BYTES: u64 = 80 * 1024 * 1024;
 const MAX_RUNTIME_DIAGNOSTIC_CHARS: usize = 4_096;
 
 #[derive(Parser)]
@@ -448,7 +448,8 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             let annotations = match (source_map, fsh_index, repo_root, fsh_root) {
                 (None, None, None, None) => check_report_to_github_annotations_bytes(&report)?,
                 (Some(source_map), Some(fsh_index), Some(repo_root), Some(fsh_root)) => {
-                    let mapped_bytes = read_bounded_file(&source_map, MAX_SOURCE_MAP_INPUT_BYTES)?;
+                    let mapped_bytes =
+                        read_bounded_file(&source_map, MAX_SOURCE_MAPPED_REPORT_BYTES as u64)?;
                     let mapped = SourceMappedCheckReport::from_json_slice(&mapped_bytes)?;
                     let index_bytes = read_bounded_file(&fsh_index, MAX_SUSHI_INDEX_INPUT_BYTES)?;
                     source_mapped_check_report_to_github_annotations_bytes(

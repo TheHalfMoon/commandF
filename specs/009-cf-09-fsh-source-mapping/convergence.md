@@ -111,7 +111,9 @@ match: exact equality to one SUSHI outputFile
 range: fshFile + startLine + endLine
 ```
 
-There is no fallback from `before_filename`, canonical URL, resource id, FSH definition name, element id/path, rule id, or fuzzy similarity. Unmapped findings remain first-class and locationless. Mapped findings add only file/line/endLine; no columns are fabricated.
+There is no fallback from `before_filename`, canonical URL, resource id, FSH definition name, element id/path, rule id, or fuzzy similarity. Unmapped findings remain first-class and locationless. Mapped findings add only file/line/endLine; no columns are fabricated. Current EOF validation detects numerically impossible exported ranges, not same-length/range-preserving source edits; CF-09 does not claim cryptographic source freshness.
+
+Render-time rebuilding from the current index/repository is intentionally retained as a trust boundary for persisted maps. It repeats one full mapping pass across the process boundary by design; the builder now caches validation per repeated `after_filename` so multiple findings for the same generated artifact do not repeatedly canonicalize/stat/scan the same FSH source within a pass.
 
 ## Fail-closed and security contract
 
