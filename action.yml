@@ -28,6 +28,14 @@ inputs:
     description: Optional JSON report path. Parent directory must already exist when supplied.
     required: false
     default: ""
+  fsh-index:
+    description: Optional SUSHI fsh-generated/data/fsh-index.json path for CF-09 source mapping.
+    required: false
+    default: ""
+  fsh-root:
+    description: Repository-relative FSH source root used with fsh-index.
+    required: false
+    default: input/fsh
 outputs:
   report-path:
     description: Resolved path to the complete CF-05 JSON report when evaluation produced one.
@@ -52,4 +60,6 @@ runs:
         COMMANDF_DIRECTION: ${{ inputs.direction }}
         COMMANDF_FAIL_ON: ${{ inputs.fail-on }}
         COMMANDF_REPORT_PATH: ${{ inputs.report-path }}
+        COMMANDF_FSH_INDEX: ${{ inputs.fsh-index }}
+        COMMANDF_FSH_ROOT: ${{ inputs.fsh-root }}
       run: bash "$GITHUB_ACTION_PATH/scripts/github-action.sh"
