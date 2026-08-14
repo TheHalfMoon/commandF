@@ -39,7 +39,8 @@ fn annotation_title_and_message_are_bounded() {
         findings: vec![finding],
     };
     let report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
-    let text = String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
+    let text =
+        String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
 
     assert_eq!(text.lines().count(), 1);
     assert!(text.contains("[title truncated]"));
