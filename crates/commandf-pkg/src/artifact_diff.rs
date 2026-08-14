@@ -19,6 +19,15 @@ struct Side {
     raw: BTreeMap<String, Value>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct MatchedResourcePair {
+    pub key: ResourceKey,
+    pub before: ResourceArtifact,
+    pub after: ResourceArtifact,
+    pub before_value: Value,
+    pub after_value: Value,
+}
+
 pub fn diff_package_archives(
     package_name: impl Into<String>,
     before_version: impl Into<String>,
@@ -94,6 +103,50 @@ pub fn diff_package_archives(
         },
         changes,
     })
+}
+
+pub(crate) fn matched_resource_pairs(
+    package_name: &str,
+    before_version: &str,
+    before_digest: &str,
+    before_bytes: &[u8],
+    after_version: &str,
+    after_digest: &str,
+    after_bytes: &[u8],
+) -> Result<Vec<MatchedResourcePair>, StructuralDiffError> {
+    let before = load_side(package_name, before_version, before_digest, before_bytes)?;
+    let after = load_side(package_name, after_version, after_digest, after_bytes)?;
+    let before_counts = canonical_counts(&before.inspection);
+    let after_counts = canonical_counts(&after.inspection);
+    let before_index = build_resource_index(&before.inspection, &before_counts, &after_counts)?;
+    let after_index = build_resource_index(&after.inspection, &before_counts, &after_counts)?;
+
+    let mut pairs = Vec::new();
+    for (key, before_index) in &before_index {
+        let Some(after_index) = after_index.get(key) else {
+            continue;
+        };
+        let before_resource = &before.inspection.resources[*before_index];
+        let after_resource = &after.inspection.resources[*after_index];
+        let before_value = before.raw.get(&before_resource.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: before_resource.filename.clone(),
+            }
+        })?;
+        let after_value = after.raw.get(&after_resource.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: after_resource.filename.clone(),
+            }
+        })?;
+        pairs.push(MatchedResourcePair {
+            key: key.clone(),
+            before: before_resource.clone(),
+            after: after_resource.clone(),
+            before_value: before_value.clone(),
+            after_value: after_value.clone(),
+        });
+    }
+    Ok(pairs)
 }
 
 fn load_side(
