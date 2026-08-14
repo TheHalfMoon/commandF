@@ -232,8 +232,14 @@ fn required_incomparable_membership_breaks_both_directions() {
     )
     .unwrap();
     assert_eq!(report.binding_refinements.len(), 2);
-    assert_eq!(report.binding_refinements[0].relation, TerminologyRelation::Incomparable);
-    assert_eq!(report.binding_refinements[1].relation, TerminologyRelation::Incomparable);
+    assert_eq!(
+        report.binding_refinements[0].relation,
+        TerminologyRelation::Incomparable
+    );
+    assert_eq!(
+        report.binding_refinements[1].relation,
+        TerminologyRelation::Incomparable
+    );
     let directions = report
         .binding_refinements
         .iter()
