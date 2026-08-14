@@ -5,10 +5,10 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    build_terminology_diff_report, classify_structural_diff, diff_package_archives, inspect_package,
-    FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName,
-    PackageRequest, Resolver, StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState,
-    VersionConstraint,
+    build_terminology_diff_report, classify_structural_diff, diff_package_archives,
+    inspect_package, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache,
+    PackageName, PackageRequest, Resolver, StructuralDiffReport, TerminologyDiffReport,
+    TerminologyPackageState, VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -320,10 +320,7 @@ fn build_terminology_report(
     )?)
 }
 
-fn read_locked_archive(
-    cache: &PackageCache,
-    locked: &LockedPackage,
-) -> Result<Vec<u8>, io::Error> {
+fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> Result<Vec<u8>, io::Error> {
     fs::read(
         cache
             .root()

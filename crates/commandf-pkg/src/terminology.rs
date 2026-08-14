@@ -25,7 +25,11 @@ pub fn build_terminology_diff_report(
     compatibility: &CompatibilityReport,
 ) -> Result<TerminologyDiffReport, TerminologyError> {
     validate_report_contract(structural, compatibility)?;
-    validate_root_evidence(before.lockfile, &structural.package_name, &structural.before)?;
+    validate_root_evidence(
+        before.lockfile,
+        &structural.package_name,
+        &structural.before,
+    )?;
     validate_root_evidence(after.lockfile, &structural.package_name, &structural.after)?;
 
     let before_closure = TerminologyClosure::load(before.lockfile, before.cache)?;
