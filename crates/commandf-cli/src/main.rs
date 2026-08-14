@@ -1,16 +1,19 @@
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    check_report_to_sarif_bytes, classify_structural_diff, diff_package_archives,
-    evaluate_compatibility_policy, inspect_package, CheckDirection, CheckFailOn, CheckPolicy,
-    FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName,
-    PackageRequest, Resolver, StructuralDiffReport, VersionConstraint,
+    check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
+    classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
+    inspect_package, CheckDirection, CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource,
+    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest, Resolver,
+    StructuralDiffReport, VersionConstraint,
 };
+
+const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -82,6 +85,10 @@ enum Command {
         format: CheckOutputFormat,
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+    GithubAnnotations {
+        #[arg(long)]
+        input: PathBuf,
     },
 }
 
@@ -315,8 +322,27 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             }
             return Ok(ExitCode::from(2));
         }
+        Command::GithubAnnotations { input } => {
+            let bytes = read_bounded_file(&input, MAX_CHECK_REPORT_INPUT_BYTES)?;
+            let report = CheckReport::from_json_slice(&bytes)?;
+            let annotations = check_report_to_github_annotations_bytes(&report)?;
+            io::stdout().write_all(&annotations)?;
+        }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
+    let file = fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("input exceeds {max_bytes} byte limit: {}", path.display()),
+        ));
+    }
+    Ok(bytes)
 }
 
 fn write_check_output(bytes: &[u8], output: Option<&Path>) -> io::Result<()> {
