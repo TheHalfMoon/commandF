@@ -143,18 +143,16 @@ pub fn matched_structure_definition_pairs(
                 file: after_artifact.filename.clone(),
             }
         })?;
-        let before_json = serde_json::to_vec(before_value).map_err(|source| {
-            StructuralDiffError::Json {
+        let before_json =
+            serde_json::to_vec(before_value).map_err(|source| StructuralDiffError::Json {
                 file: before_artifact.filename.clone(),
                 source,
-            }
-        })?;
-        let after_json = serde_json::to_vec(after_value).map_err(|source| {
-            StructuralDiffError::Json {
+            })?;
+        let after_json =
+            serde_json::to_vec(after_value).map_err(|source| StructuralDiffError::Json {
                 file: after_artifact.filename.clone(),
                 source,
-            }
-        })?;
+            })?;
         pairs.push(MatchedStructureDefinitionPair {
             resource: resource.clone(),
             before_filename: before_artifact.filename.clone(),
