@@ -137,17 +137,22 @@ fn missing_observation_never_becomes_false_agreement() {
         vec![],
     )
     .unwrap();
-    assert_eq!(report.resources[0].status, OracleResourceStatus::Uncomparable);
+    assert_eq!(
+        report.resources[0].status,
+        OracleResourceStatus::Uncomparable
+    );
 }
 
 #[test]
 fn observation_identity_mismatch_and_duplicates_fail_closed() {
     let resource = key("http://example.org/StructureDefinition/example");
     let mismatch = oracle("http://example.org/StructureDefinition/other", false);
-    assert!(reconcile_hl7_oracle(diff(vec![]), vec![(resource.clone(), mismatch)])
-        .unwrap_err()
-        .to_string()
-        .contains("observation identity mismatch"));
+    assert!(
+        reconcile_hl7_oracle(diff(vec![]), vec![(resource.clone(), mismatch)])
+            .unwrap_err()
+            .to_string()
+            .contains("observation identity mismatch")
+    );
 
     let observation = oracle(&resource.value, false);
     assert!(reconcile_hl7_oracle(
@@ -170,12 +175,12 @@ fn repeated_reconciliation_is_byte_deterministic() {
         StructuralChangeKind::ResourceBytesChanged,
     )]);
     let observation = oracle(&resource.value, true);
-    let first = reconcile_hl7_oracle(
-        input.clone(),
-        vec![(resource.clone(), observation.clone())],
-    )
-    .unwrap();
+    let first =
+        reconcile_hl7_oracle(input.clone(), vec![(resource.clone(), observation.clone())]).unwrap();
     let second = reconcile_hl7_oracle(input, vec![(resource, observation)]).unwrap();
     assert_eq!(first, second);
-    assert_eq!(first.to_json_bytes().unwrap(), second.to_json_bytes().unwrap());
+    assert_eq!(
+        first.to_json_bytes().unwrap(),
+        second.to_json_bytes().unwrap()
+    );
 }
