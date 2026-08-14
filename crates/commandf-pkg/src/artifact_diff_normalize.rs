@@ -9,6 +9,73 @@ pub(crate) fn normalize_structural_field(field: &str, value: &Value) -> Value {
     }
 }
 
+pub(crate) fn validate_resource_structural_field(
+    field: &str,
+    value: &Value,
+) -> Result<(), String> {
+    match field {
+        "contextInvariant" => validate_string_array(value, "expected an array of strings"),
+        "context" => {
+            let entries = value
+                .as_array()
+                .ok_or_else(|| "expected an array of context objects".to_owned())?;
+            for (index, entry) in entries.iter().enumerate() {
+                let object = entry
+                    .as_object()
+                    .ok_or_else(|| format!("context[{index}] must be an object"))?;
+                require_string(object, "type", &format!("context[{index}]"))?;
+                require_string(object, "expression", &format!("context[{index}]"))?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+pub(crate) fn validate_element_structural_field(
+    field: &str,
+    value: &Value,
+) -> Result<(), String> {
+    match field {
+        "representation" | "condition" => {
+            validate_string_array(value, "expected an array of strings")
+        }
+        "type" => {
+            let types = value
+                .as_array()
+                .ok_or_else(|| "expected an array of type objects".to_owned())?;
+            for (index, entry) in types.iter().enumerate() {
+                let object = entry
+                    .as_object()
+                    .ok_or_else(|| format!("type[{index}] must be an object"))?;
+                require_string(object, "code", &format!("type[{index}]"))?;
+                for nested in ["profile", "targetProfile", "aggregation"] {
+                    if let Some(value) = object.get(nested) {
+                        validate_string_array(
+                            value,
+                            &format!("type[{index}].{nested} must be an array of strings"),
+                        )?;
+                    }
+                }
+            }
+            Ok(())
+        }
+        "constraint" => {
+            let constraints = value
+                .as_array()
+                .ok_or_else(|| "expected an array of constraint objects".to_owned())?;
+            for (index, entry) in constraints.iter().enumerate() {
+                let object = entry
+                    .as_object()
+                    .ok_or_else(|| format!("constraint[{index}] must be an object"))?;
+                require_string(object, "key", &format!("constraint[{index}]"))?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn canonicalize(value: &Value) -> Value {
     match value {
         Value::Object(object) => {
@@ -43,7 +110,11 @@ fn normalize_types(value: &Value) -> Value {
             entry
         })
         .collect::<Vec<_>>();
-    normalized.sort_by_key(stable_json);
+    normalized.sort_by(|left, right| {
+        type_code(left)
+            .cmp(type_code(right))
+            .then_with(|| stable_json(left).cmp(&stable_json(right)))
+    });
     Value::Array(normalized)
 }
 
@@ -60,12 +131,36 @@ fn normalize_constraints(value: &Value) -> Value {
     Value::Array(normalized)
 }
 
+fn type_code(value: &Value) -> &str {
+    value
+        .as_object()
+        .and_then(|object| object.get("code"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+}
+
 fn constraint_key(value: &Value) -> &str {
     value
         .as_object()
         .and_then(|object| object.get("key"))
         .and_then(Value::as_str)
         .unwrap_or("")
+}
+
+fn validate_string_array(value: &Value, message: &str) -> Result<(), String> {
+    let values = value.as_array().ok_or_else(|| message.to_owned())?;
+    if values.iter().all(Value::is_string) {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn require_string(object: &Map<String, Value>, field: &str, path: &str) -> Result<(), String> {
+    match object.get(field) {
+        Some(Value::String(value)) if !value.is_empty() => Ok(()),
+        _ => Err(format!("{path}.{field} must be a non-empty string")),
+    }
 }
 
 fn sort_array(value: &Value, normalize: fn(&Value) -> Value) -> Value {

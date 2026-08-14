@@ -12,6 +12,8 @@ pub enum StructuralDiffError {
         first: String,
         second: String,
     },
+    #[error("canonical URL {url} has multiplicity but {file} has no usable version")]
+    CanonicalMultiplicityMissingVersion { url: String, file: String },
     #[error("duplicate package resource filename: {file}")]
     DuplicateResourceFilename { file: String },
     #[error("inspected resource is missing from the scanned archive inventory: {file}")]

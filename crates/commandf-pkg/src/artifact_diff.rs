@@ -137,7 +137,7 @@ fn build_resource_index(
 ) -> Result<BTreeMap<ResourceKey, usize>, StructuralDiffError> {
     let mut index = BTreeMap::new();
     for (position, resource) in inspection.resources.iter().enumerate() {
-        let key = resource_key(resource, before_counts, after_counts);
+        let key = resource_key(resource, before_counts, after_counts)?;
         if let Some(first_position) = index.insert(key.clone(), position) {
             return Err(StructuralDiffError::AmbiguousResourceKey {
                 key: format!("{:?}:{}", key.kind, key.value),
@@ -153,33 +153,38 @@ fn resource_key(
     resource: &ResourceArtifact,
     before_counts: &BTreeMap<String, usize>,
     after_counts: &BTreeMap<String, usize>,
-) -> ResourceKey {
+) -> Result<ResourceKey, StructuralDiffError> {
     if let Some(url) = &resource.canonical_url {
         let before_count = before_counts.get(url).copied().unwrap_or(0);
         let after_count = after_counts.get(url).copied().unwrap_or(0);
         let value = if before_count <= 1 && after_count <= 1 {
             url.clone()
         } else {
-            match &resource.canonical_version {
-                Some(version) => format!("{url}|{version}"),
-                None => url.clone(),
-            }
+            let version = resource
+                .canonical_version
+                .as_deref()
+                .filter(|version| !version.trim().is_empty())
+                .ok_or_else(|| StructuralDiffError::CanonicalMultiplicityMissingVersion {
+                    url: url.clone(),
+                    file: resource.filename.clone(),
+                })?;
+            format!("{url}|{version}")
         };
-        return ResourceKey {
+        return Ok(ResourceKey {
             kind: ResourceKeyKind::Canonical,
             value,
-        };
+        });
     }
     if let Some(id) = &resource.id {
-        return ResourceKey {
+        return Ok(ResourceKey {
             kind: ResourceKeyKind::ResourceId,
             value: format!("{}/{}", resource.resource_type, id),
-        };
+        });
     }
-    ResourceKey {
+    Ok(ResourceKey {
         kind: ResourceKeyKind::Filename,
         value: resource.filename.clone(),
-    }
+    })
 }
 
 fn compare_matched_resource(

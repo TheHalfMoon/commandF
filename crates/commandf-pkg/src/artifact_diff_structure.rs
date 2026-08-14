@@ -6,7 +6,10 @@ use crate::{
     artifact_diff_change::{base_change, element_change, view_change},
     artifact_diff_error::StructuralDiffError,
     artifact_diff_model::{ResourceKey, StructuralChange, StructuralChangeKind},
-    artifact_diff_normalize::normalize_structural_field,
+    artifact_diff_normalize::{
+        normalize_structural_field, validate_element_structural_field,
+        validate_resource_structural_field,
+    },
     ElementView, ResourceArtifact,
 };
 
@@ -33,8 +36,12 @@ pub(crate) fn compare_structure_definition(
         "context",
         "contextInvariant",
     ] {
-        let before_value = normalized_optional_field(before, field);
-        let after_value = normalized_optional_field(after, field);
+        let before_value = normalized_optional_resource_field(
+            before,
+            field,
+            &before_resource.filename,
+        )?;
+        let after_value = normalized_optional_resource_field(after, field, &after_resource.filename)?;
         if before_value != after_value {
             let mut change = base_change(
                 StructuralChangeKind::StructureFieldChanged,
@@ -63,7 +70,7 @@ pub(crate) fn compare_structure_definition(
             before_view,
             after_view,
             changes,
-        );
+        )?;
     }
 
     Ok(())
@@ -121,7 +128,7 @@ fn compare_view(
     before: Option<ElementMap>,
     after: Option<ElementMap>,
     changes: &mut Vec<StructuralChange>,
-) {
+) -> Result<(), StructuralDiffError> {
     match (&before, &after) {
         (None, Some(_)) => changes.push(view_change(
             StructuralChangeKind::ViewAdded,
@@ -159,7 +166,7 @@ fn compare_view(
                 before_element,
                 after_element,
                 changes,
-            ),
+            )?,
             (Some(_), None) => changes.push(element_change(
                 StructuralChangeKind::ElementRemoved,
                 key,
@@ -179,6 +186,7 @@ fn compare_view(
             (None, None) => unreachable!("union id must exist on at least one side"),
         }
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -191,7 +199,7 @@ fn compare_element(
     before: &Map<String, Value>,
     after: &Map<String, Value>,
     changes: &mut Vec<StructuralChange>,
-) {
+) -> Result<(), StructuralDiffError> {
     let fields = before
         .keys()
         .chain(after.keys())
@@ -200,12 +208,20 @@ fn compare_element(
         .collect::<BTreeSet<_>>();
 
     for field in fields {
-        let before_value = before
-            .get(&field)
-            .map(|value| normalize_structural_field(&field, value));
-        let after_value = after
-            .get(&field)
-            .map(|value| normalize_structural_field(&field, value));
+        let before_value = normalized_optional_element_field(
+            before,
+            &field,
+            &before_resource.filename,
+            view,
+            element_id,
+        )?;
+        let after_value = normalized_optional_element_field(
+            after,
+            &field,
+            &after_resource.filename,
+            view,
+            element_id,
+        )?;
         if before_value != after_value {
             let mut change = base_change(
                 StructuralChangeKind::ElementFieldChanged,
@@ -221,6 +237,7 @@ fn compare_element(
             changes.push(change);
         }
     }
+    Ok(())
 }
 
 fn is_structural_element_field(field: &str) -> bool {
@@ -265,8 +282,47 @@ fn structural_object<'a>(
         })
 }
 
-fn normalized_optional_field(object: &Map<String, Value>, field: &str) -> Option<Value> {
-    object
-        .get(field)
-        .map(|value| normalize_structural_field(field, value))
+fn normalized_optional_resource_field(
+    object: &Map<String, Value>,
+    field: &str,
+    file: &str,
+) -> Result<Option<Value>, StructuralDiffError> {
+    let Some(value) = object.get(field) else {
+        return Ok(None);
+    };
+    validate_resource_structural_field(field, value).map_err(|message| {
+        StructuralDiffError::InvalidStructuralField {
+            file: file.to_owned(),
+            field: field.to_owned(),
+            message,
+        }
+    })?;
+    Ok(Some(normalize_structural_field(field, value)))
+}
+
+fn normalized_optional_element_field(
+    object: &Map<String, Value>,
+    field: &str,
+    file: &str,
+    view: ElementView,
+    element_id: &str,
+) -> Result<Option<Value>, StructuralDiffError> {
+    let Some(value) = object.get(field) else {
+        return Ok(None);
+    };
+    validate_element_structural_field(field, value).map_err(|message| {
+        StructuralDiffError::InvalidStructuralField {
+            file: file.to_owned(),
+            field: format!("{}.element[{element_id}].{field}", view_name(view)),
+            message,
+        }
+    })?;
+    Ok(Some(normalize_structural_field(field, value)))
+}
+
+fn view_name(view: ElementView) -> &'static str {
+    match view {
+        ElementView::Snapshot => "snapshot",
+        ElementView::Differential => "differential",
+    }
 }
