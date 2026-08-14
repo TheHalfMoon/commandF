@@ -34,12 +34,7 @@ pub fn diff_package_archives(
     let after_version = after_version.into();
     let after_digest = after_digest.into();
 
-    let before = load_side(
-        &package_name,
-        &before_version,
-        &before_digest,
-        before_bytes,
-    )?;
+    let before = load_side(&package_name, &before_version, &before_digest, before_bytes)?;
     let after = load_side(&package_name, &after_version, &after_digest, after_bytes)?;
 
     let before_counts = canonical_counts(&before.inspection);
@@ -247,7 +242,8 @@ fn compare_matched_resource(
         before.sha256 != after.sha256,
     );
 
-    if before.resource_type == "StructureDefinition" && after.resource_type == "StructureDefinition" {
+    if before.resource_type == "StructureDefinition" && after.resource_type == "StructureDefinition"
+    {
         let before_value = before_raw
             .get(&before.filename)
             .expect("scanner and inspection inventory must agree");
