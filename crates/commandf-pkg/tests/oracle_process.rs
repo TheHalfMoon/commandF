@@ -3,7 +3,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use commandf_pkg::{run_hl7_oracle_adapter, Hl7OracleInvocation};
 
@@ -134,5 +134,32 @@ fn adapter_timeout_kills_the_process() {
     )
     .expect_err("timeout must fail");
     assert!(error.to_string().contains("timed out"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn adapter_timeout_kills_descendant_process_group() {
+    let root = unique_temp_dir("timeout-descendant");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let adapter = root.join("adapter.sh");
+    write_executable(&adapter, "sleep 60 & wait");
+    let (core, left, right) = package_inputs(&root);
+
+    let started = Instant::now();
+    let error = invoke(
+        &adapter,
+        None,
+        &core,
+        &left,
+        &right,
+        Duration::from_millis(100),
+    )
+    .expect_err("timeout must kill descendant process group");
+    assert!(error.to_string().contains("timed out"));
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "timeout return exceeded bound: {:?}",
+        started.elapsed()
+    );
     let _ = fs::remove_dir_all(root);
 }

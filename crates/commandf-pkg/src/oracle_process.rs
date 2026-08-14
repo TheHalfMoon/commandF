@@ -1,6 +1,6 @@
 use std::io::{self, Read};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -77,6 +77,7 @@ pub fn run_hl7_oracle_adapter(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    configure_process_tree(&mut command);
 
     let mut child = command.spawn().map_err(|source| OracleError::AdapterIo {
         operation: "spawning adapter",
@@ -104,7 +105,7 @@ pub fn run_hl7_oracle_adapter(
             break status;
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
+            terminate_process_tree(&mut child);
             let _ = child.wait();
             let _ = join_capture(stdout_thread, "stdout");
             let _ = join_capture(stderr_thread, "stderr");
@@ -128,6 +129,58 @@ pub fn run_hl7_oracle_adapter(
     }
 
     parse_hl7_oracle_report(&stdout)
+}
+
+#[cfg(unix)]
+fn configure_process_tree(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_process_tree(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn terminate_process_tree(child: &mut Child) {
+    extern "C" {
+        fn kill(pid: i32, signal: i32) -> i32;
+    }
+    const SIGKILL: i32 = 9;
+
+    let Ok(pid) = i32::try_from(child.id()) else {
+        let _ = child.kill();
+        return;
+    };
+    // SAFETY: this child was spawned with PGID == PID, so the negative PID targets only
+    // the dedicated adapter process group and its descendants.
+    let result = unsafe { kill(-pid, SIGKILL) };
+    if result != 0 {
+        let _ = child.kill();
+    }
+}
+
+#[cfg(windows)]
+fn terminate_process_tree(child: &mut Child) {
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
+    let taskkill = PathBuf::from(root).join("System32").join("taskkill.exe");
+    let pid = child.id().to_string();
+    let status = Command::new(taskkill)
+        .args(["/PID", &pid, "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    if !matches!(status, Ok(status) if status.success()) {
+        let _ = child.kill();
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_process_tree(child: &mut Child) {
+    let _ = child.kill();
 }
 
 fn adapter_is_jar(adapter: &Path) -> bool {
