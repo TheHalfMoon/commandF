@@ -19,6 +19,15 @@ struct Side {
     raw: BTreeMap<String, Value>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct MatchedResourcePair {
+    pub key: ResourceKey,
+    pub before: ResourceArtifact,
+    pub after: ResourceArtifact,
+    pub before_value: Value,
+    pub after_value: Value,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MatchedStructureDefinitionPair {
     pub resource: ResourceKey,
@@ -105,6 +114,50 @@ pub fn diff_package_archives(
     })
 }
 
+pub(crate) fn matched_resource_pairs(
+    package_name: &str,
+    before_version: &str,
+    before_digest: &str,
+    before_bytes: &[u8],
+    after_version: &str,
+    after_digest: &str,
+    after_bytes: &[u8],
+) -> Result<Vec<MatchedResourcePair>, StructuralDiffError> {
+    let before = load_side(package_name, before_version, before_digest, before_bytes)?;
+    let after = load_side(package_name, after_version, after_digest, after_bytes)?;
+    let before_counts = canonical_counts(&before.inspection);
+    let after_counts = canonical_counts(&after.inspection);
+    let before_index = build_resource_index(&before.inspection, &before_counts, &after_counts)?;
+    let after_index = build_resource_index(&after.inspection, &before_counts, &after_counts)?;
+
+    let mut pairs = Vec::new();
+    for (key, before_index) in &before_index {
+        let Some(after_index) = after_index.get(key) else {
+            continue;
+        };
+        let before_resource = &before.inspection.resources[*before_index];
+        let after_resource = &after.inspection.resources[*after_index];
+        let before_value = before.raw.get(&before_resource.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: before_resource.filename.clone(),
+            }
+        })?;
+        let after_value = after.raw.get(&after_resource.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: after_resource.filename.clone(),
+            }
+        })?;
+        pairs.push(MatchedResourcePair {
+            key: key.clone(),
+            before: before_resource.clone(),
+            after: after_resource.clone(),
+            before_value: before_value.clone(),
+            after_value: after_value.clone(),
+        });
+    }
+    Ok(pairs)
+}
+
 pub fn matched_structure_definition_pairs(
     package_name: &str,
     before_version: &str,
@@ -114,54 +167,43 @@ pub fn matched_structure_definition_pairs(
     after_digest: &str,
     after_bytes: &[u8],
 ) -> Result<Vec<MatchedStructureDefinitionPair>, StructuralDiffError> {
-    let before = load_side(package_name, before_version, before_digest, before_bytes)?;
-    let after = load_side(package_name, after_version, after_digest, after_bytes)?;
-    let before_counts = canonical_counts(&before.inspection);
-    let after_counts = canonical_counts(&after.inspection);
-    let before_index = build_resource_index(&before.inspection, &before_counts, &after_counts)?;
-    let after_index = build_resource_index(&after.inspection, &before_counts, &after_counts)?;
-    let mut pairs = Vec::new();
-
-    for (resource, before_index) in &before_index {
-        let Some(after_index) = after_index.get(resource) else {
-            continue;
-        };
-        let before_artifact = &before.inspection.resources[*before_index];
-        let after_artifact = &after.inspection.resources[*after_index];
-        if before_artifact.resource_type != "StructureDefinition"
-            || after_artifact.resource_type != "StructureDefinition"
+    let pairs = matched_resource_pairs(
+        package_name,
+        before_version,
+        before_digest,
+        before_bytes,
+        after_version,
+        after_digest,
+        after_bytes,
+    )?;
+    let mut output = Vec::new();
+    for pair in pairs {
+        if pair.before.resource_type != "StructureDefinition"
+            || pair.after.resource_type != "StructureDefinition"
         {
             continue;
         }
-        let before_value = before.raw.get(&before_artifact.filename).ok_or_else(|| {
-            StructuralDiffError::MissingScannedResource {
-                file: before_artifact.filename.clone(),
+        let before_json = serde_json::to_vec(&pair.before_value).map_err(|source| {
+            StructuralDiffError::Json {
+                file: pair.before.filename.clone(),
+                source,
             }
         })?;
-        let after_value = after.raw.get(&after_artifact.filename).ok_or_else(|| {
-            StructuralDiffError::MissingScannedResource {
-                file: after_artifact.filename.clone(),
+        let after_json = serde_json::to_vec(&pair.after_value).map_err(|source| {
+            StructuralDiffError::Json {
+                file: pair.after.filename.clone(),
+                source,
             }
         })?;
-        let before_json =
-            serde_json::to_vec(before_value).map_err(|source| StructuralDiffError::Json {
-                file: before_artifact.filename.clone(),
-                source,
-            })?;
-        let after_json =
-            serde_json::to_vec(after_value).map_err(|source| StructuralDiffError::Json {
-                file: after_artifact.filename.clone(),
-                source,
-            })?;
-        pairs.push(MatchedStructureDefinitionPair {
-            resource: resource.clone(),
-            before_filename: before_artifact.filename.clone(),
-            after_filename: after_artifact.filename.clone(),
+        output.push(MatchedStructureDefinitionPair {
+            resource: pair.key,
+            before_filename: pair.before.filename,
+            after_filename: pair.after.filename,
             before_json,
             after_json,
         });
     }
-    Ok(pairs)
+    Ok(output)
 }
 
 fn load_side(

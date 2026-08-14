@@ -7,7 +7,7 @@ on:
       - feat/cf-01-package-resolution
       - feat/cf-02-canonical-inspect
       - feat/cf-03-structural-diff
-      - feat/cf-06-hl7-oracle-divergence
+      - feat/cf-07-terminology-diff
 
 permissions:
   contents: read
@@ -26,7 +26,9 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace --all-features
-      - name: Real FHIR registry, inspect, and self-diff smoke
+      - name: CF-08 Action runner security regression
+        run: bash .github/scripts/test-cf08-action-runner.sh
+      - name: Real FHIR registry, inspect, self-diff, self-classify, and self-check smoke
         run: |
           rm -rf /tmp/commandf-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
@@ -36,6 +38,9 @@ jobs:
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- diff hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/diff.json
+          cargo run --locked --quiet -p commandf -- classify hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/classify.json
+          cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/check.json
+          cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format sarif > /tmp/commandf-smoke/check.sarif
 
           python - <<'PY'
           import json
@@ -57,242 +62,76 @@ jobs:
           assert diff["before"]["version"] == "4.0.1"
           assert diff["after"]["version"] == "4.0.1"
           assert diff["changes"] == []
-          PY
 
-  oracle-adapter:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v5.7.0
+          classify = json.loads(Path("/tmp/commandf-smoke/classify.json").read_text())
+          assert classify["schema"] == 1
+          assert classify["ruleset"] == "cf04-rules-v1"
+          assert classify["package_name"] == "hl7.fhir.r4.core"
+          assert classify["before"]["version"] == "4.0.1"
+          assert classify["after"]["version"] == "4.0.1"
+          assert classify["findings"] == []
+
+          check = json.loads(Path("/tmp/commandf-smoke/check.json").read_text())
+          assert check["schema"] == 1
+          assert check["policy"] == {"direction": "both", "fail_on": "breaking"}
+          assert check["decision"]["passed"] is True
+          assert check["decision"]["blocking_findings"] == 0
+          assert check["compatibility"]["findings"] == []
+
+          sarif = json.loads(Path("/tmp/commandf-smoke/check.sarif").read_text())
+          assert sarif["version"] == "2.1.0"
+          assert len(sarif["runs"]) == 1
+          assert sarif["runs"][0]["tool"]["driver"]["name"] == "commandF"
+          assert sarif["runs"][0]["results"] == []
+          assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
+          assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
+          PY
+      - name: Real FHIR self-terminology smoke
+        run: |
+          cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          terminology = json.loads(Path("/tmp/commandf-smoke/terminology.json").read_text())
+          assert terminology["schema"] == 1
+          assert terminology["ruleset"] == "cf07-terminology-v1"
+          assert terminology["package_name"] == "hl7.fhir.r4.core"
+          assert terminology["before"]["version"] == "4.0.1"
+          assert terminology["after"]["version"] == "4.0.1"
+          assert terminology["compatibility"]["findings"] == []
+          assert terminology["code_systems"] == []
+          assert terminology["value_sets"] == []
+          assert terminology["binding_refinements"] == []
+          PY
+      - name: Local GitHub Action self-check smoke
+        id: cf08-action
+        uses: ./
         with:
-          distribution: temurin
-          java-version: '17'
-      - uses: dtolnay/rust-toolchain@1.97.1
-      - name: Build pinned HL7 oracle adapter
-        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
-      - name: Resolve pinned real R4 oracle context
+          package: hl7.fhir.r4.core
+          before-lock: /tmp/commandf-smoke/before.lock
+          before-cache: /tmp/commandf-smoke/before-cache
+          after-lock: /tmp/commandf-smoke/after.lock
+          after-cache: /tmp/commandf-smoke/after-cache
+      - name: Verify local GitHub Action outputs
+        env:
+          REPORT_PATH: ${{ steps.cf08-action.outputs.report-path }}
+          EXIT_CODE: ${{ steps.cf08-action.outputs.exit-code }}
+          PASSED: ${{ steps.cf08-action.outputs.passed }}
         run: |
-          rm -rf /tmp/commandf-oracle-smoke
-          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-oracle-smoke/cache --lock /tmp/commandf-oracle-smoke/commandf.lock
-          cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-oracle-smoke/cache --lock /tmp/commandf-oracle-smoke/commandf.lock
-      - name: Real HL7 R4 profile self-equivalence oracle smoke
-        run: |
-          ARCHIVE="$(python - <<'PY'
-          import json
-          from pathlib import Path
-
-          lock = json.loads(Path('/tmp/commandf-oracle-smoke/commandf.lock').read_text())
-          package = next(item for item in lock['packages'] if item['name'] == 'hl7.fhir.r4.core')
-          print(Path('/tmp/commandf-oracle-smoke/cache/sha256') / f"{package['sha256']}.tgz")
-          PY
-          )"
-
-          "$JAVA_HOME/bin/java" -jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-            --core-package "$ARCHIVE" \
-            --left-package "$ARCHIVE" \
-            --right-package "$ARCHIVE" \
-            --left-url http://hl7.org/fhir/StructureDefinition/vitalsigns \
-            --right-url http://hl7.org/fhir/StructureDefinition/vitalsigns \
-            > /tmp/commandf-oracle-smoke/hl7.json
-
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          report = json.loads(Path('/tmp/commandf-oracle-smoke/hl7.json').read_text())
-          assert report['schema'] == 1
-          assert report['oracle'] == {
-              'project': 'hapifhir/org.hl7.fhir.core',
-              'release': '6.10.2',
-              'source_commit': 'd06577dbc5c62c74a2a8823fbc4830a3024d5b0b',
-          }
-          assert report['left']['url'] == 'http://hl7.org/fhir/StructureDefinition/vitalsigns'
-          assert report['right']['url'] == 'http://hl7.org/fhir/StructureDefinition/vitalsigns'
-          assert report['messages'] == []
-          assert all(
-              state not in {'changed', 'cannot_evaluate'}
-              for state in report['states'].values()
-          )
-          PY
-      - name: Real commandf oracle self-diff smoke
-        run: |
-          cargo run --locked --quiet -p commandf -- oracle hl7.fhir.r4.core \
-            --before-lock /tmp/commandf-oracle-smoke/commandf.lock \
-            --before-cache /tmp/commandf-oracle-smoke/cache \
-            --after-lock /tmp/commandf-oracle-smoke/commandf.lock \
-            --after-cache /tmp/commandf-oracle-smoke/cache \
-            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-            --oracle-java "$JAVA_HOME/bin/java" \
-            --format json \
-            > /tmp/commandf-oracle-smoke/commandf.json
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path('/tmp/commandf-oracle-smoke/commandf.json').read_text())
-          assert report['schema'] == 1
-          assert report['package_name'] == 'hl7.fhir.r4.core'
-          assert report['oracle']['release'] == '6.10.2'
-          assert report['structural_diff']['changes'] == []
-          assert report['resources'] == []
-          PY
-      - name: Build deterministic changed-profile oracle fixtures
-        run: |
-          ARCHIVE="$(python - <<'PY'
-          import json
-          from pathlib import Path
-
-          lock = json.loads(Path('/tmp/commandf-oracle-smoke/commandf.lock').read_text())
-          package = next(item for item in lock['packages'] if item['name'] == 'hl7.fhir.r4.core')
-          print(Path('/tmp/commandf-oracle-smoke/cache/sha256') / f"{package['sha256']}.tgz")
-          PY
-          )"
-          python tools/hl7-oracle/ci/build_changed_fixture.py \
-            --core-archive "$ARCHIVE" \
-            --output /tmp/commandf-oracle-smoke/changed
-          cargo run --locked --quiet -p commandf -- pkg verify \
-            --cache /tmp/commandf-oracle-smoke/changed/before/cache \
-            --lock /tmp/commandf-oracle-smoke/changed/before/commandf.lock
-          cargo run --locked --quiet -p commandf -- pkg verify \
-            --cache /tmp/commandf-oracle-smoke/changed/after/cache \
-            --lock /tmp/commandf-oracle-smoke/changed/after/commandf.lock
-      - name: Invalid empty snapshot fails closed
-        run: |
-          META=/tmp/commandf-oracle-smoke/changed/fixture.json
-          CORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["core_archive"])' "$META")"
-          BEFORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["before_archive"])' "$META")"
-          INVALID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["invalid_archive"])' "$META")"
-          CANONICAL="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["canonical"])' "$META")"
-
-          set +e
-          "$JAVA_HOME/bin/java" -jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-            --core-package "$CORE" \
-            --left-package "$BEFORE" \
-            --right-package "$INVALID" \
-            --left-url "$CANONICAL" \
-            --right-url "$CANONICAL" \
-            > /tmp/commandf-oracle-smoke/changed/invalid.json \
-            2> /tmp/commandf-oracle-smoke/changed/invalid.err
-          status=$?
-          set -e
-          test "$status" -ne 0
-          test ! -s /tmp/commandf-oracle-smoke/changed/invalid.json
-          grep -Ei 'snapshot|comparison failed' /tmp/commandf-oracle-smoke/changed/invalid.err
-      - name: Corrupted oracle caches fail closed on both sides
-        run: |
-          cp -a /tmp/commandf-oracle-smoke/changed/before /tmp/commandf-oracle-smoke/changed/corrupt-before
-          cp -a /tmp/commandf-oracle-smoke/changed/after /tmp/commandf-oracle-smoke/changed/corrupt-after
-
-          BEFORE_DIGEST="$(python - <<'PY'
-          import json
-          from pathlib import Path
-          lock = json.loads(Path('/tmp/commandf-oracle-smoke/changed/corrupt-before/commandf.lock').read_text())
-          print(next(p['sha256'] for p in lock['packages'] if p['name'] == 'dev.commandf.oracle.fixture'))
-          PY
-          )"
-          AFTER_DIGEST="$(python - <<'PY'
-          import json
-          from pathlib import Path
-          lock = json.loads(Path('/tmp/commandf-oracle-smoke/changed/corrupt-after/commandf.lock').read_text())
-          print(next(p['sha256'] for p in lock['packages'] if p['name'] == 'dev.commandf.oracle.fixture'))
-          PY
-          )"
-          printf corrupt > "/tmp/commandf-oracle-smoke/changed/corrupt-before/cache/sha256/$BEFORE_DIGEST.tgz"
-          printf corrupt > "/tmp/commandf-oracle-smoke/changed/corrupt-after/cache/sha256/$AFTER_DIGEST.tgz"
-
-          for side in before after; do
-            if [ "$side" = before ]; then
-              BEFORE_ROOT=/tmp/commandf-oracle-smoke/changed/corrupt-before
-              AFTER_ROOT=/tmp/commandf-oracle-smoke/changed/after
-            else
-              BEFORE_ROOT=/tmp/commandf-oracle-smoke/changed/before
-              AFTER_ROOT=/tmp/commandf-oracle-smoke/changed/corrupt-after
-            fi
-            set +e
-            cargo run --locked --quiet -p commandf -- oracle dev.commandf.oracle.fixture \
-              --before-lock "$BEFORE_ROOT/commandf.lock" \
-              --before-cache "$BEFORE_ROOT/cache" \
-              --after-lock "$AFTER_ROOT/commandf.lock" \
-              --after-cache "$AFTER_ROOT/cache" \
-              --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-              --oracle-java "$JAVA_HOME/bin/java" \
-              --format json \
-              > "/tmp/commandf-oracle-smoke/changed/corrupt-$side.json" \
-              2> "/tmp/commandf-oracle-smoke/changed/corrupt-$side.err"
-            status=$?
-            set -e
-            test "$status" -ne 0
-            test ! -s "/tmp/commandf-oracle-smoke/changed/corrupt-$side.json"
-          done
-      - name: Real HL7 changed-profile evidence is deterministic
-        run: |
-          META=/tmp/commandf-oracle-smoke/changed/fixture.json
-          CORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["core_archive"])' "$META")"
-          BEFORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["before_archive"])' "$META")"
-          AFTER="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["after_archive"])' "$META")"
-          CANONICAL="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["canonical"])' "$META")"
-
-          for n in 1 2; do
-            "$JAVA_HOME/bin/java" -jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-              --core-package "$CORE" \
-              --left-package "$BEFORE" \
-              --right-package "$AFTER" \
-              --left-url "$CANONICAL" \
-              --right-url "$CANONICAL" \
-              > "/tmp/commandf-oracle-smoke/changed/hl7-$n.json"
-          done
-          cmp /tmp/commandf-oracle-smoke/changed/hl7-1.json /tmp/commandf-oracle-smoke/changed/hl7-2.json
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path('/tmp/commandf-oracle-smoke/changed/hl7-1.json').read_text())
-          meta = json.loads(Path('/tmp/commandf-oracle-smoke/changed/fixture.json').read_text())
-          assert set(meta['mutations']) == {'binding', 'cardinality', 'mustSupport', 'type'}
-          assert report['left']['url'] == meta['canonical']
-          assert report['right']['url'] == meta['canonical']
-          assert report['left']['version'] == '1.0.0'
-          assert report['right']['version'] == '1.1.0'
-          assert report['messages'] or any(
-              state in {'changed', 'cannot_evaluate'}
-              for state in report['states'].values()
-          )
-          PY
-      - name: Real commandf oracle changed-profile reconciliation
-        run: |
-          cargo run --locked --quiet -p commandf -- oracle dev.commandf.oracle.fixture \
-            --before-lock /tmp/commandf-oracle-smoke/changed/before/commandf.lock \
-            --before-cache /tmp/commandf-oracle-smoke/changed/before/cache \
-            --after-lock /tmp/commandf-oracle-smoke/changed/after/commandf.lock \
-            --after-cache /tmp/commandf-oracle-smoke/changed/after/cache \
-            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
-            --oracle-java "$JAVA_HOME/bin/java" \
-            --format json \
-            > /tmp/commandf-oracle-smoke/changed/commandf.json
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path('/tmp/commandf-oracle-smoke/changed/commandf.json').read_text())
-          meta = json.loads(Path('/tmp/commandf-oracle-smoke/changed/fixture.json').read_text())
-          assert report['schema'] == 1
-          assert report['package_name'] == 'dev.commandf.oracle.fixture'
-          assert report['structural_diff']['changes']
-          assert len(report['resources']) == 2
-          by_value = {resource['resource']['value']: resource for resource in report['resources']}
-          changed = by_value[meta['canonical']]
-          control = by_value[meta['control_canonical']]
-          assert changed['resource']['kind'] == 'canonical'
-          assert changed['status'] == 'both_changed'
-          assert changed['oracle'] is not None
-          assert changed['commandf_change_kinds']
-          assert control['resource']['kind'] == 'canonical'
-          assert control['status'] == 'agreement'
-          assert control['oracle'] is not None
-          assert control['commandf_change_kinds'] == []
-          fields = {change.get('field') for change in report['structural_diff']['changes']}
-          assert {'min', 'type', 'binding', 'mustSupport'} <= fields
+          assert os.environ["EXIT_CODE"] == "0"
+          assert os.environ["PASSED"] == "true"
+          report_path = Path(os.environ["REPORT_PATH"])
+          assert report_path.is_file()
+          report = json.loads(report_path.read_text())
+          assert report["schema"] == 1
+          assert report["policy"] == {"direction": "both", "fail_on": "breaking"}
+          assert report["decision"]["passed"] is True
+          assert report["decision"]["blocking_findings"] == 0
+          assert report["compatibility"]["findings"] == []
           PY
