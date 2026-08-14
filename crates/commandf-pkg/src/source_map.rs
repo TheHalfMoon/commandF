@@ -10,6 +10,7 @@ use crate::{
     SourceMappedCheckReport, SourceMappingEntry, SourceMappingStatus,
 };
 
+pub const MAX_SUSHI_INDEX_INPUT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_SUSHI_INDEX_ENTRIES: usize = 100_000;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -37,6 +38,12 @@ pub fn build_source_mapped_check_report(
     fsh_root: &Path,
 ) -> Result<SourceMappedCheckReport, SourceMapError> {
     validate_check_report(report)?;
+    if index_bytes.len() > MAX_SUSHI_INDEX_INPUT_BYTES {
+        return Err(SourceMapError::IndexTooLarge {
+            found: index_bytes.len(),
+            maximum: MAX_SUSHI_INDEX_INPUT_BYTES,
+        });
+    }
 
     let repo_root = fs::canonicalize(repo_root)?;
     if !repo_root.is_dir() {
@@ -155,6 +162,12 @@ pub fn validate_source_mapped_check_report(
         return Err(SourceMapError::InvalidIndex(
             "source-index sha256 must be 64 hexadecimal characters".to_owned(),
         ));
+    }
+    if report.source_index.entries > MAX_SUSHI_INDEX_ENTRIES {
+        return Err(SourceMapError::TooManyEntries {
+            found: report.source_index.entries,
+            maximum: MAX_SUSHI_INDEX_ENTRIES,
+        });
     }
     let serialized_fsh_root =
         portable_relative_path(&report.source_index.fsh_root, "serialized FSH root", true)?;
