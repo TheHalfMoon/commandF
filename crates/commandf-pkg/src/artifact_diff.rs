@@ -164,10 +164,12 @@ fn resource_key(
                 .canonical_version
                 .as_deref()
                 .filter(|version| !version.trim().is_empty())
-                .ok_or_else(|| StructuralDiffError::CanonicalMultiplicityMissingVersion {
-                    url: url.clone(),
-                    file: resource.filename.clone(),
-                })?;
+                .ok_or_else(
+                    || StructuralDiffError::CanonicalMultiplicityMissingVersion {
+                        url: url.clone(),
+                        file: resource.filename.clone(),
+                    },
+                )?;
             format!("{url}|{version}")
         };
         return Ok(ResourceKey {
