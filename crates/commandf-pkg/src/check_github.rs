@@ -1,4 +1,7 @@
+use std::path::Path;
+
 use crate::{
+    build_source_mapped_check_report,
     check::{direction_selected, validate_check_report},
     validate_source_mapped_check_report, CheckError, CheckReport, CompatibilityDirection,
     CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind, SourceLocation,
@@ -46,13 +49,22 @@ pub fn check_report_to_github_annotations_bytes(
 pub fn source_mapped_check_report_to_github_annotations_bytes(
     report: &CheckReport,
     source_map: &SourceMappedCheckReport,
+    index_bytes: &[u8],
+    repo_root: &Path,
+    fsh_root: &Path,
 ) -> Result<Vec<u8>, SourceMapError> {
     validate_check_report(report)?;
     validate_source_mapped_check_report(source_map)?;
     if source_map.check != *report {
         return Err(SourceMapError::CheckReportMismatch);
     }
-    Ok(render_annotations(report, Some(source_map)))
+
+    let verified = build_source_mapped_check_report(report, index_bytes, repo_root, fsh_root)?;
+    if verified != *source_map {
+        return Err(SourceMapError::SourceEvidenceMismatch);
+    }
+
+    Ok(render_annotations(report, Some(&verified)))
 }
 
 fn render_annotations(
