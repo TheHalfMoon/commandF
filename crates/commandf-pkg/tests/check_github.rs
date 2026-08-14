@@ -67,7 +67,8 @@ fn severity_maps_to_github_levels_without_fake_locations() {
         ),
     ]);
     let report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
-    let text = String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
+    let text =
+        String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
     let lines = text.lines().collect::<Vec<_>>();
 
     assert_eq!(lines.len(), 3);
@@ -134,7 +135,9 @@ fn policy_failed_report_still_renders_before_action_exit() {
     let report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
     assert!(!report.decision.passed);
     let bytes = check_report_to_github_annotations_bytes(&report).unwrap();
-    assert!(String::from_utf8(bytes).unwrap().starts_with("::error title="));
+    assert!(String::from_utf8(bytes)
+        .unwrap()
+        .starts_with("::error title="));
 }
 
 #[test]
@@ -148,7 +151,8 @@ fn workflow_command_control_characters_are_escaped() {
     injected.resource.value = "http://example.org/a,b:c%".to_owned();
     let compatibility = compatibility(vec![injected]);
     let report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
-    let text = String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
+    let text =
+        String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
 
     assert_eq!(text.lines().count(), 1);
     assert!(text.starts_with("::error title=commandF CF04%3AINJECT%2C001::"));
@@ -178,10 +182,17 @@ fn annotation_caps_are_bounded_and_overflow_is_disclosed() {
     }
     let compatibility = compatibility(findings);
     let report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
-    let text = String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
+    let text =
+        String::from_utf8(check_report_to_github_annotations_bytes(&report).unwrap()).unwrap();
     let lines = text.lines().collect::<Vec<_>>();
 
-    assert_eq!(lines.iter().filter(|line| line.starts_with("::error ")).count(), 10);
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| line.starts_with("::error "))
+            .count(),
+        10
+    );
     assert_eq!(
         lines
             .iter()
@@ -197,7 +208,10 @@ fn annotation_caps_are_bounded_and_overflow_is_disclosed() {
         10
     );
     assert_eq!(lines.len(), 30);
-    assert!(lines.last().unwrap().contains("omitted errors=1, warnings=1, notices=2"));
+    assert!(lines
+        .last()
+        .unwrap()
+        .contains("omitted errors=1, warnings=1, notices=2"));
     assert_eq!(report.decision.total_findings, 33);
     assert_eq!(report.decision.selected_findings, 33);
 }
@@ -214,6 +228,18 @@ fn repeated_rendering_is_byte_identical_and_empty_report_is_empty() {
     assert!(check_report_to_github_annotations_bytes(&first)
         .unwrap()
         .is_empty());
+}
+
+#[test]
+fn inconsistent_persisted_decision_fails_closed() {
+    let compatibility = compatibility(Vec::new());
+    let mut report = evaluate_compatibility_policy(&compatibility, CheckPolicy::default()).unwrap();
+    report.decision.passed = false;
+    report.decision.blocking_findings = 1;
+    assert!(matches!(
+        check_report_to_github_annotations_bytes(&report),
+        Err(CheckError::InconsistentCheckDecision)
+    ));
 }
 
 #[test]
