@@ -214,12 +214,16 @@ def main() -> None:
     source = load_source_profile(core_archive)
     before = prepare_profile(source, "1.0.0")
     after = prepare_profile(source, "1.1.0")
+    invalid = prepare_profile(source, "9.9.0")
+    invalid["snapshot"] = {"element": []}
     mutations = mutate_after(after)
 
     before_archive = output / "before.tgz"
     after_archive = output / "after.tgz"
+    invalid_archive = output / "invalid-empty-snapshot.tgz"
     before_digest = build_package(before_archive, "1.0.0", before)
     after_digest = build_package(after_archive, "1.1.0", after)
+    build_package(invalid_archive, "9.9.0", invalid)
     core_digest = sha256(core_archive)
 
     write_state(output / "before", core_archive, core_digest, before_archive, "1.0.0", before_digest)
@@ -230,6 +234,7 @@ def main() -> None:
         "canonical": CANONICAL,
         "before_archive": str(before_archive),
         "after_archive": str(after_archive),
+        "invalid_archive": str(invalid_archive),
         "core_archive": str(core_archive),
         "mutations": mutations,
     }
