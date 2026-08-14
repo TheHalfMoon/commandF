@@ -58,7 +58,12 @@ pub(crate) fn view_change(
     after: &ResourceArtifact,
     view: ElementView,
 ) -> StructuralChange {
-    let mut change = base_change(kind, resource, Some(&before.filename), Some(&after.filename));
+    let mut change = base_change(
+        kind,
+        resource,
+        Some(&before.filename),
+        Some(&after.filename),
+    );
     change.view = Some(view);
     change
 }
