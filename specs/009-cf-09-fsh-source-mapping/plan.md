@@ -1,30 +1,31 @@
 # CF-09 Implementation Plan — FSH Source Mapping
 
-Status: implementation plan
+Status: implemented / convergence candidate
 
 ## Stack
 
 ```text
 base: feat/cf-08-github-action-annotations
 base SHA: 03dbdc956847b9edd2eedd58058894118e338beb
+implementation candidate: 3819f35116a5bf18070cc00453f34176b549688a
+implementation tree: 3d80d4a76d29611a6cde771fc4d343d58e44435b
+implementation CI: 31840014291 — SUCCESS
 ```
 
-## Design
+## Implemented design
 
-CF-09 is an enrichment layer over persisted CF-05 evidence and CF-08 presentation.
+CF-09 is an enrichment layer over persisted CF-05 evidence and CF-08 presentation. It adds:
 
-The implementation will add four bounded pieces:
+1. a typed, bounded SUSHI `fsh-index.json` reader/validator;
+2. deterministic exact current-tree source mapping;
+3. schema-v1 mapped report and `commandf source-map` CLI;
+4. optional source-map consumption in `github-annotations` and the root composite Action.
 
-1. typed SUSHI `fsh-index.json` reader + validator;
-2. deterministic exact current-tree source mapper;
-3. schema-v1 mapped report + `commandf source-map` CLI;
-4. optional CF-09 location consumption in `github-annotations` and the root composite Action.
+No compatibility rule or policy decision changes were introduced.
 
-No compatibility rule or policy decision changes are permitted.
+## Upstream authority / donor posture
 
-## Upstream donor/reference
-
-Use SUSHI machine-index behavior as the source-format authority:
+Source-format behavior is studied from:
 
 ```text
 FHIR/sushi
@@ -35,13 +36,13 @@ paths:
   src/export/StructureDefinitionExporter.ts
 ```
 
-Adoption mode is STUDY / ORACLE_BEHAVIOR only. No SUSHI TypeScript source is copied and no runtime dependency on SUSHI is introduced.
+Adoption mode is STUDY / ORACLE_BEHAVIOR only. No SUSHI TypeScript source is copied and SUSHI is not a commandF runtime dependency.
 
-The V1 contract consumes SUSHI's emitted `fsh-generated/data/fsh-index.json`; it does not parse FSH syntax itself.
+The V1 contract consumes SUSHI's emitted `fsh-generated/data/fsh-index.json`; it does not parse FSH syntax.
 
-## Rust module shape
+## Rust implementation
 
-Add commandF-owned source mapping types under `commandf-pkg`, expected as:
+`commandf-pkg` owns:
 
 ```text
 source_map.rs
@@ -49,79 +50,56 @@ source_map_error.rs
 source_map_model.rs
 ```
 
-The exact file split may collapse if a smaller implementation is clearer, but no new workspace crate is authorized.
+The mapped report embeds the complete validated `CheckReport`, one deterministic mapping entry per finding, source-index SHA/count/root evidence, and optional repository-relative definition range.
 
-Core types:
+Persisted CF-05 validation was factored into one shared `validate_check_report` path reused by CF-08 and CF-09.
 
-```text
-SushiFshIndexEntry
-SourceLocation
-SourceMappingStatus
-SourceMappingEntry
-SourceMappedCheckReport
-```
+## Exact mapping algorithm
 
-The mapped report embeds the complete validated `CheckReport` so locations cannot drift independently from the evidence they annotate.
-
-## Validation reuse
-
-Refactor persisted-check validation into one shared internal/public helper used by:
-
-- CF-08 GitHub renderer;
-- CF-09 source mapper.
-
-Do not duplicate the CF-05 decision-consistency logic.
-
-## Mapping algorithm
-
-Build a deterministic map keyed by exact SUSHI `outputFile`.
+The implementation builds a deterministic map keyed by exact SUSHI `outputFile`.
 
 For each `report.compatibility.findings[i]`:
 
 ```text
 if after_filename is None:
-    status = unmapped_no_after_filename
-else if exact after_filename not in index:
-    status = unmapped_no_index_entry
+    unmapped_no_after_filename
+else if exact after_filename is absent:
+    unmapped_no_index_entry
 else:
-    validate/canonicalize mapped FSH path
-    status = mapped
-    location = repo-relative path + start/end line
+    canonicalize the referenced FSH source under explicit roots
+    require a regular current source file
+    require endLine <= current source line count
+    emit mapped repo-relative definition range
 ```
 
-Duplicate `outputFile` is fatal ambiguity.
+Duplicate `outputFile` is fatal ambiguity. No fuzzy, canonical, resource-id, FSH-name, element-id/path, rule-id, or `before_filename` fallback exists.
 
-The algorithm never selects "closest" matches and never uses `before_filename` for current-tree GitHub locations.
+## Filesystem / untrusted-input boundary
 
-## Filesystem boundary
+Validation performs:
 
-`source-map` accepts explicit repository root and FSH root.
+1. repository-root canonicalization to a directory;
+2. repository-relative FSH-root parsing and canonical containment;
+3. portable relative `fshFile` validation;
+4. canonical source containment under FSH root and repository root;
+5. regular-file validation;
+6. streaming current-file line counting and stale `endLine` rejection;
+7. repository-relative UTF-8 `/`-separator serialization.
 
-Validation sequence:
+Absolute paths, `..`, drive-style prefixes, malformed components, and symlink escapes fail closed.
 
-1. repository root must canonicalize to a directory;
-2. FSH root must be relative and must canonicalize beneath repository root;
-3. each index `fshFile` must be relative;
-4. joined source path must canonicalize to a regular file beneath the FSH root and repository root;
-5. serialized path is repository-relative UTF-8 with `/` separators.
-
-This rejects symlink escapes and stale source indices.
-
-Unmapped findings do not require any path lookup.
-
-## Input bounds
-
-Read using bounded streaming/file reads before JSON parsing:
+The core library enforces SUSHI-index byte and entry limits before/after parsing as appropriate:
 
 ```text
-CheckReport: 64 MiB
-SUSHI index: 16 MiB
-entries: 100,000
+SUSHI index <= 16 MiB
+entries <= 100,000
 ```
 
-## CLI
+CLI inputs additionally retain the CF-05/08 bounded-read contracts. Persisted source-map validation rechecks declared FSH-root containment and entry-count bounds.
 
-Add:
+## CLI / publication
+
+Implemented command:
 
 ```text
 commandf source-map \
@@ -132,116 +110,86 @@ commandf source-map \
   [--output <mapped-report.json>]
 ```
 
-Output defaults to stdout. When `--output` is used, reuse CF-05 same-directory atomic replace semantics rather than inventing a second publication mechanism.
+Output defaults to stdout. `--output` reuses the existing same-directory atomic publication path. Operational failures exit 1.
 
-`source-map` operational failures exit 1; normal Clap usage behavior remains the normal non-check usage contract.
-
-## GitHub renderer integration
-
-Extend:
-
-```text
-commandf github-annotations --input <check-report.json>
-```
-
-with optional:
+`github-annotations` accepts:
 
 ```text
 --source-map <mapped-report.json>
 ```
 
-When a source map is supplied:
-
-- its embedded CheckReport must exactly equal the separately supplied report;
-- mapped locations add `file`, `line`, and `endLine` properties;
-- unmapped findings remain locationless;
-- the definition-range limitation is included in mapped messages;
-- existing escaping and bounds remain authoritative.
-
-Reject mismatched source-map/check-report pairs.
+The source map must embed the exact same validated CheckReport. Mapped findings add only `file`, `line`, and `endLine`; unmapped findings remain locationless. Messages explicitly distinguish definition-range evidence from exact rule-line attribution.
 
 ## Action integration
 
-Add optional Action inputs:
+The root Action accepts optional:
 
 ```text
 fsh-index = ""
 fsh-root = input/fsh
 ```
 
-If `fsh-index` is non-empty, the Action:
+With mapping enabled the Action runs CF-05 check, creates the CF-09 mapped report in the same checked-out workspace/run, renders annotations with that report, and preserves the original CF-05 exit 0/2. Source-map or renderer failure becomes operational 1. With mapping disabled, CF-08 behavior is unchanged.
 
-1. runs CF-05 check exactly as before;
-2. on completed report exit 0 or 2, runs `commandf source-map` using `$GITHUB_WORKSPACE`;
-3. renders annotations with the generated mapped report;
-4. preserves original CF-05 exit 0/2 unless source mapping or rendering fails, in which case the Action exits operational 1.
-
-If `fsh-index` is empty, exact CF-08 behavior remains unchanged.
-
-Action wrapper argv remains fully quoted; no input is eval'd.
+All wrapper arguments remain quoted argv; no input is evaluated as shell code. Operational failure continues to expose an empty report-path rather than stale evidence.
 
 ## SARIF boundary
 
-CF-09 may later enrich SARIF with proven physical locations, but V1 implementation scope is GitHub workflow-command annotations plus a reusable mapped JSON report.
+CF-09 V1 does not modify CF-05 SARIF physical locations. This slice adds reusable mapped JSON plus GitHub workflow-command physical locations only.
 
-Do not silently change CF-05 SARIF output in this slice unless a separate acceptance task explicitly proves the location model and source artifact URI semantics.
+## Regression evidence
 
-## Tests
+Coverage includes:
 
-Synthetic tests must cover:
-
-- exact outputFile mapping;
-- definition start/end lines;
-- no after filename;
-- missing index entry;
-- duplicate outputFile failure;
-- malformed field types and line ranges;
-- absolute/traversal paths;
+- exact outputFile mapping and definition ranges;
+- no-after-filename and missing-index unmapped states;
+- duplicate generated identity;
+- malformed JSON/field types/ranges;
+- absolute/traversal/drive-like paths;
 - symlink escape;
-- missing/non-regular mapped source;
-- nested relative FSH paths;
+- missing/non-file source;
+- persisted mapped-path escape outside declared FSH root;
+- `endLine` beyond current source EOF;
+- 16 MiB library byte bound before parse;
+- 100,000-entry parser and persisted-map bounds;
 - deterministic bytes;
-- full CF-05 evidence preservation;
-- decision inconsistency rejection;
-- check/source-map mismatch rejection;
-- mapped annotation file/line/endLine;
-- unmapped annotation remains locationless;
-- workflow-command path escaping;
-- presentation caps remain unchanged;
-- Action source mapping on/off behavior;
-- Action exit 0/1/2 preservation.
+- CF-05 decision consistency and embedded-report equality;
+- mapped annotation `file/line/endLine`;
+- unmapped locationless behavior;
+- workflow-command property escaping;
+- Action quoted argv, source-map failure, renderer failure, and exit 0/1/2 preservation.
 
-## Real integration fixture
+Committed synthetic fixture:
 
-Add a minimal public/synthetic FSH fixture in repository CI that includes:
+```text
+crates/commandf-cli/tests/fixtures/cf09/input/fsh/example.fsh
+crates/commandf-cli/tests/fixtures/cf09/fsh-index.json
+```
 
-- `input/fsh/*.fsh`;
-- a SUSHI-shaped `fsh-index.json` fixture with documented provenance;
-- matching generated FHIR package artifact filenames;
-- one deterministic CF-04/05 finding whose `after_filename` maps to the FSH declaration range.
+`source_map_fixture.rs` executes the real CLI map→render path against that SUSHI-shaped fixture. CI also exercises the real root `uses: ./` Action with source mapping enabled using a valid empty SUSHI-shaped index for a real R4 self-check state.
 
-No PHI and no controlled terminology content.
+No PHI or controlled terminology content is present.
 
-A live SUSHI invocation is not required in CF-09 CI; the machine-index parser is tested against the pinned upstream shape and synthetic fixtures. This keeps CF-09 offline and avoids unpinned Node/package acquisition in the trusted gate.
+## Security-diff audit disposition
 
-## Review fleet
+A manual security-diff review using the Codex Security diff-scan threat-model/source-to-sink methodology covered the CF-09 source/script/workflow delta. Three valid issues were found before reviewer freeze and fixed with regressions:
 
-After first exact green implementation candidate:
+1. a tampered persisted map could move a mapped path outside the declared FSH root while remaining repository-relative — fixed with component-wise FSH-root containment;
+2. the 16 MiB index limit existed only at CLI level — fixed in the public core builder before JSON parse;
+3. a stale/malicious index could claim an `endLine` beyond the current FSH source — fixed with streaming current-file line validation.
 
-1. CodeRabbit substantive review request;
-2. Qodo `/review` request;
-3. configured Ponytail/independent reviewer when available;
-4. `@codex review for security vulnerabilities` on the PR;
-5. Codex Security scan when the repository is separately enabled/available.
+No fourth security finding was identified in the manual audit. This is not represented as a Codex Security product scan: the actual Codex Security scan executor is not exposed in this ChatGPT host.
 
-Codex Security is tracked independently from Codex Code Review. Unavailability is recorded, not converted into a fake PASS and not used to waive deterministic gates.
+## Reviewer truth at convergence candidate
 
-## Convergence
+- CodeRabbit: substantive review requested twice on exact implementation candidate; request was rate-limited and no substantive review result or inline finding returned.
+- Qodo: `/review` requested; no substantive result returned.
+- Codex Code Review: `@codex review for security vulnerabilities` requested; no result returned.
+- Codex Security: installed workflow/skill applied as manual methodology, but actual product scan NOT RUN in this host because the executor is not exposed; no PASS claimed.
+- Ponytail/independent plugin lane: availability checked; no Ponytail plugin/connector was available in this host; no PASS claimed.
 
-After reviewer dispositions:
+Reviewer unavailability does not waive deterministic gates.
 
-- reconcile `spec.md`, `plan.md`, `tasks.md`;
-- add `convergence.md`;
-- run exact-final-docs-head CI;
-- verify PR remains Draft/open/unmerged/auto-merge disabled;
-- verify no CF-10 branch before final verdict.
+## Convergence procedure
+
+Reconcile `spec.md`, `plan.md`, `tasks.md`, add `convergence.md`, run exact docs-head CI, verify PR remains Draft/open/unmerged with auto-merge disabled, verify unresolved threads, and verify CF-10 has not started.
