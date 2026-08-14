@@ -87,8 +87,12 @@ jobs:
           assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
           assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
           PY
-      - name: Local GitHub Action self-check smoke
-        id: cf08-action
+      - name: Prepare real CF-09 Action source-map fixture
+        run: |
+          mkdir -p input/fsh
+          printf '[]\n' > /tmp/commandf-smoke/fsh-index.json
+      - name: Local GitHub Action source-map self-check smoke
+        id: cf09-action
         uses: ./
         with:
           package: hl7.fhir.r4.core
@@ -96,11 +100,13 @@ jobs:
           before-cache: /tmp/commandf-smoke/before-cache
           after-lock: /tmp/commandf-smoke/after.lock
           after-cache: /tmp/commandf-smoke/after-cache
+          fsh-index: /tmp/commandf-smoke/fsh-index.json
+          fsh-root: input/fsh
       - name: Verify local GitHub Action outputs
         env:
-          REPORT_PATH: ${{ steps.cf08-action.outputs.report-path }}
-          EXIT_CODE: ${{ steps.cf08-action.outputs.exit-code }}
-          PASSED: ${{ steps.cf08-action.outputs.passed }}
+          REPORT_PATH: ${{ steps.cf09-action.outputs.report-path }}
+          EXIT_CODE: ${{ steps.cf09-action.outputs.exit-code }}
+          PASSED: ${{ steps.cf09-action.outputs.passed }}
         run: |
           python - <<'PY'
           import json
