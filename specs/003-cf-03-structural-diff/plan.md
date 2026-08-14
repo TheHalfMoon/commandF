@@ -1,12 +1,12 @@
 # CF-03 Implementation Plan
 
-Status: Implemented — convergence candidate
+Status: Implemented — founder review candidate
 
 ## Architecture
 
 CF-03 stays inside the existing `commandf-pkg` trust boundary and `commandf` CLI. No new workspace crate was required.
 
-The bounded package-root resource scanner from CF-02 is now a reusable internal helper consumed by both inspection and diff, preserving the same archive limits and exclusion rules. This is a behavior-preserving CF-02 refactor, not a new acquisition path.
+The bounded package-root resource scanner from CF-02 is one reusable internal helper consumed by both inspection and diff, preserving the same archive limits and exclusion rules. This is a behavior-preserving CF-02 refactor, not a new acquisition path.
 
 ## Inputs
 
@@ -23,7 +23,7 @@ Deterministic match keys are built in this order:
 3. unique `resourceType/id` for non-canonical resources;
 4. filename fallback.
 
-Any residual ambiguous non-canonical key fails rather than guessing. Duplicate package-root resource filenames also fail explicitly so the inspection inventory and raw structural inventory cannot diverge.
+If canonical multiplicity exists, every member of that URL group must have a non-empty explicit canonical version; otherwise matching fails closed instead of mixing bare and version-qualified identities. Any residual ambiguous non-canonical key also fails. Duplicate package-root resource filenames fail explicitly so inspection and raw structural inventories cannot diverge.
 
 ## StructureDefinition comparison
 
@@ -48,15 +48,31 @@ Structural element fields include:
 
 Editorial-only fields such as `short`, `definition`, `comment`, `requirements`, `alias`, `example`, and `mapping` are not emitted as StructureDefinition structural-field changes in CF-03. Exact resource-byte hash changes remain visible separately as `resource_bytes_changed`.
 
+## Shape validation and FHIR primitive metadata
+
+CF-03 validates the shape of fields it interprets **before** normalization. It is not a general FHIR validator; the purpose is to stop malformed values from being canonicalized into valid-looking structural deltas.
+
+Examples of enforced shapes include:
+
+- selected StructureDefinition metadata strings/booleans/arrays;
+- `min` as a non-negative integer and `max` as a non-empty string;
+- boolean flags as booleans;
+- `slicing` and `binding` as objects;
+- `type` and `constraint` as arrays of objects;
+- `extension` as an array of objects;
+- `maxLength` as an integer.
+
+Required primitive string fields such as `ElementDefinition.type.code` and `constraint.key` accept either a normal non-empty string value or a meaningful FHIR JSON `_field` metadata object when the primitive value is absent. Empty/malformed metadata fails closed. This preserves official R4 extension-only primitive shapes such as `_code` while retaining strict malformed-input rejection.
+
 ## Normalization
 
-Canonicalize JSON objects recursively. Normalize fields known to behave as sets:
+Canonicalize JSON objects recursively. Normalize fields known to behave as sets in CF-03:
 
-- `representation` and `condition`: sort scalar values;
+- `representation`, `condition`, and `contextInvariant`: sort values;
 - `type`: sort by canonical content and sort `profile`, `targetProfile`, and `aggregation` lists inside each type;
 - `constraint`: sort by constraint key plus canonical content.
 
-Preserve array order for fields where order may be semantically meaningful, especially slicing structures and arbitrary fixed/pattern values.
+Preserve array order where semantics may depend on order. In particular, CF-03 intentionally preserves `extension[]` ordering; it does not globally treat every extension collection as a set. A future profile-aware layer may apply narrower unordered semantics only when the governing profile/slicing contract proves them.
 
 ## Output model
 
@@ -87,17 +103,20 @@ All four before/after path options are required in v1 to avoid hidden workspace 
 
 ## Validation
 
-Synthetic tests use generated package archives and prove:
+Synthetic tests prove:
 
 - byte-stable no-op self-diff;
 - unique canonical matching across canonical-version changes;
-- `url|version` matching for multi-version canonical groups;
-- fail-closed ambiguous non-canonical ids and duplicate archive resource filenames;
+- `url|version` matching for multi-version canonical groups and fail-closed missing group versions;
+- fail-closed ambiguous non-canonical ids and duplicate archive filenames;
 - view and element additions/removals;
 - cardinality/type/binding/slicing/fixed structural changes;
+- malformed interpreted structural shapes fail closed;
+- valid primitive `_field` metadata forms remain accepted;
 - editorial-field exclusion;
-- set-like normalization for representation, condition, constraint, type/profile/targetProfile/aggregation ordering.
+- set-like normalization for representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation ordering;
+- extension ordering remains structural.
 
-Real CI resolves and verifies published `hl7.fhir.r4.core@4.0.1` into two independent lock/cache states, runs `commandf diff` through the CLI, and requires an empty change list.
+Real CI resolves and verifies published `hl7.fhir.r4.core@4.0.1` once, inspects it, copies the verified content-addressed lock/cache state to explicit after paths, verifies the copied after state, then runs the real CLI self-diff and requires an empty change list.
 
 No external FHIR validator is required for CF-03 because this slice computes structural facts rather than conformance judgments. Differential oracle work begins in CF-06.
