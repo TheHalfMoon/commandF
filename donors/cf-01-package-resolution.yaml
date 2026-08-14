@@ -1,0 +1,51 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-13
+
+sources:
+  - id: fhir-package-loader
+    repository: https://github.com/FHIR/fhir-package-loader
+    ref: d61030801eff8ccbcfd2b9223748b641b11f3113
+    license: Apache-2.0
+    mode: [STUDY, PORT_PATTERN, ORACLE_BEHAVIOR]
+    source_paths:
+      - src/registry/DefaultRegistryClient.ts
+      - src/registry/FHIRRegistryClient.ts
+      - src/registry/RedundantRegistryClient.ts
+      - src/registry/utils.ts
+    adopted_patterns:
+      - primary then secondary FHIR registry fallback
+      - package metadata lookup by package name
+      - exact-version archive retrieval
+    exclusions:
+      - no TypeScript source copied
+      - no runtime dependency on fhir-package-loader
+
+  - id: ureq
+    repository: https://github.com/algesten/ureq
+    version: 3.4.0
+    ref: 5e803fc4ce031a0d667dc6cdb97d1413ac8cdab9
+    license: MIT OR Apache-2.0
+    mode: [DEPEND]
+    scope:
+      - bounded blocking HTTPS transport
+      - request timeout policy
+    commandf_constraints:
+      - exact direct version 3.4.0 until Cargo.lock is committed
+      - no caller-supplied registry URL in CF-01
+      - redirects disabled
+      - metadata limit 4 MiB
+      - archive limit 128 MiB
+      - global timeout 30 seconds
+
+standards:
+  - id: hl7-fhir-npm-packages
+    reference: https://hl7.org/fhir/packages.html
+    mode: PROTOCOL_STANDARD
+  - id: hl7-crmi-stu1
+    reference: https://hl7.org/fhir/uv/crmi/STU1/
+    mode: STUDY
+
+rules:
+  - exact commit required before source-level port or copy
+  - committed Cargo.lock required before readiness
+  - registry bytes remain untrusted until identity and digest checks pass

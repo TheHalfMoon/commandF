@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/cf-01-package-resolution
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --locked --workspace --all-features
+      - name: Real FHIR registry smoke
+        run: |
+          rm -rf /tmp/commandf-smoke
+          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
+          cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/cache --lock /tmp/commandf-smoke/commandf.lock
