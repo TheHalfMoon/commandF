@@ -10,6 +10,8 @@ use crate::{
     ElementView, ResourceArtifact,
 };
 
+type ElementMap = BTreeMap<String, Map<String, Value>>;
+
 pub(crate) fn compare_structure_definition(
     key: &ResourceKey,
     before_resource: &ResourceArtifact,
@@ -71,7 +73,7 @@ fn parse_view(
     resource: &Map<String, Value>,
     view: &str,
     file: &str,
-) -> Result<Option<BTreeMap<String, Map<String, Value>>>, StructuralDiffError> {
+) -> Result<Option<ElementMap>, StructuralDiffError> {
     let Some(container) = resource.get(view) else {
         return Ok(None);
     };
@@ -116,8 +118,8 @@ fn compare_view(
     before_resource: &ResourceArtifact,
     after_resource: &ResourceArtifact,
     view: ElementView,
-    before: Option<BTreeMap<String, Map<String, Value>>>,
-    after: Option<BTreeMap<String, Map<String, Value>>>,
+    before: Option<ElementMap>,
+    after: Option<ElementMap>,
     changes: &mut Vec<StructuralChange>,
 ) {
     match (&before, &after) {
