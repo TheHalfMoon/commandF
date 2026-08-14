@@ -1,7 +1,8 @@
 use crate::{
     check::{direction_selected, validate_compatibility_report},
     evaluate_compatibility_policy, CheckError, CheckReport, CompatibilityDirection,
-    CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind, StructuralChangeKind,
+    CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind,
+    StructuralChangeKind,
 };
 
 const MAX_ERROR_ANNOTATIONS: usize = 10;
