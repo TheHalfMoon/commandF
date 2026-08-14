@@ -1,8 +1,8 @@
 use commandf_pkg::{
     parse_hl7_oracle_report, reconcile_hl7_oracle, Hl7OracleReport, OracleChangeState,
-    OracleIdentity, OracleMessage, OracleMessageLevel, OracleResourceIdentity, OracleResourceStatus,
-    OracleStates, PackageEvidence, ResourceKey, ResourceKeyKind, StructuralChange,
-    StructuralChangeKind, StructuralDiffReport,
+    OracleIdentity, OracleMessage, OracleMessageLevel, OracleResourceIdentity,
+    OracleResourceStatus, OracleStates, PackageEvidence, ResourceKey, ResourceKeyKind,
+    StructuralChange, StructuralChangeKind, StructuralDiffReport,
 };
 
 fn key(value: &str) -> ResourceKey {
@@ -125,7 +125,10 @@ fn unique_canonical_key_allows_version_drift_between_sides() {
         vec![(resource.clone(), oracle(&resource.value, false))],
     )
     .unwrap();
-    assert_eq!(report.resources[0].status, OracleResourceStatus::CommandfOnly);
+    assert_eq!(
+        report.resources[0].status,
+        OracleResourceStatus::CommandfOnly
+    );
 }
 
 #[test]
@@ -139,10 +142,12 @@ fn version_qualified_canonical_key_requires_matching_versions() {
     let mut mismatch = oracle("http://example.org/StructureDefinition/example", false);
     mismatch.left.version = Some("1.0.0".to_owned());
     mismatch.right.version = Some("2.0.0".to_owned());
-    assert!(reconcile_hl7_oracle(diff(vec![]), vec![(resource, mismatch)])
-        .unwrap_err()
-        .to_string()
-        .contains("observation identity mismatch"));
+    assert!(
+        reconcile_hl7_oracle(diff(vec![]), vec![(resource, mismatch)])
+            .unwrap_err()
+            .to_string()
+            .contains("observation identity mismatch")
+    );
 }
 
 #[test]

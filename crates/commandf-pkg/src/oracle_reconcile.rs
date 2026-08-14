@@ -64,7 +64,10 @@ pub fn reconcile_hl7_oracle(
         canonicalize_messages(&mut observation);
         validate_hl7_oracle_report(&observation)?;
         validate_observation_resource(&resource, &observation)?;
-        if observation_map.insert(resource.clone(), observation).is_some() {
+        if observation_map
+            .insert(resource.clone(), observation)
+            .is_some()
+        {
             return Err(OracleError::DuplicateObservation {
                 resource: resource.value,
             });
@@ -135,7 +138,12 @@ fn validate_observation_resource(
 }
 
 fn identity_matches_key(identity: &OracleResourceIdentity, resource: &ResourceKey) -> bool {
-    let Some(url) = identity.url.as_deref().map(str::trim).filter(|value| !value.is_empty()) else {
+    let Some(url) = identity
+        .url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
         return false;
     };
     if url == resource.value {

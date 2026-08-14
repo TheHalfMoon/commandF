@@ -42,7 +42,12 @@ impl OracleResourceIdentity {
         if url.is_empty() {
             return None;
         }
-        match self.version.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        match self
+            .version
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
             Some(version) => Some(format!("{url}|{version}")),
             None => Some(url.to_owned()),
         }
@@ -76,7 +81,12 @@ impl OracleStates {
             self.content_interpretation,
         ]
         .into_iter()
-        .any(|state| matches!(state, OracleChangeState::Changed | OracleChangeState::CannotEvaluate))
+        .any(|state| {
+            matches!(
+                state,
+                OracleChangeState::Changed | OracleChangeState::CannotEvaluate
+            )
+        })
     }
 }
 
