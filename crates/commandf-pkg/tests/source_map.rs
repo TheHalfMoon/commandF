@@ -192,7 +192,7 @@ fn duplicate_generated_output_identity_fails_closed() {
             &report,
             &index,
             repo.path(),
-            std::path::Path::new("input/fsh")
+            std::path::Path::new("input/fsh"),
         ),
         Err(SourceMapError::DuplicateOutputFile(_))
     ));
@@ -217,7 +217,7 @@ fn malformed_ranges_and_traversal_fail_closed() {
             &report,
             &invalid_range,
             repo.path(),
-            std::path::Path::new("input/fsh")
+            std::path::Path::new("input/fsh"),
         ),
         Err(SourceMapError::InvalidIndex(_))
     ));
@@ -233,7 +233,7 @@ fn malformed_ranges_and_traversal_fail_closed() {
             &report,
             &traversal,
             repo.path(),
-            std::path::Path::new("input/fsh")
+            std::path::Path::new("input/fsh"),
         ),
         Err(SourceMapError::InvalidPath(_))
     ));
@@ -267,7 +267,7 @@ fn symlink_escape_fails_closed() {
             &report,
             &index,
             &repo_root,
-            std::path::Path::new("input/fsh")
+            std::path::Path::new("input/fsh"),
         ),
         Err(SourceMapError::SourceEscape(_))
     ));
@@ -301,5 +301,33 @@ fn renderer_rejects_a_source_map_for_a_different_valid_check_report() {
     assert!(matches!(
         source_mapped_check_report_to_github_annotations_bytes(&second_report, &mapped),
         Err(SourceMapError::CheckReportMismatch)
+    ));
+}
+
+#[test]
+fn renderer_rejects_tampered_location_outside_declared_fsh_root() {
+    let repo = repo_with_fsh();
+    let report = report(vec![finding(
+        "CF04-CARD-001",
+        Some("StructureDefinition-example.json"),
+    )]);
+    let index = index_bytes(
+        "StructureDefinition-example.json",
+        "nested/example.fsh",
+        3,
+        6,
+    );
+    let mut mapped = build_source_mapped_check_report(
+        &report,
+        &index,
+        repo.path(),
+        std::path::Path::new("input/fsh"),
+    )
+    .unwrap();
+    mapped.mappings[0].location.as_mut().unwrap().file = "README.md".to_owned();
+
+    assert!(matches!(
+        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped),
+        Err(SourceMapError::InvalidMappingEntry { index: 0 })
     ));
 }
