@@ -15,10 +15,12 @@ from pathlib import Path
 
 PACKAGE_NAME = "dev.commandf.oracle.fixture"
 CANONICAL = "http://example.org/fhir/StructureDefinition/commandf-oracle-fixture"
+CONTROL_CANONICAL = "http://example.org/fhir/StructureDefinition/commandf-oracle-control"
 SOURCE_CANONICAL = "http://hl7.org/fhir/StructureDefinition/vitalsigns"
 CORE_NAME = "hl7.fhir.r4.core"
 CORE_VERSION = "4.0.1"
 RESOURCE_FILENAME = "StructureDefinition-commandf-oracle-fixture.json"
+CONTROL_FILENAME = "StructureDefinition-commandf-oracle-control.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,13 +55,21 @@ def load_source_profile(core_archive: Path) -> dict:
     raise SystemExit(f"unable to find {SOURCE_CANONICAL} in {core_archive}")
 
 
-def prepare_profile(source: dict, version: str) -> dict:
+def prepare_profile(
+    source: dict,
+    *,
+    identifier: str,
+    canonical: str,
+    version: str,
+    name: str,
+    title: str,
+) -> dict:
     profile = copy.deepcopy(source)
-    profile["id"] = "commandf-oracle-fixture"
-    profile["url"] = CANONICAL
+    profile["id"] = identifier
+    profile["url"] = canonical
     profile["version"] = version
-    profile["name"] = "CommandFOracleFixture"
-    profile["title"] = "commandF Oracle Fixture"
+    profile["name"] = name
+    profile["title"] = title
     return profile
 
 
@@ -125,21 +135,23 @@ def package_manifest(version: str) -> dict:
     }
 
 
-def package_index(profile: dict) -> dict:
+def index_entry(filename: str, profile: dict) -> dict:
+    return {
+        "filename": filename,
+        "resourceType": "StructureDefinition",
+        "id": profile["id"],
+        "url": profile["url"],
+        "version": profile["version"],
+        "kind": profile.get("kind"),
+        "type": profile.get("type"),
+        "derivation": profile.get("derivation"),
+    }
+
+
+def package_index(resources: dict[str, dict]) -> dict:
     return {
         "index-version": 2,
-        "files": [
-            {
-                "filename": RESOURCE_FILENAME,
-                "resourceType": "StructureDefinition",
-                "id": profile["id"],
-                "url": profile["url"],
-                "version": profile["version"],
-                "kind": profile.get("kind"),
-                "type": profile.get("type"),
-                "derivation": profile.get("derivation"),
-            }
-        ],
+        "files": [index_entry(filename, resources[filename]) for filename in sorted(resources)],
     }
 
 
@@ -155,14 +167,15 @@ def add_bytes(archive: tarfile.TarFile, name: str, data: bytes) -> None:
     archive.addfile(info, io.BytesIO(data))
 
 
-def build_package(path: Path, version: str, profile: dict) -> str:
+def build_package(path: Path, version: str, resources: dict[str, dict]) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as raw:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
             with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive:
                 add_bytes(archive, "package/package.json", pretty_json(package_manifest(version)))
-                add_bytes(archive, "package/.index.json", pretty_json(package_index(profile)))
-                add_bytes(archive, f"package/{RESOURCE_FILENAME}", compact_json(profile))
+                add_bytes(archive, "package/.index.json", pretty_json(package_index(resources)))
+                for filename in sorted(resources):
+                    add_bytes(archive, f"package/{filename}", compact_json(resources[filename]))
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -212,18 +225,55 @@ def main() -> None:
     output.mkdir(parents=True, exist_ok=True)
 
     source = load_source_profile(core_archive)
-    before = prepare_profile(source, "1.0.0")
-    after = prepare_profile(source, "1.1.0")
-    invalid = prepare_profile(source, "9.9.0")
+    before = prepare_profile(
+        source,
+        identifier="commandf-oracle-fixture",
+        canonical=CANONICAL,
+        version="1.0.0",
+        name="CommandFOracleFixture",
+        title="commandF Oracle Fixture",
+    )
+    after = prepare_profile(
+        source,
+        identifier="commandf-oracle-fixture",
+        canonical=CANONICAL,
+        version="1.1.0",
+        name="CommandFOracleFixture",
+        title="commandF Oracle Fixture",
+    )
+    control = prepare_profile(
+        source,
+        identifier="commandf-oracle-control",
+        canonical=CONTROL_CANONICAL,
+        version="1.0.0",
+        name="CommandFOracleControl",
+        title="commandF Oracle Control",
+    )
+    invalid = prepare_profile(
+        source,
+        identifier="commandf-oracle-fixture",
+        canonical=CANONICAL,
+        version="9.9.0",
+        name="CommandFOracleFixture",
+        title="commandF Oracle Fixture",
+    )
     invalid["snapshot"] = {"element": []}
     mutations = mutate_after(after)
 
     before_archive = output / "before.tgz"
     after_archive = output / "after.tgz"
     invalid_archive = output / "invalid-empty-snapshot.tgz"
-    before_digest = build_package(before_archive, "1.0.0", before)
-    after_digest = build_package(after_archive, "1.1.0", after)
-    build_package(invalid_archive, "9.9.0", invalid)
+    before_digest = build_package(
+        before_archive,
+        "1.0.0",
+        {RESOURCE_FILENAME: before, CONTROL_FILENAME: control},
+    )
+    after_digest = build_package(
+        after_archive,
+        "1.1.0",
+        {RESOURCE_FILENAME: after, CONTROL_FILENAME: control},
+    )
+    build_package(invalid_archive, "9.9.0", {RESOURCE_FILENAME: invalid})
     core_digest = sha256(core_archive)
 
     write_state(output / "before", core_archive, core_digest, before_archive, "1.0.0", before_digest)
@@ -232,6 +282,7 @@ def main() -> None:
     metadata = {
         "package_name": PACKAGE_NAME,
         "canonical": CANONICAL,
+        "control_canonical": CONTROL_CANONICAL,
         "before_archive": str(before_archive),
         "after_archive": str(after_archive),
         "invalid_archive": str(invalid_archive),
