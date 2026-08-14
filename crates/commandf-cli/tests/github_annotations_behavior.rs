@@ -225,9 +225,9 @@ fn mapped_projection_requires_current_source_evidence_inputs() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
-    assert!(String::from_utf8(output.stderr)
-        .unwrap()
-        .contains("requires --source-map%2C --fsh-index%2C --repo-root%2C and --fsh-root together"));
+    assert!(String::from_utf8(output.stderr).unwrap().contains(
+        "requires --source-map%2C --fsh-index%2C --repo-root%2C and --fsh-root together"
+    ));
 }
 
 #[test]
