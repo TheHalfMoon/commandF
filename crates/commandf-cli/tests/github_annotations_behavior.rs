@@ -41,7 +41,7 @@ fn empty_check_report() -> String {
 }
 
 fn failed_check_report() -> String {
-    let finding = "{\"rule_id\":\"CF04-TEST-001\",\"severity\":\"BREAKING\",\"direction\":\"producer\",\"source_kind\":\"element_field_changed\",\"message\":\"synthetic breaking finding\",\"resource\":{\"kind\":\"canonical\",\"value\":\"http://example.org/StructureDefinition/example\"}}";
+    let finding = "{\"rule_id\":\"CF04-TEST-001\",\"severity\":\"BREAKING\",\"direction\":\"producer\",\"source_kind\":\"element_field_changed\",\"message\":\"synthetic breaking finding\",\"resource\":{\"kind\":\"canonical\",\"value\":\"http://example.org/StructureDefinition/example\"},\"after_filename\":\"StructureDefinition-example.json\"}";
     empty_check_report()
         .replace("\"passed\": true", "\"passed\": false")
         .replace("\"total_findings\": 0", "\"total_findings\": 1")
@@ -136,4 +136,67 @@ fn github_annotations_oversized_input_fails_before_json_parse() {
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("byte limit"));
+}
+
+#[test]
+fn source_map_cli_maps_sushi_definition_range_and_renderer_uses_it() {
+    let temp = TestDir::new("source-map-integration");
+    let fsh_root = temp.path().join("input/fsh");
+    fs::create_dir_all(&fsh_root).unwrap();
+    write(
+        &fsh_root.join("example.fsh"),
+        b"Profile: Example\nParent: Observation\n* status 1..1\n* code 1..1\n",
+    );
+
+    let report = temp.path().join("check.json");
+    let index = temp.path().join("fsh-index.json");
+    let mapped = temp.path().join("mapped.json");
+    write(&report, failed_check_report().as_bytes());
+    write(
+        &index,
+        br#"[
+  {
+    "outputFile": "StructureDefinition-example.json",
+    "fshFile": "example.fsh",
+    "fshName": "Example",
+    "fshType": "Profile",
+    "startLine": 1,
+    "endLine": 4
+  }
+]
+"#,
+    );
+
+    let source_map = commandf()
+        .args(["source-map", "--input"])
+        .arg(&report)
+        .arg("--fsh-index")
+        .arg(&index)
+        .arg("--repo-root")
+        .arg(temp.path())
+        .args(["--fsh-root", "input/fsh", "--output"])
+        .arg(&mapped)
+        .output()
+        .unwrap();
+    assert!(source_map.status.success());
+
+    let mapped_text = fs::read_to_string(&mapped).unwrap();
+    assert!(mapped_text.contains("\"status\": \"mapped\""));
+    assert!(mapped_text.contains("\"file\": \"input/fsh/example.fsh\""));
+    assert!(mapped_text.contains("\"line\": 1"));
+    assert!(mapped_text.contains("\"end_line\": 4"));
+
+    let annotations = commandf()
+        .args(["github-annotations", "--input"])
+        .arg(&report)
+        .arg("--source-map")
+        .arg(&mapped)
+        .output()
+        .unwrap();
+    assert!(annotations.status.success());
+    let stdout = String::from_utf8(annotations.stdout).unwrap();
+    assert!(stdout.starts_with(
+        "::error title=commandF CF04-TEST-001,file=input/fsh/example.fsh,line=1,endLine=4::"
+    ));
+    assert!(stdout.contains("exact rule-line attribution not proven"));
 }
