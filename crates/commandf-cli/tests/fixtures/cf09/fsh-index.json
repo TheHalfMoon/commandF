@@ -1,0 +1,10 @@
+[
+  {
+    "outputFile": "StructureDefinition-example.json",
+    "fshFile": "example.fsh",
+    "fshName": "Example",
+    "fshType": "Profile",
+    "startLine": 1,
+    "endLine": 4
+  }
+]
