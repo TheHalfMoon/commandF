@@ -102,7 +102,10 @@ fn exact_after_filename_maps_to_sushi_definition_range_and_renders_location() {
     .unwrap();
 
     assert_eq!(first, second);
-    assert_eq!(first.to_json_bytes().unwrap(), second.to_json_bytes().unwrap());
+    assert_eq!(
+        first.to_json_bytes().unwrap(),
+        second.to_json_bytes().unwrap()
+    );
     assert_eq!(first.source_index.fsh_root, "input/fsh");
     assert_eq!(first.mappings.len(), 1);
     assert_eq!(first.mappings[0].status, SourceMappingStatus::Mapped);
@@ -222,12 +225,7 @@ fn malformed_ranges_and_traversal_fail_closed() {
         Err(SourceMapError::InvalidIndex(_))
     ));
 
-    let traversal = index_bytes(
-        "StructureDefinition-example.json",
-        "../escape.fsh",
-        3,
-        6,
-    );
+    let traversal = index_bytes("StructureDefinition-example.json", "../escape.fsh", 3, 6);
     assert!(matches!(
         build_source_mapped_check_report(
             &report,
@@ -256,12 +254,7 @@ fn symlink_escape_fails_closed() {
         "CF04-CARD-001",
         Some("StructureDefinition-example.json"),
     )]);
-    let index = index_bytes(
-        "StructureDefinition-example.json",
-        "escape.fsh",
-        1,
-        2,
-    );
+    let index = index_bytes("StructureDefinition-example.json", "escape.fsh", 1, 2);
     assert!(matches!(
         build_source_mapped_check_report(
             &report,
