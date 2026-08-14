@@ -25,6 +25,8 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace --all-features
+      - name: CF-08 Action runner security regression
+        run: bash .github/scripts/test-cf08-action-runner.sh
       - name: Real FHIR registry, inspect, self-diff, self-classify, and self-check smoke
         run: |
           rm -rf /tmp/commandf-smoke
@@ -82,4 +84,35 @@ jobs:
           assert sarif["runs"][0]["results"] == []
           assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
           assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
+          PY
+      - name: Local GitHub Action self-check smoke
+        id: cf08-action
+        uses: ./
+        with:
+          package: hl7.fhir.r4.core
+          before-lock: /tmp/commandf-smoke/before.lock
+          before-cache: /tmp/commandf-smoke/before-cache
+          after-lock: /tmp/commandf-smoke/after.lock
+          after-cache: /tmp/commandf-smoke/after-cache
+      - name: Verify local GitHub Action outputs
+        env:
+          REPORT_PATH: ${{ steps.cf08-action.outputs.report-path }}
+          EXIT_CODE: ${{ steps.cf08-action.outputs.exit-code }}
+          PASSED: ${{ steps.cf08-action.outputs.passed }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          assert os.environ["EXIT_CODE"] == "0"
+          assert os.environ["PASSED"] == "true"
+          report_path = Path(os.environ["REPORT_PATH"])
+          assert report_path.is_file()
+          report = json.loads(report_path.read_text())
+          assert report["schema"] == 1
+          assert report["policy"] == {"direction": "both", "fail_on": "breaking"}
+          assert report["decision"]["passed"] is True
+          assert report["decision"]["blocking_findings"] == 0
+          assert report["compatibility"]["findings"] == []
           PY
