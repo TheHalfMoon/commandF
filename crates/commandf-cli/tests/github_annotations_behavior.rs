@@ -11,10 +11,8 @@ impl TestDir {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "commandf-cf08-{label}-{}-{nonce}",
-            process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("commandf-cf08-{label}-{}-{nonce}", process::id()));
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
@@ -40,6 +38,17 @@ fn empty_check_report() -> String {
         "a".repeat(64),
         "a".repeat(64)
     )
+}
+
+fn failed_check_report() -> String {
+    let finding = "{\"rule_id\":\"CF04-TEST-001\",\"severity\":\"BREAKING\",\"direction\":\"producer\",\"source_kind\":\"element_field_changed\",\"message\":\"synthetic breaking finding\",\"resource\":{\"kind\":\"canonical\",\"value\":\"http://example.org/StructureDefinition/example\"}}";
+    empty_check_report()
+        .replace("\"passed\": true", "\"passed\": false")
+        .replace("\"total_findings\": 0", "\"total_findings\": 1")
+        .replace("\"selected_findings\": 0", "\"selected_findings\": 1")
+        .replace("\"breaking_findings\": 0", "\"breaking_findings\": 1")
+        .replace("\"blocking_findings\": 0", "\"blocking_findings\": 1")
+        .replace("\"findings\": []", &format!("\"findings\": [{finding}]"))
 }
 
 fn write(path: &Path, content: &[u8]) {
@@ -82,10 +91,7 @@ fn github_annotations_empty_valid_report_emits_nothing() {
 fn github_annotations_policy_failed_report_still_exits_zero() {
     let temp = TestDir::new("policy-failed");
     let report = temp.path().join("check.json");
-    let content = empty_check_report()
-        .replace("\"passed\": true", "\"passed\": false")
-        .replace("\"blocking_findings\": 0", "\"blocking_findings\": 1");
-    write(&report, content.as_bytes());
+    write(&report, failed_check_report().as_bytes());
 
     let output = commandf()
         .args(["github-annotations", "--input"])
@@ -93,6 +99,9 @@ fn github_annotations_policy_failed_report_still_exits_zero() {
         .output()
         .unwrap();
     assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .starts_with("::error title=commandF CF04-TEST-001::"));
 }
 
 #[test]
