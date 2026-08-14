@@ -20,7 +20,9 @@ mod registry;
 mod resolver;
 mod source;
 
-pub use artifact_diff::diff_package_archives;
+pub use artifact_diff::{
+    diff_package_archives, matched_structure_definition_pairs, MatchedStructureDefinitionPair,
+};
 pub use artifact_diff_error::StructuralDiffError;
 pub use artifact_diff_model::{
     PackageEvidence, ResourceKey, ResourceKeyKind, StructuralChange, StructuralChangeKind,
