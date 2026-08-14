@@ -80,7 +80,8 @@ pub fn run(
 
     let mut observations = Vec::new();
     for pair in pairs {
-        if !changed_resources.contains(&pair.resource) || pair.resource.kind != ResourceKeyKind::Canonical
+        if !changed_resources.contains(&pair.resource)
+            || pair.resource.kind != ResourceKeyKind::Canonical
         {
             continue;
         }
@@ -162,7 +163,10 @@ fn canonical_parts(resource: &ResourceKey) -> Result<(&str, Option<&str>), io::E
         if url.is_empty() || version.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("invalid qualified canonical resource key {}", resource.value),
+                format!(
+                    "invalid qualified canonical resource key {}",
+                    resource.value
+                ),
             ));
         }
         Ok((url, Some(version)))

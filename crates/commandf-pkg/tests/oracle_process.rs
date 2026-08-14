@@ -65,15 +65,8 @@ fn executable_adapter_accepts_valid_pinned_json() {
     write_executable(&adapter, &format!("printf '%s\\n' '{}'", GOOD_REPORT));
     let (core, left, right) = package_inputs(&root);
 
-    let report = invoke(
-        &adapter,
-        None,
-        &core,
-        &left,
-        &right,
-        Duration::from_secs(1),
-    )
-    .expect("valid adapter report");
+    let report = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
+        .expect("valid adapter report");
     assert_eq!(report.schema, 1);
     assert!(report.messages.is_empty());
     let _ = fs::remove_dir_all(root);
@@ -87,15 +80,8 @@ fn jar_adapter_requires_explicit_java_path() {
     fs::write(&adapter, b"not-a-real-jar").expect("write jar fixture");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(
-        &adapter,
-        None,
-        &core,
-        &left,
-        &right,
-        Duration::from_secs(1),
-    )
-    .expect_err("jar without explicit Java must fail");
+    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
+        .expect_err("jar without explicit Java must fail");
     assert!(error.to_string().contains("--oracle-java is required"));
     let _ = fs::remove_dir_all(root);
 }
@@ -108,15 +94,8 @@ fn malformed_adapter_json_fails_closed() {
     write_executable(&adapter, "printf 'not-json\\n'");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(
-        &adapter,
-        None,
-        &core,
-        &left,
-        &right,
-        Duration::from_secs(1),
-    )
-    .expect_err("malformed JSON must fail");
+    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
+        .expect_err("malformed JSON must fail");
     assert!(error.to_string().contains("oracle report JSON is invalid"));
     let _ = fs::remove_dir_all(root);
 }
@@ -129,15 +108,8 @@ fn nonzero_adapter_exit_fails_closed_with_bounded_stderr() {
     write_executable(&adapter, "printf 'adapter failed' >&2; exit 7");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(
-        &adapter,
-        None,
-        &core,
-        &left,
-        &right,
-        Duration::from_secs(1),
-    )
-    .expect_err("nonzero exit must fail");
+    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
+        .expect_err("nonzero exit must fail");
     let message = error.to_string();
     assert!(message.contains("code Some(7)"));
     assert!(message.contains("adapter failed"));
@@ -149,7 +121,7 @@ fn adapter_timeout_kills_the_process() {
     let root = unique_temp_dir("timeout");
     fs::create_dir_all(&root).expect("create temp dir");
     let adapter = root.join("adapter.sh");
-    write_executable(&adapter, "sleep 1");
+    write_executable(&adapter, "while :; do :; done");
     let (core, left, right) = package_inputs(&root);
 
     let error = invoke(
