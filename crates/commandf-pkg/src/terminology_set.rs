@@ -159,9 +159,9 @@ fn flatten_code_system_concepts(
     for concept in concepts {
         *visited += 1;
         enforce_limit("terminology_members", *visited, MAX_TERMINOLOGY_MEMBERS)?;
-        let object = concept.as_object().ok_or_else(|| {
-            invalid(resource, "concept", "CodeSystem concept must be an object")
-        })?;
+        let object = concept
+            .as_object()
+            .ok_or_else(|| invalid(resource, "concept", "CodeSystem concept must be an object"))?;
         let code = required_object_string(object, "code", resource, "concept.code")?;
         let member = TerminologyMember {
             system: system.to_owned(),
@@ -176,7 +176,11 @@ fn flatten_code_system_concepts(
         }
         if let Some(children) = object.get("concept") {
             let children = children.as_array().ok_or_else(|| {
-                invalid(resource, "concept.concept", "nested concepts must be an array")
+                invalid(
+                    resource,
+                    "concept.concept",
+                    "nested concepts must be an array",
+                )
             })?;
             flatten_code_system_concepts(children, system, resource, output, visited)?;
         }
@@ -192,9 +196,13 @@ fn extract_value_set(value: &Value, resource: &str) -> Result<Extraction, Termin
             version,
         });
     };
-    let expansion = expansion
-        .as_object()
-        .ok_or_else(|| invalid(resource, "expansion", "ValueSet expansion must be an object"))?;
+    let expansion = expansion.as_object().ok_or_else(|| {
+        invalid(
+            resource,
+            "expansion",
+            "ValueSet expansion must be an object",
+        )
+    })?;
 
     if let Some(offset) = optional_object_u64(expansion, "offset", resource, "expansion.offset")? {
         if offset != 0 {
@@ -224,9 +232,9 @@ fn extract_value_set(value: &Value, resource: &str) -> Result<Extraction, Termin
     let mut visited = 0_usize;
     let mut has_abstract_code = false;
     if let Some(contains) = expansion.get("contains") {
-        let contains = contains.as_array().ok_or_else(|| {
-            invalid(resource, "expansion.contains", "contains must be an array")
-        })?;
+        let contains = contains
+            .as_array()
+            .ok_or_else(|| invalid(resource, "expansion.contains", "contains must be an array"))?;
         flatten_expansion_contains(
             contains,
             resource,
@@ -271,25 +279,12 @@ fn flatten_expansion_contains(
         })?;
         let code = optional_object_string(object, "code", resource, "expansion.contains.code")?;
         if let Some(code) = code {
-            let system = required_object_string(
-                object,
-                "system",
-                resource,
-                "expansion.contains.system",
-            )?;
-            let version = optional_object_string(
-                object,
-                "version",
-                resource,
-                "expansion.contains.version",
-            )?;
-            if optional_object_bool(
-                object,
-                "abstract",
-                resource,
-                "expansion.contains.abstract",
-            )?
-            .unwrap_or(false)
+            let system =
+                required_object_string(object, "system", resource, "expansion.contains.system")?;
+            let version =
+                optional_object_string(object, "version", resource, "expansion.contains.version")?;
+            if optional_object_bool(object, "abstract", resource, "expansion.contains.abstract")?
+                .unwrap_or(false)
             {
                 *has_abstract_code = true;
             }
@@ -637,11 +632,7 @@ fn invalid(
     }
 }
 
-fn enforce_limit(
-    field: &'static str,
-    actual: usize,
-    limit: usize,
-) -> Result<(), TerminologyError> {
+fn enforce_limit(field: &'static str, actual: usize, limit: usize) -> Result<(), TerminologyError> {
     if actual > limit {
         return Err(TerminologyError::Limit {
             field,

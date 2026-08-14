@@ -132,13 +132,10 @@ fn duplicate_complete_code_system_codes_fail_closed() {
         {"code": "a", "concept": [{"code": "b"}]},
         {"code": "b"}
     ]);
-    let error = compare_complete_code_systems(
-        key("http://example.org/CodeSystem/test"),
-        &value,
-        &value,
-    )
-    .unwrap_err()
-    .to_string();
+    let error =
+        compare_complete_code_systems(key("http://example.org/CodeSystem/test"), &value, &value)
+            .unwrap_err()
+            .to_string();
     assert!(error.contains("duplicate complete CodeSystem concept code b"));
 }
 
@@ -178,12 +175,9 @@ fn complete_value_set_expansion_relations_are_directional() {
     .unwrap();
     assert_eq!(widened.relation, TerminologyRelation::Widened);
 
-    let incomparable = compare_value_set_expansions(
-        resource,
-        &expansion(&["a", "b"]),
-        &expansion(&["a", "c"]),
-    )
-    .unwrap();
+    let incomparable =
+        compare_value_set_expansions(resource, &expansion(&["a", "b"]), &expansion(&["a", "c"]))
+            .unwrap();
     assert_eq!(incomparable.relation, TerminologyRelation::Incomparable);
 }
 
@@ -208,12 +202,9 @@ fn hierarchical_expansion_duplicate_is_deduplicated_for_membership() {
         }
     });
     let after = expansion(&["a", "b"]);
-    let result = compare_value_set_expansions(
-        key("http://example.org/ValueSet/test"),
-        &before,
-        &after,
-    )
-    .unwrap();
+    let result =
+        compare_value_set_expansions(key("http://example.org/ValueSet/test"), &before, &after)
+            .unwrap();
     assert_eq!(result.relation, TerminologyRelation::Equal);
     assert_eq!(result.before_count, Some(2));
 }
@@ -243,12 +234,9 @@ fn expansion_paging_and_context_mismatch_are_indeterminate() {
         {"name": "displayLanguage", "valueCode": "en"},
         {"name": "system-version", "valueUri": "http://example.org/CodeSystem/test|2"}
     ]);
-    let result = compare_value_set_expansions(
-        key("http://example.org/ValueSet/test"),
-        &before,
-        &after,
-    )
-    .unwrap();
+    let result =
+        compare_value_set_expansions(key("http://example.org/ValueSet/test"), &before, &after)
+            .unwrap();
     assert_eq!(
         result.reason,
         Some(TerminologyIndeterminateReason::ExpansionContextMismatch)
@@ -260,12 +248,9 @@ fn abstract_coded_members_disable_hard_binding_proof() {
     let before = expansion(&["a"]);
     let mut after = expansion(&["a", "b"]);
     after["expansion"]["contains"][1]["abstract"] = json!(true);
-    let result = compare_value_set_expansions(
-        key("http://example.org/ValueSet/test"),
-        &before,
-        &after,
-    )
-    .unwrap();
+    let result =
+        compare_value_set_expansions(key("http://example.org/ValueSet/test"), &before, &after)
+            .unwrap();
     assert_eq!(result.relation, TerminologyRelation::Widened);
     assert!(!result.binding_proof_eligible);
     assert_eq!(

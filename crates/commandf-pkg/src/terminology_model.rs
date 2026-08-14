@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CompatibilityDirection, CompatibilityReport, CompatibilitySeverity, ElementView, PackageEvidence,
-    ResourceKey,
+    CompatibilityDirection, CompatibilityReport, CompatibilitySeverity, ElementView,
+    PackageEvidence, ResourceKey,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
