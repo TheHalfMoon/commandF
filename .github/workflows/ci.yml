@@ -281,13 +281,18 @@ jobs:
           assert report['schema'] == 1
           assert report['package_name'] == 'dev.commandf.oracle.fixture'
           assert report['structural_diff']['changes']
-          assert len(report['resources']) == 1
-          resource = report['resources'][0]
-          assert resource['resource']['kind'] == 'canonical'
-          assert resource['resource']['value'] == meta['canonical']
-          assert resource['status'] == 'both_changed'
-          assert resource['oracle'] is not None
-          assert resource['commandf_change_kinds']
+          assert len(report['resources']) == 2
+          by_value = {resource['resource']['value']: resource for resource in report['resources']}
+          changed = by_value[meta['canonical']]
+          control = by_value[meta['control_canonical']]
+          assert changed['resource']['kind'] == 'canonical'
+          assert changed['status'] == 'both_changed'
+          assert changed['oracle'] is not None
+          assert changed['commandf_change_kinds']
+          assert control['resource']['kind'] == 'canonical'
+          assert control['status'] == 'agreement'
+          assert control['oracle'] is not None
+          assert control['commandf_change_kinds'] == []
           fields = {change.get('field') for change in report['structural_diff']['changes']}
           assert {'min', 'type', 'binding', 'mustSupport'} <= fields
           PY
