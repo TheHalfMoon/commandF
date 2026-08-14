@@ -55,6 +55,10 @@ pub struct CheckReport {
 impl CheckReport {
     pub const SCHEMA_V1: u32 = 1;
 
+    pub fn from_json_slice(bytes: &[u8]) -> Result<Self, serde_json::Error> {
+        serde_json::from_slice(bytes)
+    }
+
     pub fn to_json_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
         let mut bytes = serde_json::to_vec_pretty(self)?;
         bytes.push(b'\n');
