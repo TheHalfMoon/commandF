@@ -48,6 +48,9 @@ pub enum SourceMapError {
     #[error("source-map CheckReport does not match the CheckReport being rendered")]
     CheckReportMismatch,
 
+    #[error("persisted source-map evidence does not match the current SUSHI index and source tree")]
+    SourceEvidenceMismatch,
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
