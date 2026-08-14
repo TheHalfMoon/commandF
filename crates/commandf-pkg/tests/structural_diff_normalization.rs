@@ -24,7 +24,10 @@ fn archive(resource: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn diff(before: &[u8], after: &[u8]) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
+fn diff(
+    before: &[u8],
+    after: &[u8],
+) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
     diff_package_archives(
         "example.pkg",
         "1.0.0",
@@ -38,7 +41,8 @@ fn diff(before: &[u8], after: &[u8]) -> Result<commandf_pkg::StructuralDiffRepor
 
 #[test]
 fn type_and_nested_set_reordering_is_not_a_structural_change() {
-    let before = archive(br#"{
+    let before = archive(
+        br#"{
       "resourceType":"StructureDefinition",
       "id":"example",
       "url":"https://example.org/StructureDefinition/example",
@@ -55,8 +59,10 @@ fn type_and_nested_set_reordering_is_not_a_structural_change() {
           {"code":"Quantity"}
         ]
       }]}
-    }"#);
-    let after = archive(br#"{
+    }"#,
+    );
+    let after = archive(
+        br#"{
       "resourceType":"StructureDefinition",
       "id":"example",
       "url":"https://example.org/StructureDefinition/example",
@@ -73,7 +79,8 @@ fn type_and_nested_set_reordering_is_not_a_structural_change() {
           }
         ]
       }]}
-    }"#);
+    }"#,
+    );
 
     let report = diff(&before, &after).unwrap();
 
@@ -89,7 +96,8 @@ fn type_and_nested_set_reordering_is_not_a_structural_change() {
 
 #[test]
 fn view_and_element_removals_are_explicit() {
-    let before = archive(br#"{
+    let before = archive(
+        br#"{
       "resourceType":"StructureDefinition",
       "id":"example",
       "url":"https://example.org/StructureDefinition/example",
@@ -100,13 +108,16 @@ fn view_and_element_removals_are_explicit() {
       "differential":{"element":[
         {"id":"Observation.status","path":"Observation.status","min":1}
       ]}
-    }"#);
-    let after = archive(br#"{
+    }"#,
+    );
+    let after = archive(
+        br#"{
       "resourceType":"StructureDefinition",
       "id":"example",
       "url":"https://example.org/StructureDefinition/example",
       "snapshot":{"element":[{"id":"Observation","path":"Observation"}]}
-    }"#);
+    }"#,
+    );
 
     let report = diff(&before, &after).unwrap();
 
