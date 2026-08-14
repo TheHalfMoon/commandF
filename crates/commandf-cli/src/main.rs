@@ -5,9 +5,10 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    classify_structural_diff, diff_package_archives, inspect_package, FhirRegistrySource,
-    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest,
-    Resolver, StructuralDiffReport, VersionConstraint,
+    build_terminology_diff_report, classify_structural_diff, diff_package_archives, inspect_package,
+    FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName,
+    PackageRequest, Resolver, StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState,
+    VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -50,6 +51,19 @@ enum Command {
         format: OutputFormat,
     },
     Classify {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+    Terminology {
         package: String,
         #[arg(long)]
         before_lock: PathBuf,
@@ -207,6 +221,25 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
         }
+        Command::Terminology {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            format,
+        } => {
+            let report = build_terminology_report(
+                package,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
+            )?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
+            }
+        }
     }
     Ok(())
 }
@@ -229,18 +262,8 @@ fn build_diff_report(
     before_cache.verify(&before_locked.sha256)?;
     after_cache.verify(&after_locked.sha256)?;
 
-    let before_bytes = fs::read(
-        before_cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", before_locked.sha256)),
-    )?;
-    let after_bytes = fs::read(
-        after_cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", after_locked.sha256)),
-    )?;
+    let before_bytes = read_locked_archive(&before_cache, before_locked)?;
+    let after_bytes = read_locked_archive(&after_cache, after_locked)?;
     Ok(diff_package_archives(
         package_name.to_string(),
         &before_locked.version,
@@ -250,6 +273,63 @@ fn build_diff_report(
         &after_locked.sha256,
         &after_bytes,
     )?)
+}
+
+fn build_terminology_report(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+) -> Result<TerminologyDiffReport, Box<dyn std::error::Error>> {
+    let package_name = PackageName::parse(package)?;
+    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
+    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
+    let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
+    let before_cache = PackageCache::new(before_cache);
+    let after_cache = PackageCache::new(after_cache);
+
+    before_cache.verify(&before_locked.sha256)?;
+    after_cache.verify(&after_locked.sha256)?;
+    let before_bytes = read_locked_archive(&before_cache, before_locked)?;
+    let after_bytes = read_locked_archive(&after_cache, after_locked)?;
+    let diff = diff_package_archives(
+        package_name.to_string(),
+        &before_locked.version,
+        &before_locked.sha256,
+        &before_bytes,
+        &after_locked.version,
+        &after_locked.sha256,
+        &after_bytes,
+    )?;
+    let compatibility = classify_structural_diff(&diff)?;
+    Ok(build_terminology_diff_report(
+        TerminologyPackageState {
+            lockfile: &before_lockfile,
+            cache: &before_cache,
+            root_bytes: &before_bytes,
+        },
+        TerminologyPackageState {
+            lockfile: &after_lockfile,
+            cache: &after_cache,
+            root_bytes: &after_bytes,
+        },
+        &diff,
+        &compatibility,
+    )?)
+}
+
+fn read_locked_archive(
+    cache: &PackageCache,
+    locked: &LockedPackage,
+) -> Result<Vec<u8>, io::Error> {
+    fs::read(
+        cache
+            .root()
+            .join("sha256")
+            .join(format!("{}.tgz", locked.sha256)),
+    )
 }
 
 fn select_locked_package<'a>(
