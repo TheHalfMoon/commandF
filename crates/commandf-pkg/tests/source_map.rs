@@ -1,10 +1,12 @@
 use std::fs;
+use std::path::Path;
 
 use commandf_pkg::{
     build_source_mapped_check_report, evaluate_compatibility_policy,
     source_mapped_check_report_to_github_annotations_bytes, CheckPolicy, CompatibilityDirection,
     CompatibilityFinding, CompatibilityReport, CompatibilitySeverity, PackageEvidence, ResourceKey,
-    ResourceKeyKind, SourceMapError, SourceMappingStatus, StructuralChangeKind,
+    ResourceKeyKind, SourceLocation, SourceMapError, SourceMappedCheckReport, SourceMappingStatus,
+    StructuralChangeKind,
 };
 use serde_json::json;
 use tempfile::tempdir;
@@ -56,6 +58,11 @@ fn repo_with_fsh() -> tempfile::TempDir {
         "Alias: $x = http://example.org\n\nProfile: Example\nParent: Observation\n* status 1..1\n* code 1..1\n",
     )
     .unwrap();
+    fs::write(
+        temp.path().join("input/fsh/nested/other.fsh"),
+        "Profile: Other\nParent: Observation\n* status 1..1\n* code 1..1\n",
+    )
+    .unwrap();
     temp
 }
 
@@ -70,6 +77,21 @@ fn index_bytes(output_file: &str, fsh_file: &str, start_line: u32, end_line: u32
         "futureMetadata": {"ignored": true}
     }]))
     .unwrap()
+}
+
+fn render_mapped(
+    report: &commandf_pkg::CheckReport,
+    mapped: &SourceMappedCheckReport,
+    index: &[u8],
+    repo_root: &Path,
+) -> Result<Vec<u8>, SourceMapError> {
+    source_mapped_check_report_to_github_annotations_bytes(
+        report,
+        mapped,
+        index,
+        repo_root,
+        Path::new("input/fsh"),
+    )
 }
 
 #[test]
@@ -90,14 +112,14 @@ fn exact_after_filename_maps_to_sushi_definition_range_and_renders_location() {
         &report,
         &index,
         repo.path(),
-        std::path::Path::new("input/fsh"),
+        Path::new("input/fsh"),
     )
     .unwrap();
     let second = build_source_mapped_check_report(
         &report,
         &index,
         repo.path(),
-        std::path::Path::new("input/fsh"),
+        Path::new("input/fsh"),
     )
     .unwrap();
 
@@ -114,10 +136,8 @@ fn exact_after_filename_maps_to_sushi_definition_range_and_renders_location() {
     assert_eq!(location.line, 3);
     assert_eq!(location.end_line, 6);
 
-    let text = String::from_utf8(
-        source_mapped_check_report_to_github_annotations_bytes(&report, &first).unwrap(),
-    )
-    .unwrap();
+    let text = String::from_utf8(render_mapped(&report, &first, &index, repo.path()).unwrap())
+        .unwrap();
     assert!(text.starts_with(
         "::error title=commandF CF04-CARD-001,file=input/fsh/nested/example.fsh,line=3,endLine=6::"
     ));
@@ -142,7 +162,7 @@ fn current_tree_unmapped_states_do_not_fabricate_locations() {
         &report,
         &index,
         repo.path(),
-        std::path::Path::new("input/fsh"),
+        Path::new("input/fsh"),
     )
     .unwrap();
     assert_eq!(
@@ -155,10 +175,8 @@ fn current_tree_unmapped_states_do_not_fabricate_locations() {
     );
     assert!(mapped.mappings.iter().all(|entry| entry.location.is_none()));
 
-    let text = String::from_utf8(
-        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped).unwrap(),
-    )
-    .unwrap();
+    let text = String::from_utf8(render_mapped(&report, &mapped, &index, repo.path()).unwrap())
+        .unwrap();
     assert!(!text.contains(",file="));
     assert!(text.contains("no proven current FSH source mapping"));
 }
@@ -184,19 +202,14 @@ fn duplicate_generated_output_identity_fails_closed() {
             "fshFile": "nested/other.fsh",
             "fshName": "Other",
             "fshType": "Profile",
-            "startLine": 8,
-            "endLine": 10
+            "startLine": 1,
+            "endLine": 4
         }
     ]))
     .unwrap();
 
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report,
-            &index,
-            repo.path(),
-            std::path::Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh")),
         Err(SourceMapError::DuplicateOutputFile(_))
     ));
 }
@@ -220,19 +233,14 @@ fn malformed_ranges_and_traversal_fail_closed() {
             &report,
             &invalid_range,
             repo.path(),
-            std::path::Path::new("input/fsh"),
+            Path::new("input/fsh"),
         ),
         Err(SourceMapError::InvalidIndex(_))
     ));
 
     let traversal = index_bytes("StructureDefinition-example.json", "../escape.fsh", 3, 6);
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report,
-            &traversal,
-            repo.path(),
-            std::path::Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report, &traversal, repo.path(), Path::new("input/fsh")),
         Err(SourceMapError::InvalidPath(_))
     ));
 }
@@ -256,12 +264,7 @@ fn symlink_escape_fails_closed() {
     )]);
     let index = index_bytes("StructureDefinition-example.json", "escape.fsh", 1, 2);
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report,
-            &index,
-            &repo_root,
-            std::path::Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report, &index, &repo_root, Path::new("input/fsh")),
         Err(SourceMapError::SourceEscape(_))
     ));
 }
@@ -287,18 +290,18 @@ fn renderer_rejects_a_source_map_for_a_different_valid_check_report() {
         &first_report,
         &index,
         repo.path(),
-        std::path::Path::new("input/fsh"),
+        Path::new("input/fsh"),
     )
     .unwrap();
 
     assert!(matches!(
-        source_mapped_check_report_to_github_annotations_bytes(&second_report, &mapped),
+        render_mapped(&second_report, &mapped, &index, repo.path()),
         Err(SourceMapError::CheckReportMismatch)
     ));
 }
 
 #[test]
-fn renderer_rejects_tampered_location_outside_declared_fsh_root() {
+fn renderer_rejects_persisted_map_tampering_even_when_shape_is_valid() {
     let repo = repo_with_fsh();
     let report = report(vec![finding(
         "CF04-CARD-001",
@@ -314,13 +317,77 @@ fn renderer_rejects_tampered_location_outside_declared_fsh_root() {
         &report,
         &index,
         repo.path(),
-        std::path::Path::new("input/fsh"),
+        Path::new("input/fsh"),
     )
     .unwrap();
-    mapped.mappings[0].location.as_mut().unwrap().file = "README.md".to_owned();
+    mapped.source_index.sha256 = "f".repeat(64);
+    mapped.mappings[0].location.as_mut().unwrap().line = 4;
 
     assert!(matches!(
-        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped),
-        Err(SourceMapError::InvalidMappingEntry { index: 0 })
+        render_mapped(&report, &mapped, &index, repo.path()),
+        Err(SourceMapError::SourceEvidenceMismatch)
+    ));
+}
+
+#[test]
+fn renderer_rejects_a_map_when_current_index_evidence_changes() {
+    let repo = repo_with_fsh();
+    let report = report(vec![finding(
+        "CF04-CARD-001",
+        Some("StructureDefinition-example.json"),
+    )]);
+    let original_index = index_bytes(
+        "StructureDefinition-example.json",
+        "nested/example.fsh",
+        3,
+        6,
+    );
+    let changed_index = index_bytes(
+        "StructureDefinition-example.json",
+        "nested/other.fsh",
+        1,
+        4,
+    );
+    let mapped = build_source_mapped_check_report(
+        &report,
+        &original_index,
+        repo.path(),
+        Path::new("input/fsh"),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        render_mapped(&report, &mapped, &changed_index, repo.path()),
+        Err(SourceMapError::SourceEvidenceMismatch)
+    ));
+}
+
+#[test]
+fn renderer_rejects_fabricated_mapping_for_finding_without_after_filename() {
+    let repo = repo_with_fsh();
+    let report = report(vec![finding("CF04-REMOVE-001", None)]);
+    let index = index_bytes(
+        "StructureDefinition-example.json",
+        "nested/example.fsh",
+        3,
+        6,
+    );
+    let mut mapped = build_source_mapped_check_report(
+        &report,
+        &index,
+        repo.path(),
+        Path::new("input/fsh"),
+    )
+    .unwrap();
+    mapped.mappings[0].status = SourceMappingStatus::Mapped;
+    mapped.mappings[0].location = Some(SourceLocation {
+        file: "input/fsh/nested/example.fsh".to_owned(),
+        line: 3,
+        end_line: 6,
+    });
+
+    assert!(matches!(
+        render_mapped(&report, &mapped, &index, repo.path()),
+        Err(SourceMapError::SourceEvidenceMismatch)
     ));
 }
