@@ -84,7 +84,9 @@ pub(crate) fn validate_element_structural_field(
                             object,
                             nested,
                             value,
-                            &format!("type[{index}].{nested} must be an array of primitive strings"),
+                            &format!(
+                                "type[{index}].{nested} must be an array of primitive strings"
+                            ),
                         )?;
                     }
                 }
@@ -274,9 +276,7 @@ fn validate_repeating_string_primitive(
             Some(metadata.as_slice())
         }
         Some(_) => {
-            return Err(format!(
-                "{metadata_field} must be an array when present"
-            ));
+            return Err(format!("{metadata_field} must be an array when present"));
         }
     };
 
@@ -295,10 +295,7 @@ fn validate_repeating_string_primitive(
                             "{field}[{index}] may be null only with matching {metadata_field}[{index}] primitive metadata"
                         )
                     })?;
-                validate_primitive_metadata(
-                    metadata_value,
-                    &format!("{metadata_field}[{index}]"),
-                )?;
+                validate_primitive_metadata(metadata_value, &format!("{metadata_field}[{index}]"))?;
                 continue;
             }
             _ => {
@@ -309,10 +306,7 @@ fn validate_repeating_string_primitive(
         }
 
         if let Some(metadata_value) = metadata_value.filter(|value| !value.is_null()) {
-            validate_primitive_metadata(
-                metadata_value,
-                &format!("{metadata_field}[{index}]"),
-            )?;
+            validate_primitive_metadata(metadata_value, &format!("{metadata_field}[{index}]"))?;
         }
     }
 
