@@ -8,6 +8,7 @@ use crate::{
 const MAX_ERROR_ANNOTATIONS: usize = 10;
 const MAX_WARNING_ANNOTATIONS: usize = 10;
 const MAX_NOTICE_ANNOTATIONS: usize = 10;
+const MAX_ANNOTATION_TITLE_CHARS: usize = 256;
 const MAX_ANNOTATION_MESSAGE_CHARS: usize = 4_000;
 
 #[derive(Clone, Copy)]
@@ -108,7 +109,7 @@ pub fn check_report_to_github_annotations_bytes(
 }
 
 fn write_annotation(output: &mut String, level: AnnotationLevel, finding: &CompatibilityFinding) {
-    let title = format!("commandF {}", finding.rule_id);
+    let title = bounded_title(&format!("commandF {}", finding.rule_id));
     let message = bounded_message(&annotation_message(finding));
 
     output.push_str("::");
@@ -160,15 +161,29 @@ fn annotation_message(finding: &CompatibilityFinding) -> String {
     parts.join(" | ")
 }
 
+fn bounded_title(value: &str) -> String {
+    const SUFFIX: &str = "… [title truncated]";
+    if value.chars().count() <= MAX_ANNOTATION_TITLE_CHARS {
+        return value.to_owned();
+    }
+    let mut truncated = value
+        .chars()
+        .take(MAX_ANNOTATION_TITLE_CHARS.saturating_sub(SUFFIX.chars().count()))
+        .collect::<String>();
+    truncated.push_str(SUFFIX);
+    truncated
+}
+
 fn bounded_message(value: &str) -> String {
+    const SUFFIX: &str = "… [projection truncated]";
     if value.chars().count() <= MAX_ANNOTATION_MESSAGE_CHARS {
         return value.to_owned();
     }
     let mut truncated = value
         .chars()
-        .take(MAX_ANNOTATION_MESSAGE_CHARS.saturating_sub(25))
+        .take(MAX_ANNOTATION_MESSAGE_CHARS.saturating_sub(SUFFIX.chars().count()))
         .collect::<String>();
-    truncated.push_str("… [projection truncated]");
+    truncated.push_str(SUFFIX);
     truncated
 }
 
