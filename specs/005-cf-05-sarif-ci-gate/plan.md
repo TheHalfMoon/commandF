@@ -1,6 +1,6 @@
 # CF-05 Implementation Plan
 
-Status: Approved for implementation
+Status: Implemented — convergence candidate
 
 ## Architecture
 
@@ -16,7 +16,7 @@ CF-05 does not reopen archives or reimplement CF-03/CF-04 semantics.
 
 ## Public model
 
-Add a versioned gate model:
+The versioned gate model is:
 
 ```text
 CheckPolicy {
@@ -46,7 +46,7 @@ CheckReport {
 
 ## Policy engine
 
-Expose a pure function similar to:
+The pure evaluator is:
 
 ```text
 evaluate_compatibility_policy(
@@ -66,7 +66,7 @@ The function has no filesystem, network, clock, environment, or process dependen
 
 ## SARIF model
 
-Implement the minimum typed SARIF 2.1.0 surface needed by commandF rather than adding a third-party SARIF dependency.
+CF-05 implements the minimum typed SARIF 2.1.0 surface needed by commandF rather than adding a third-party SARIF dependency.
 
 Top-level shape:
 
@@ -88,33 +88,25 @@ Each run includes:
 Each result includes:
 
 - `ruleId` = CF-04 rule id;
-- `level` from CF-04 severity;
+- `level` from CF-04 severity (`error`, `warning`, `note`);
 - message text copied from CF-04;
-- commandF-specific properties for all available evidence.
+- the original CF-04 severity and all available commandF evidence in result properties.
 
-Do not emit timestamps, GUIDs, random values, host paths, repository assumptions, or physical locations.
+The serializer emits no timestamps, GUIDs, random values, host paths, repository assumptions, or physical locations.
 
-The active rule descriptor set is sorted by rule id and de-duplicated. Rule metadata should remain minimal and factual; result-specific direction/evidence stays on results.
+The active rule descriptor set is sorted by rule id and de-duplicated. Rule metadata remains minimal and factual; result-specific direction/evidence stays on results.
 
 ## SARIF / GitHub boundary
 
-OASIS SARIF 2.1.0 permits analysis results as an interchange format. GitHub Code Scanning supports a subset of SARIF 2.1.0 and requires a location for an alert to display.
+OASIS SARIF 2.1.0 is the interchange contract. GitHub Code Scanning supports a subset of SARIF 2.1.0 and requires a physical location for an alert to display.
 
 CF-04 findings currently refer to FHIR package artifacts, not checked-in repository source paths. CF-05 therefore emits standards-oriented SARIF without fabricated physical locations. GitHub source annotations remain blocked on CF-09 source mapping.
 
-This is an explicit product boundary, not a missing implementation detail.
+This is an explicit product boundary, not a missing implementation detail. Generated third-party PR summaries that describe current SARIF as "upload-ready" are not treated as commandF authority.
 
 ## CLI
 
-Add `Check` beside `Diff` and `Classify`.
-
-Extend output format to:
-
-```text
-json | sarif
-```
-
-`Inspect`, `Diff`, and `Classify` continue to accept only their supported format(s); reject `sarif` for commands that do not support it instead of silently changing their output contract.
+`Check` is added beside `Diff` and `Classify`.
 
 `Check` accepts:
 
@@ -122,85 +114,89 @@ json | sarif
 - before/after lock and cache paths;
 - direction;
 - fail-on threshold;
-- output format;
+- `json` or `sarif` format;
 - optional output path.
 
-To avoid conflating policy failure with operational failure, refactor the top-level runner to return an explicit process outcome. Preserve current behavior for existing commands.
+`Inspect`, `Diff`, and `Classify` keep their existing output contracts and do not silently gain SARIF.
 
-Recommended internal shape:
+The top-level executable uses `Cli::try_parse()` so `commandf check` parse/usage failures return `1`, `check --help` remains `0`, and exit `2` is reserved for completed CF-05 policy failures. Existing non-`check` Clap parse behavior is preserved.
+
+The check execution path remains:
 
 ```text
-enum ProcessOutcome {
-  Success,
-  PolicyFailed,
-}
+build_diff_report
+  -> classify_structural_diff
+  -> evaluate_compatibility_policy
+  -> serialize JSON or SARIF
+  -> write output
+  -> return 0 or 2
 ```
 
-`main` maps these to exit `0` and `2`; errors remain exit `1`.
+Operational errors from any stage return `1`.
 
 ## Output writer
 
-Create a small helper that either writes bytes to stdout or atomically replaces the requested output file.
+The CLI helper writes bytes to stdout or atomically replaces the requested output path.
 
-Atomic file output:
+File publication:
 
 1. verify the parent directory exists;
-2. create a temporary file in that same directory;
-3. write and sync bytes;
-4. persist/rename over the target only after serialization and write succeed.
+2. allocate a unique temporary file in that same directory with create-new semantics;
+3. write and sync all bytes;
+4. close the temporary file;
+5. rename the temporary file over the destination;
+6. remove a leftover temporary file on publication failure.
 
-No partial result file should remain after a write failure.
+This permits repeated CI runs to replace stale prior reports while preventing a partially written result from becoming the requested output. The complete output is published before returning policy exit `2`.
 
 ## Test strategy
 
-Package tests:
+Package regressions prove:
 
-- default policy passes empty report;
-- breaking threshold behavior;
-- risky threshold behavior;
-- none threshold behavior;
-- producer/consumer/both filtering;
+- breaking/risky/none thresholds;
+- producer/consumer/both direction filtering;
 - count accuracy;
 - unsupported CF-04 schema/ruleset failure;
-- repeated JSON serialization byte identity;
-- repeated SARIF serialization byte identity;
-- SARIF severity mapping;
-- active rule sorting/de-duplication;
-- all CF-04 evidence properties preserved where available;
-- no timestamps or physical locations.
+- repeated independent policy evaluations produce byte-identical JSON and SARIF;
+- SARIF schema/version/tool metadata;
+- stable rule ids and rule sorting/de-duplication;
+- severity-to-level mapping while preserving original CF-04 severity evidence;
+- message and full available evidence-property preservation;
+- no physical locations.
 
-CLI tests:
+CLI regressions prove:
 
 - `check --help` contract;
-- successful JSON stdout;
-- successful SARIF stdout;
-- policy-failure exit `2` with output present;
-- operational failure exit `1`;
-- output-file success;
-- output-file policy failure still leaves complete output;
-- parent-directory failure remains exit `1`;
-- no network acquisition.
+- policy-failure exit `2` with JSON output present;
+- `--fail-on none` pass behavior without evidence removal;
+- SARIF file output exists before exit `2`;
+- existing output replacement on both pass and fail paths;
+- corrupted cache remains exit `1`;
+- invalid check policy syntax remains exit `1`;
+- missing output parent remains exit `1`;
+- no network acquisition through a dead-proxy test environment.
 
-Real smoke:
+## Real smoke
 
-Extend the current independent R4 smoke to run:
+The existing independent R4 smoke runs:
 
 ```text
 commandf check hl7.fhir.r4.core ... --format json
 commandf check hl7.fhir.r4.core ... --format sarif
 ```
 
-Require JSON `passed == true`, `blocking_findings == 0`, and embedded CF-04 findings empty. Require SARIF version `2.1.0`, one run, tool name `commandF`, and empty results.
+It requires JSON `passed == true`, `blocking_findings == 0`, and embedded CF-04 findings empty. It requires SARIF version `2.1.0`, one run, tool name `commandF`, empty results, the passing decision property, and `commandf.sourceMapping = deferred_cf09`.
 
-## Review priorities
+## Review priorities and disposition
 
-1. exit `2` must only mean a completed policy failure;
-2. output must exist before exit `2`;
-3. no CF-04 evidence loss or severity reinterpretation;
-4. no fake source locations in SARIF;
-5. deterministic byte output;
-6. no network in `check`;
-7. no CF-06 oracle leakage.
+1. exit `2` must only mean a completed policy failure — self-review found and fixed the original Clap ambiguity;
+2. output must exist before exit `2` — proven by CLI regression;
+3. existing output must be replaced atomically — CodeRabbit finding fixed with same-directory rename publication and pass/fail regressions;
+4. no CF-04 evidence loss or severity reinterpretation — strengthened SARIF regression proves original `BREAKING` evidence is preserved while level maps to `error`;
+5. no fake source locations in SARIF — enforced by serializer shape and regression;
+6. deterministic byte output — repeated independent evaluation regression;
+7. no network in `check` — CLI tests and real locked-cache path;
+8. no CF-06 oracle leakage — no validator execution or CF-06 branch/work in this slice.
 
 ## Deferred work
 
