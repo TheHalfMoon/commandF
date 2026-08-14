@@ -1,25 +1,55 @@
 # CF-09 Convergence — FSH Source Mapping
 
-Status: converged; final task-state exact-head revalidation required before founder-review verdict
+Status: reconciled with canonical main; implementation exact-head gates green; final documentation-head revalidation required before merge.
 
-## Stack identity
+## Decision
+
+```text
+CF-09_RECONCILED_READY_FOR_FINAL_REVIEW_AFTER_DOCS_HEAD_CI
+```
+
+CF-09 adds source attribution only. It does not reinterpret structural evidence, compatibility severity, policy, pass/fail decisions, terminology semantics, HL7-oracle evidence, or GitHub Action trust boundaries.
+
+## Current stack identity
 
 ```text
 repository: TheHalfMoon/commandF
 PR: #10
-base branch: feat/cf-08-github-action-annotations
-exact base SHA: 03dbdc956847b9edd2eedd58058894118e338beb
+base branch: main
+canonical main used for reconciliation: f2c331b3f832407b6834aaaa3b5b03ef73b770c9
 implementation branch: feat/cf-09-fsh-source-mapping
-exact green implementation head: 3819f35116a5bf18070cc00453f34176b549688a
-exact green implementation tree: 3d80d4a76d29611a6cde771fc4d343d58e44435b
-exact green implementation CI: 31840014291
-implementation CI result: SUCCESS
-first converged docs head: 79847a2bcb97566dff10f0de1186953998dcb68d
-first converged docs CI: 31840724719
-first converged docs CI result: SUCCESS
+pre-reconciliation CF-09 head: 4966f645becfa38cdbd3a94a9f5c201952222ce1
+reconciled implementation head: 9907531264227be0c63293d1d1c478ad51b107e2
+reconciled implementation tree: b633e2a1d46419614801d0bb3f9671a422df30bd
 ```
 
-The PR remains intentionally Draft/open/unmerged. No merge or auto-merge is authorized by this convergence record.
+The reconciled commit has the pre-reconciliation CF-09 head as first parent and canonical main as second parent. The final tree was reconstructed from tested Git blob identities and matched the independently tested reconciliation tree byte-for-byte before the CF-09 branch moved.
+
+## Reconciliation proof
+
+CF-09 had exactly three merge-conflict paths against canonical main:
+
+```text
+.github/workflows/ci.yml
+crates/commandf-cli/src/main.rs
+crates/commandf-pkg/src/lib.rs
+```
+
+All other CF-09 paths were preserved from the existing CF-09 head. The three conflicts were resolved with these invariants:
+
+- preserve CF-09 source-map CLI, mapped GitHub annotations, diagnostic sanitization, Action wiring, and security checks;
+- preserve current-main `terminology` and `oracle` commands and exports;
+- preserve the single structural matching authority rather than introducing a competing matcher;
+- preserve current mainline CI and add CF-09 source-map security / Action gates without removing terminology coverage.
+
+A guarded GitHub Actions reconciliation independently performed the real three-way merge, asserted the exact conflict set, applied the deterministic resolver, and passed formatting, Clippy, the full workspace tests, CF-08 Action security regression, and CF-09 source-map security regression. That tested tree was exported as an artifact. GitHub's reconstructed tree SHA matched it exactly:
+
+```text
+tested tree: b633e2a1d46419614801d0bb3f9671a422df30bd
+reconstructed tree: b633e2a1d46419614801d0bb3f9671a422df30bd
+```
+
+The temporary reconciliation branch/workflows were not merged into CF-09 and were reset to canonical main after the branch update.
 
 ## Upstream source-mapping evidence
 
@@ -32,9 +62,7 @@ machine index: fsh-generated/data/fsh-index.json
 fields consumed: outputFile, fshFile, fshName, fshType, startLine, endLine
 ```
 
-The studied SUSHI implementation writes this JSON for machine usage. It maps generated FHIR artifacts to FSH definition ranges. It does not export exact per-rule source locations. CF-09 therefore reports definition-level source ranges and explicitly refuses to claim exact rule-line attribution.
-
-No SUSHI source code was copied and SUSHI is not a runtime dependency.
+The studied SUSHI implementation maps generated artifacts to FSH definition ranges. It does not provide exact per-rule source locations. CF-09 therefore reports definition-level source ranges only. No SUSHI source code is copied and SUSHI is not a runtime dependency.
 
 ## Shipped capability
 
@@ -52,25 +80,29 @@ and:
 ```text
 commandf github-annotations \
   --input <check-report.json> \
-  [--source-map <mapped-report.json>]
+  [--source-map <mapped-report.json> \
+   --fsh-index <fsh-index.json> \
+   --repo-root <repository-root> \
+   --fsh-root <repo-relative-fsh-root>]
 ```
 
-The root composite Action accepts optional `fsh-index` and `fsh-root` inputs. With mapping disabled, CF-08 behavior is unchanged. With mapping enabled, source-map generation and annotation rendering occur in the same checked-out workspace/run.
+The root composite Action accepts optional `fsh-index` and `fsh-root` inputs. With mapping disabled, CF-08 behavior remains unchanged. With mapping enabled, source-map generation and annotation rendering occur in the same checked-out workspace/run.
 
 ## Authority boundary
 
-CF-09 adds source attribution only.
-
+- CF-03 remains deterministic structural-fact authority.
 - CF-04 remains compatibility-classification authority.
 - CF-05 remains policy/decision/exit-code authority.
+- CF-07 terminology remains independent terminology evidence.
 - CF-08 remains bounded GitHub presentation authority.
-- CF-09 cannot modify severity, direction, rule id, compatibility evidence, policy counts, pass/fail decision, or the original CF-05 exit 0/2.
-- Source-map/render failure becomes operational exit 1.
-- The complete validated CF-05 report remains embedded and unchanged.
+- CF-06 remains advisory pinned-HL7-oracle evidence.
+- CF-09 can add source attribution only.
+
+CF-09 cannot modify severity, direction, rule id, compatibility evidence, policy counts, pass/fail decision, original CF-05 exit 0/2, terminology evidence, or oracle evidence. Source-map/render failure is operational failure, not a compatibility judgment.
 
 ## Mapping contract
 
-V1 mapping is intentionally narrow:
+V1 is intentionally narrow:
 
 ```text
 current/after tree only
@@ -79,142 +111,113 @@ match: exact equality to one SUSHI outputFile
 range: fshFile + startLine + endLine
 ```
 
-There is no fallback from `before_filename`, canonical URL, resource id, FSH definition name, element id/path, rule id, or fuzzy similarity.
-
-Unmapped states are first-class and locationless:
-
-```text
-unmapped_no_after_filename
-unmapped_no_index_entry
-```
-
-Mapped findings add only:
-
-```text
-file
-line
-endLine
-```
-
-No columns are emitted.
+There is no fallback from `before_filename`, canonical URL, resource id, FSH definition name, element id/path, rule id, or fuzzy similarity. Unmapped findings remain first-class and locationless. Mapped findings add only file/line/endLine; no columns are fabricated.
 
 ## Fail-closed and security contract
-
-Untrusted inputs include the CF-05 report, SUSHI index, explicit roots/paths, persisted mapped report, and Action inputs.
 
 Implemented safeguards include:
 
 - CF-05 schema/ruleset/decision revalidation;
 - exact embedded CheckReport equality before mapped rendering;
-- 64 MiB CheckReport CLI bound;
-- 16 MiB SUSHI-index bound enforced in the public core builder before JSON parse as well as CLI;
-- 100,000-entry bound during parse and persisted-map validation;
-- required SUSHI field and line-range shape validation;
+- bounded CheckReport, SUSHI index, and persisted mapped-report inputs;
+- entry-count and required-field validation;
 - duplicate outputFile rejection;
 - absolute/drive-style/traversal path rejection;
 - repository and FSH-root canonical containment;
 - symlink escape rejection;
 - regular-file requirement;
-- streaming current-file line counting and rejection when exported `endLine` exceeds current EOF;
-- persisted mapped-path component containment beneath serialized `source_index.fsh_root`;
+- current-file line counting and rejection when exported `endLine` exceeds current EOF;
+- persisted mapped-path component containment beneath serialized FSH root;
 - repository-relative UTF-8 `/`-separator output paths;
 - workflow-command escaping for finding-controlled properties/data;
 - fully quoted Action argv with no `eval`;
 - operational failure exposes no stale report-path;
 - no FSH source content is copied into annotation messages.
 
-A serialized mapped report is deterministic derived evidence, not a cryptographic freshness attestation. It can become stale after creation if the repository changes. The source-index SHA records the consumed index bytes; it is not a signature of later repository state.
+Three valid issues found by the manual security-diff methodology were fixed and regression-tested before convergence: persisted mapped-path escape from the declared FSH root, public-library SUSHI-index bound bypass, and stale index `endLine` beyond current EOF.
 
-## Security-diff findings discovered before reviewer freeze
+This remains a manual security-diff audit, not a completed Codex Security product scan.
 
-A manual security-diff audit following the installed Codex Security diff-scan threat-model/source-to-sink method found three valid issues. All were fixed before the reviewer candidate and regression-tested:
+## Exact reconciled implementation CI
 
-1. **Persisted mapped path outside declared FSH root** — VALID / FIXED / REGRESSION-TESTED. Persisted mapped paths must remain component-wise beneath serialized `source_index.fsh_root` unless that root is `.`.
-2. **16 MiB index limit bypass through public library API** — VALID / FIXED / REGRESSION-TESTED. The public core builder rejects oversized bytes before JSON parse.
-3. **Stale index `endLine` beyond current source EOF** — VALID / FIXED / REGRESSION-TESTED. Current source lines are counted in bounded memory and invalid ranges fail closed.
-
-No fourth security finding was identified in the manual CF-09 source/script/workflow audit.
-
-This manual methodology is not represented as a completed Codex Security product scan:
+Exact head:
 
 ```text
-Codex Security product scan: NOT RUN IN THIS HOST
-Codex Security PASS claimed: NO
-manual security-diff methodology applied: YES
-manual valid findings: 3
-manual valid findings fixed: 3
+9907531264227be0c63293d1d1c478ad51b107e2
 ```
 
-## Test and CI evidence
+Mainline workflow:
 
-Exact implementation candidate `3819f35116a5bf18070cc00453f34176b549688a`, run `31840014291`, passed:
+```text
+workflow: ci
+run: 31851096849
+result: SUCCESS
+```
+
+Passed on the exact reconciled head:
 
 - `cargo fmt --all -- --check`;
 - locked workspace Clippy with `-D warnings`;
 - full workspace tests;
-- inherited CF-08 Action runner security regression;
-- CF-09 source-map Action security regression;
-- independent real `hl7.fhir.r4.core@4.0.1` resolve/verify and inspect/diff/classify/check smoke;
+- CF-08 Action runner security regression;
+- CF-09 Action source-map security regression;
+- real `hl7.fhir.r4.core@4.0.1` resolve/verify + inspect/diff/classify/check smoke;
+- real terminology self-diff smoke;
+- real CF-09 source-map fixture preparation;
 - local repository-root composite Action `uses: ./` with source mapping enabled;
 - Action output verification.
 
-First converged docs head `79847a2bcb97566dff10f0de1186953998dcb68d`, run `31840724719`, repeated the same gate set and also completed SUCCESS.
+Dedicated HL7 oracle workflow:
 
-Regression coverage includes a committed synthetic FSH fixture and SUSHI-shaped machine index, exact map→render CLI integration, mapped/unmapped states, duplicate identity, malformed shapes, traversal, symlink escape, missing/non-file source, current EOF validation, deterministic bytes, persisted-map tampering, property escaping, and bounds.
+```text
+workflow: cf06-oracle
+run: 31851096862
+result: SUCCESS
+```
+
+Passed on the same exact CF-09 head:
+
+- pinned HL7 6.10.2 adapter build;
+- real R4 context resolve/verify;
+- HL7 StructureDefinition self-equivalence;
+- `commandf oracle` self-diff;
+- deterministic changed-profile fixture construction;
+- invalid snapshot fail-closed behavior;
+- corrupted before/after cache fail-closed behavior;
+- changed-profile evidence determinism;
+- end-to-end changed-profile reconciliation.
 
 ## Reviewer truth
 
 ### CodeRabbit
 
-A focused substantive review was requested on exact implementation candidate `3819f35116a5bf18070cc00453f34176b549688a`. CodeRabbit selected all 22 changed paths but reported the PR review limit and did not start a substantive review. A retry was posted after the reported window, but no substantive review result or actionable thread returned before convergence closure.
-
-```text
-CodeRabbit substantive result: NOT RETURNED / RATE LIMITED
-CodeRabbit PASS claimed: NO
-```
+Historical CF-09 review requests encountered the reviewer PR/rate limit and did not return a substantive final-head review. No CodeRabbit PASS is claimed. A fresh final-head review may be requested after the PR is marked ready.
 
 ### Qodo
 
-`/review` was requested. No substantive Qodo result was observed.
+No substantive Qodo result has been observed. No Qodo PASS is claimed.
 
-```text
-Qodo result: NOT RETURNED
-Qodo PASS claimed: NO
-```
+### Codex Code Review / Codex Security
 
-### Codex Code Review
-
-`@codex review for security vulnerabilities` was requested on the exact implementation candidate. No review result was observed.
-
-```text
-Codex Code Review result: NOT RETURNED
-Codex Code Review PASS claimed: NO
-```
-
-### Codex Security
-
-The installed Codex Security diff-scan workflow was used as the methodological framework for the manual security audit. The actual Codex Security scan executor is not exposed in this ChatGPT host and therefore was not run.
-
-```text
-Codex Security product result: NOT RUN
-Codex Security PASS claimed: NO
-```
+No Codex Code Review result has been observed for the final reconciled head. The installed Codex Security methodology informed the manual security audit, but the Codex Security product scan executor was not run in this host. No Codex review or Codex Security PASS is claimed.
 
 ### Ponytail / independent reviewer
 
-Availability was checked in this host; no Ponytail plugin/connector was available.
-
-```text
-Ponytail result: NOT AVAILABLE IN THIS HOST
-Ponytail PASS claimed: NO
-```
+No Ponytail reviewer result is available in this host. No PASS is claimed.
 
 Reviewer unavailability is recorded rather than substituted with invented certification.
 
 ## Explicit deferrals
 
-CF-09 does not implement a custom FSH parser, exact rule-line mapping without upstream evidence, live SUSHI execution/download, non-FSH source mapping, CF-05 SARIF physical-location rewriting in V1, CF-10 corpus work, graph/blast radius, baselines/suppression, AutoFix, mapping execution, or AI semantic authority.
+CF-09 does not implement a custom FSH parser, unsupported exact rule-line mapping, live SUSHI execution/download, non-FSH source mapping, SARIF physical-location rewriting in V1, CF-10 corpus work, graph/blast radius, baselines/suppression, AutoFix, mapping execution, or AI semantic authority.
 
-## Final evidence rule
+## Final documentation-head rule
 
-The successful converged-docs run above authorizes task-state closure. After T023 is marked complete, the resulting final repository head must receive one final exact-head CI revalidation. That final run and final tree are recorded in PR #10 metadata/body without requiring another repository-content mutation.
+This convergence update changes documentation only. Its resulting repository head must pass both configured workflows again:
+
+```text
+ci
+cf06-oracle
+```
+
+The final documentation head and both final run ids are recorded in PR #10 metadata/body after those workflows settle. A failure reopens convergence. The convergence document intentionally does not self-reference its own future commit SHA/run ids, avoiding an endless documentation-commit chain.
