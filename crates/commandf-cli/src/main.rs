@@ -5,8 +5,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    inspect_package, FhirRegistrySource, LocalMirrorSource, Lockfile, PackageCache, PackageRequest,
-    Resolver, VersionConstraint,
+    diff_package_archives, inspect_package, FhirRegistrySource, LocalMirrorSource, LockedPackage,
+    Lockfile, PackageCache, PackageName, PackageRequest, Resolver, VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -33,12 +33,25 @@ enum Command {
         #[arg(long, default_value = "commandf.lock")]
         lock: PathBuf,
         #[arg(long, value_enum, default_value = "json")]
-        format: InspectFormat,
+        format: OutputFormat,
+    },
+    Diff {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
     },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
-enum InspectFormat {
+enum OutputFormat {
     Json,
 }
 
@@ -148,9 +161,76 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 &archive_bytes,
             )?;
             match format {
-                InspectFormat::Json => io::stdout().write_all(&inspection.to_json_bytes()?)?,
+                OutputFormat::Json => io::stdout().write_all(&inspection.to_json_bytes()?)?,
+            }
+        }
+        Command::Diff {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            format,
+        } => {
+            let package_name = PackageName::parse(package)?;
+            let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
+            let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+            let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
+            let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
+
+            let before_cache = PackageCache::new(before_cache);
+            let after_cache = PackageCache::new(after_cache);
+            before_cache.verify(&before_locked.sha256)?;
+            after_cache.verify(&after_locked.sha256)?;
+
+            let before_bytes = fs::read(
+                before_cache
+                    .root()
+                    .join("sha256")
+                    .join(format!("{}.tgz", before_locked.sha256)),
+            )?;
+            let after_bytes = fs::read(
+                after_cache
+                    .root()
+                    .join("sha256")
+                    .join(format!("{}.tgz", after_locked.sha256)),
+            )?;
+            let report = diff_package_archives(
+                package_name.to_string(),
+                &before_locked.version,
+                &before_locked.sha256,
+                &before_bytes,
+                &after_locked.version,
+                &after_locked.sha256,
+                &after_bytes,
+            )?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
         }
     }
     Ok(())
+}
+
+fn select_locked_package<'a>(
+    lockfile: &'a Lockfile,
+    package_name: &str,
+) -> Result<&'a LockedPackage, io::Error> {
+    let mut matches = lockfile
+        .packages
+        .iter()
+        .filter(|candidate| candidate.name == package_name);
+    let selected = matches.next().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("package {package_name} is not present in the lockfile"),
+        )
+    })?;
+    if matches.next().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("package {package_name} appears more than once in the lockfile"),
+        ));
+    }
+    Ok(selected)
 }
