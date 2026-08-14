@@ -137,3 +137,89 @@ jobs:
           assert report['structural_diff']['changes'] == []
           assert report['resources'] == []
           PY
+      - name: Build deterministic changed-profile oracle fixtures
+        run: |
+          ARCHIVE="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          lock = json.loads(Path('/tmp/commandf-oracle-smoke/commandf.lock').read_text())
+          package = next(item for item in lock['packages'] if item['name'] == 'hl7.fhir.r4.core')
+          print(Path('/tmp/commandf-oracle-smoke/cache/sha256') / f"{package['sha256']}.tgz")
+          PY
+          )"
+          python tools/hl7-oracle/ci/build_changed_fixture.py \
+            --core-archive "$ARCHIVE" \
+            --output /tmp/commandf-oracle-smoke/changed
+          cargo run --locked --quiet -p commandf -- pkg verify \
+            --cache /tmp/commandf-oracle-smoke/changed/before/cache \
+            --lock /tmp/commandf-oracle-smoke/changed/before/commandf.lock
+          cargo run --locked --quiet -p commandf -- pkg verify \
+            --cache /tmp/commandf-oracle-smoke/changed/after/cache \
+            --lock /tmp/commandf-oracle-smoke/changed/after/commandf.lock
+      - name: Real HL7 changed-profile evidence is deterministic
+        run: |
+          META=/tmp/commandf-oracle-smoke/changed/fixture.json
+          CORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["core_archive"])' "$META")"
+          BEFORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["before_archive"])' "$META")"
+          AFTER="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["after_archive"])' "$META")"
+          CANONICAL="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["canonical"])' "$META")"
+
+          for n in 1 2; do
+            "$JAVA_HOME/bin/java" -jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+              --core-package "$CORE" \
+              --left-package "$BEFORE" \
+              --right-package "$AFTER" \
+              --left-url "$CANONICAL" \
+              --right-url "$CANONICAL" \
+              > "/tmp/commandf-oracle-smoke/changed/hl7-$n.json"
+          done
+          cmp /tmp/commandf-oracle-smoke/changed/hl7-1.json /tmp/commandf-oracle-smoke/changed/hl7-2.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/commandf-oracle-smoke/changed/hl7-1.json').read_text())
+          meta = json.loads(Path('/tmp/commandf-oracle-smoke/changed/fixture.json').read_text())
+          assert set(meta['mutations']) == {'binding', 'cardinality', 'mustSupport', 'type'}
+          assert report['left']['url'] == meta['canonical']
+          assert report['right']['url'] == meta['canonical']
+          assert report['left']['version'] == '1.0.0'
+          assert report['right']['version'] == '1.1.0'
+          assert report['messages'] or any(
+              state in {'changed', 'cannot_evaluate'}
+              for state in report['states'].values()
+          )
+          PY
+      - name: Real commandf oracle changed-profile reconciliation
+        run: |
+          cargo run --locked --quiet -p commandf -- oracle dev.commandf.oracle.fixture \
+            --before-lock /tmp/commandf-oracle-smoke/changed/before/commandf.lock \
+            --before-cache /tmp/commandf-oracle-smoke/changed/before/cache \
+            --after-lock /tmp/commandf-oracle-smoke/changed/after/commandf.lock \
+            --after-cache /tmp/commandf-oracle-smoke/changed/after/cache \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/commandf-oracle-smoke/changed/commandf.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/commandf-oracle-smoke/changed/commandf.json').read_text())
+          meta = json.loads(Path('/tmp/commandf-oracle-smoke/changed/fixture.json').read_text())
+          assert report['schema'] == 1
+          assert report['package_name'] == 'dev.commandf.oracle.fixture'
+          assert report['structural_diff']['changes']
+          assert len(report['resources']) == 1
+          resource = report['resources'][0]
+          assert resource['resource']['kind'] == 'canonical'
+          assert resource['resource']['value'] == meta['canonical']
+          assert resource['status'] == 'both_changed'
+          assert resource['oracle'] is not None
+          assert resource['commandf_change_kinds']
+          fields = {change.get('field') for change in report['structural_diff']['changes']}
+          assert {'min', 'type', 'binding', 'mustSupport'} <= fields
+          PY
