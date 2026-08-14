@@ -10,6 +10,9 @@ mod artifact_inspect;
 mod artifact_model;
 mod artifact_scan;
 mod cache;
+mod compatibility;
+mod compatibility_error;
+mod compatibility_model;
 mod error;
 mod lock;
 mod model;
@@ -27,6 +30,11 @@ pub use artifact_error::ArtifactError;
 pub use artifact_inspect::inspect_package;
 pub use artifact_model::{ElementAddress, ElementView, PackageInspection, ResourceArtifact};
 pub use cache::PackageCache;
+pub use compatibility::classify_structural_diff;
+pub use compatibility_error::CompatibilityError;
+pub use compatibility_model::{
+    CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
+};
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
 pub use model::{PackageName, PackageRequest, VersionConstraint};

@@ -5,8 +5,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    diff_package_archives, inspect_package, FhirRegistrySource, LocalMirrorSource, LockedPackage,
-    Lockfile, PackageCache, PackageName, PackageRequest, Resolver, VersionConstraint,
+    classify_structural_diff, diff_package_archives, inspect_package, FhirRegistrySource,
+    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest, Resolver,
+    StructuralDiffReport, VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -36,6 +37,19 @@ enum Command {
         format: OutputFormat,
     },
     Diff {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+    Classify {
         package: String,
         #[arg(long)]
         before_lock: PathBuf,
@@ -172,44 +186,80 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             after_cache,
             format,
         } => {
-            let package_name = PackageName::parse(package)?;
-            let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
-            let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
-            let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
-            let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
-
-            let before_cache = PackageCache::new(before_cache);
-            let after_cache = PackageCache::new(after_cache);
-            before_cache.verify(&before_locked.sha256)?;
-            after_cache.verify(&after_locked.sha256)?;
-
-            let before_bytes = fs::read(
-                before_cache
-                    .root()
-                    .join("sha256")
-                    .join(format!("{}.tgz", before_locked.sha256)),
+            let report = build_diff_report(
+                package,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
             )?;
-            let after_bytes = fs::read(
-                after_cache
-                    .root()
-                    .join("sha256")
-                    .join(format!("{}.tgz", after_locked.sha256)),
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
+            }
+        }
+        Command::Classify {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            format,
+        } => {
+            let diff = build_diff_report(
+                package,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
             )?;
-            let report = diff_package_archives(
-                package_name.to_string(),
-                &before_locked.version,
-                &before_locked.sha256,
-                &before_bytes,
-                &after_locked.version,
-                &after_locked.sha256,
-                &after_bytes,
-            )?;
+            let report = classify_structural_diff(&diff)?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
         }
     }
     Ok(())
+}
+
+fn build_diff_report(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+) -> Result<StructuralDiffReport, Box<dyn std::error::Error>> {
+    let package_name = PackageName::parse(package)?;
+    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
+    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
+    let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
+
+    let before_cache = PackageCache::new(before_cache);
+    let after_cache = PackageCache::new(after_cache);
+    before_cache.verify(&before_locked.sha256)?;
+    after_cache.verify(&after_locked.sha256)?;
+
+    let before_bytes = fs::read(
+        before_cache
+            .root()
+            .join("sha256")
+            .join(format!("{}.tgz", before_locked.sha256)),
+    )?;
+    let after_bytes = fs::read(
+        after_cache
+            .root()
+            .join("sha256")
+            .join(format!("{}.tgz", after_locked.sha256)),
+    )?;
+    Ok(diff_package_archives(
+        package_name.to_string(),
+        &before_locked.version,
+        &before_locked.sha256,
+        &before_bytes,
+        &after_locked.version,
+        &after_locked.sha256,
+        &after_bytes,
+    )?)
 }
 
 fn select_locked_package<'a>(
