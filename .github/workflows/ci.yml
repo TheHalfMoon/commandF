@@ -157,6 +157,74 @@ jobs:
           cargo run --locked --quiet -p commandf -- pkg verify \
             --cache /tmp/commandf-oracle-smoke/changed/after/cache \
             --lock /tmp/commandf-oracle-smoke/changed/after/commandf.lock
+      - name: Invalid empty snapshot fails closed
+        run: |
+          META=/tmp/commandf-oracle-smoke/changed/fixture.json
+          CORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["core_archive"])' "$META")"
+          BEFORE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["before_archive"])' "$META")"
+          INVALID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["invalid_archive"])' "$META")"
+          CANONICAL="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["canonical"])' "$META")"
+
+          set +e
+          "$JAVA_HOME/bin/java" -jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --core-package "$CORE" \
+            --left-package "$BEFORE" \
+            --right-package "$INVALID" \
+            --left-url "$CANONICAL" \
+            --right-url "$CANONICAL" \
+            > /tmp/commandf-oracle-smoke/changed/invalid.json \
+            2> /tmp/commandf-oracle-smoke/changed/invalid.err
+          status=$?
+          set -e
+          test "$status" -ne 0
+          test ! -s /tmp/commandf-oracle-smoke/changed/invalid.json
+          grep -Ei 'snapshot|comparison failed' /tmp/commandf-oracle-smoke/changed/invalid.err
+      - name: Corrupted oracle caches fail closed on both sides
+        run: |
+          cp -a /tmp/commandf-oracle-smoke/changed/before /tmp/commandf-oracle-smoke/changed/corrupt-before
+          cp -a /tmp/commandf-oracle-smoke/changed/after /tmp/commandf-oracle-smoke/changed/corrupt-after
+
+          BEFORE_DIGEST="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          lock = json.loads(Path('/tmp/commandf-oracle-smoke/changed/corrupt-before/commandf.lock').read_text())
+          print(next(p['sha256'] for p in lock['packages'] if p['name'] == 'dev.commandf.oracle.fixture'))
+          PY
+          )"
+          AFTER_DIGEST="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          lock = json.loads(Path('/tmp/commandf-oracle-smoke/changed/corrupt-after/commandf.lock').read_text())
+          print(next(p['sha256'] for p in lock['packages'] if p['name'] == 'dev.commandf.oracle.fixture'))
+          PY
+          )"
+          printf corrupt > "/tmp/commandf-oracle-smoke/changed/corrupt-before/cache/sha256/$BEFORE_DIGEST.tgz"
+          printf corrupt > "/tmp/commandf-oracle-smoke/changed/corrupt-after/cache/sha256/$AFTER_DIGEST.tgz"
+
+          for side in before after; do
+            if [ "$side" = before ]; then
+              BEFORE_ROOT=/tmp/commandf-oracle-smoke/changed/corrupt-before
+              AFTER_ROOT=/tmp/commandf-oracle-smoke/changed/after
+            else
+              BEFORE_ROOT=/tmp/commandf-oracle-smoke/changed/before
+              AFTER_ROOT=/tmp/commandf-oracle-smoke/changed/corrupt-after
+            fi
+            set +e
+            cargo run --locked --quiet -p commandf -- oracle dev.commandf.oracle.fixture \
+              --before-lock "$BEFORE_ROOT/commandf.lock" \
+              --before-cache "$BEFORE_ROOT/cache" \
+              --after-lock "$AFTER_ROOT/commandf.lock" \
+              --after-cache "$AFTER_ROOT/cache" \
+              --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+              --oracle-java "$JAVA_HOME/bin/java" \
+              --format json \
+              > "/tmp/commandf-oracle-smoke/changed/corrupt-$side.json" \
+              2> "/tmp/commandf-oracle-smoke/changed/corrupt-$side.err"
+            status=$?
+            set -e
+            test "$status" -ne 0
+            test ! -s "/tmp/commandf-oracle-smoke/changed/corrupt-$side.json"
+          done
       - name: Real HL7 changed-profile evidence is deterministic
         run: |
           META=/tmp/commandf-oracle-smoke/changed/fixture.json
