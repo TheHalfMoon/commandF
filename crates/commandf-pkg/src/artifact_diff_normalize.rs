@@ -47,10 +47,7 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
                 validate_required_string_primitive(object, "code", &format!("type[{index}]"))?;
                 for nested in ["profile", "targetProfile", "aggregation"] {
                     if let Some(value) = object.get(nested) {
-                        validate_array(
-                            value,
-                            &format!("type[{index}].{nested} must be an array"),
-                        )?;
+                        validate_array(value, &format!("type[{index}].{nested} must be an array"))?;
                     }
                 }
             }
