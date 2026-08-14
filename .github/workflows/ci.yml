@@ -75,7 +75,7 @@ jobs:
           rm -rf /tmp/commandf-oracle-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-oracle-smoke/cache --lock /tmp/commandf-oracle-smoke/commandf.lock
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-oracle-smoke/cache --lock /tmp/commandf-oracle-smoke/commandf.lock
-      - name: Real HL7 R4 self-equivalence oracle smoke
+      - name: Real HL7 R4 profile self-equivalence oracle smoke
         run: |
           ARCHIVE="$(python - <<'PY'
           import json
@@ -91,8 +91,8 @@ jobs:
             --core-package "$ARCHIVE" \
             --left-package "$ARCHIVE" \
             --right-package "$ARCHIVE" \
-            --left-url http://hl7.org/fhir/StructureDefinition/Patient \
-            --right-url http://hl7.org/fhir/StructureDefinition/Patient \
+            --left-url http://hl7.org/fhir/StructureDefinition/vitalsigns \
+            --right-url http://hl7.org/fhir/StructureDefinition/vitalsigns \
             > /tmp/commandf-oracle-smoke/hl7.json
 
           python - <<'PY'
@@ -106,8 +106,8 @@ jobs:
               'release': '6.10.2',
               'source_commit': 'd06577dbc5c62c74a2a8823fbc4830a3024d5b0b',
           }
-          assert report['left']['url'] == 'http://hl7.org/fhir/StructureDefinition/Patient'
-          assert report['right']['url'] == 'http://hl7.org/fhir/StructureDefinition/Patient'
+          assert report['left']['url'] == 'http://hl7.org/fhir/StructureDefinition/vitalsigns'
+          assert report['right']['url'] == 'http://hl7.org/fhir/StructureDefinition/vitalsigns'
           assert report['messages'] == []
           assert all(
               state not in {'changed', 'cannot_evaluate'}
