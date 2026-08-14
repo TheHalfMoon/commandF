@@ -54,7 +54,10 @@ fn self_diff_is_empty_and_serialization_is_stable() {
     let second = diff("1.0.0", &archive, "1.0.0", &archive).unwrap();
 
     assert!(first.changes.is_empty());
-    assert_eq!(first.to_json_bytes().unwrap(), second.to_json_bytes().unwrap());
+    assert_eq!(
+        first.to_json_bytes().unwrap(),
+        second.to_json_bytes().unwrap()
+    );
 }
 
 #[test]
