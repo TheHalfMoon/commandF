@@ -59,8 +59,7 @@ pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
 pub use source_map::{
-    build_source_mapped_check_report, validate_source_mapped_check_report,
-    MAX_SUSHI_INDEX_ENTRIES,
+    build_source_mapped_check_report, validate_source_mapped_check_report, MAX_SUSHI_INDEX_ENTRIES,
 };
 pub use source_map_error::SourceMapError;
 pub use source_map_model::{

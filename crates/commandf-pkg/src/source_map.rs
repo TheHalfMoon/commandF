@@ -6,8 +6,8 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    check::validate_check_report, CheckReport, SourceIndexEvidence, SourceLocation,
-    SourceMapError, SourceMappedCheckReport, SourceMappingEntry, SourceMappingStatus,
+    check::validate_check_report, CheckReport, SourceIndexEvidence, SourceLocation, SourceMapError,
+    SourceMappedCheckReport, SourceMappingEntry, SourceMappingStatus,
 };
 
 pub const MAX_SUSHI_INDEX_ENTRIES: usize = 100_000;
@@ -95,9 +95,9 @@ pub fn build_source_mapped_check_report(
             ));
         }
 
-        let repo_relative = source_canonical.strip_prefix(&repo_root).map_err(|_| {
-            SourceMapError::SourceEscape(entry.fsh_file.display().to_string())
-        })?;
+        let repo_relative = source_canonical
+            .strip_prefix(&repo_root)
+            .map_err(|_| SourceMapError::SourceEscape(entry.fsh_file.display().to_string()))?;
         let file = relative_path_to_slash(repo_relative)?;
 
         mappings.push(SourceMappingEntry {
@@ -118,9 +118,9 @@ pub fn build_source_mapped_check_report(
             sha256: sha256_hex(index_bytes),
             entries: index.len(),
             fsh_root: relative_path_to_slash(
-                fsh_root_canonical.strip_prefix(&repo_root).map_err(|_| {
-                    SourceMapError::SourceEscape(fsh_root.display().to_string())
-                })?,
+                fsh_root_canonical
+                    .strip_prefix(&repo_root)
+                    .map_err(|_| SourceMapError::SourceEscape(fsh_root.display().to_string()))?,
             )?,
         },
         check: report.clone(),
@@ -177,9 +177,7 @@ pub fn validate_source_mapped_check_report(
         match (mapping.status, mapping.location.as_ref()) {
             (SourceMappingStatus::Mapped, Some(location)) => {
                 portable_relative_path(&location.file, "mapped repository path", false)?;
-                if location.line == 0
-                    || location.end_line == 0
-                    || location.line > location.end_line
+                if location.line == 0 || location.end_line == 0 || location.line > location.end_line
                 {
                     return Err(SourceMapError::InvalidMappingEntry {
                         index: expected_index,
@@ -215,10 +213,7 @@ fn parse_sushi_index(
 
     let mut index = BTreeMap::new();
     for entry in entries {
-        if entry.output_file.is_empty()
-            || entry.fsh_name.is_empty()
-            || entry.fsh_type.is_empty()
-        {
+        if entry.output_file.is_empty() || entry.fsh_name.is_empty() || entry.fsh_type.is_empty() {
             return Err(SourceMapError::InvalidIndex(
                 "outputFile, fshName, and fshType must be non-empty strings".to_owned(),
             ));

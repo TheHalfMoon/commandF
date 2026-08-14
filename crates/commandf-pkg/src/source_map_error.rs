@@ -31,7 +31,9 @@ pub enum SourceMapError {
     #[error("mapped FSH source escapes the configured source root: {0}")]
     SourceEscape(String),
 
-    #[error("source-map finding count {found} does not match compatibility finding count {expected}")]
+    #[error(
+        "source-map finding count {found} does not match compatibility finding count {expected}"
+    )]
     FindingCountMismatch { found: usize, expected: usize },
 
     #[error("source-map finding index {found} is invalid; expected {expected}")]
