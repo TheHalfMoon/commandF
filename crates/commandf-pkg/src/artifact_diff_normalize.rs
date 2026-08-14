@@ -9,10 +9,7 @@ pub(crate) fn normalize_structural_field(field: &str, value: &Value) -> Value {
     }
 }
 
-pub(crate) fn validate_resource_structural_field(
-    field: &str,
-    value: &Value,
-) -> Result<(), String> {
+pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
         "contextInvariant" => validate_string_array(value, "expected an array of strings"),
         "context" => {
@@ -32,10 +29,7 @@ pub(crate) fn validate_resource_structural_field(
     }
 }
 
-pub(crate) fn validate_element_structural_field(
-    field: &str,
-    value: &Value,
-) -> Result<(), String> {
+pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
         "representation" | "condition" => {
             validate_string_array(value, "expected an array of strings")
