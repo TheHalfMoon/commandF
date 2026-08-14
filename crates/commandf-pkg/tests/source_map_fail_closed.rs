@@ -224,13 +224,9 @@ fn persisted_source_index_entry_count_overflow_is_rejected() {
     let repo = repo_with_source("example.fsh");
     let report = report();
     let index = index_bytes("example.fsh");
-    let mut mapped = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let mut mapped =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
     mapped.source_index.entries = MAX_SUSHI_INDEX_ENTRIES + 1;
 
     assert!(matches!(
@@ -250,13 +246,9 @@ fn mapped_file_workflow_properties_are_escaped() {
     let repo = repo_with_source("weird,%name.fsh");
     let report = report();
     let index = index_bytes("weird,%name.fsh");
-    let mapped = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let mapped =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
 
     let annotations = String::from_utf8(
         source_mapped_check_report_to_github_annotations_bytes(

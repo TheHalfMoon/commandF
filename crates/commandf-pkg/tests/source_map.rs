@@ -108,20 +108,12 @@ fn exact_after_filename_maps_to_sushi_definition_range_and_renders_location() {
         6,
     );
 
-    let first = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
-    let second = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let first =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
+    let second =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
 
     assert_eq!(first, second);
     assert_eq!(
@@ -158,13 +150,9 @@ fn current_tree_unmapped_states_do_not_fabricate_locations() {
         6,
     );
 
-    let mapped = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let mapped =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
     assert_eq!(
         mapped.mappings[0].status,
         SourceMappingStatus::UnmappedNoAfterFilename
@@ -313,13 +301,9 @@ fn renderer_rejects_persisted_map_tampering_even_when_shape_is_valid() {
         3,
         6,
     );
-    let mut mapped = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let mut mapped =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
     mapped.source_index.sha256 = "f".repeat(64);
     mapped.mappings[0].location.as_mut().unwrap().line = 4;
 
@@ -342,12 +326,7 @@ fn renderer_rejects_a_map_when_current_index_evidence_changes() {
         3,
         6,
     );
-    let changed_index = index_bytes(
-        "StructureDefinition-example.json",
-        "nested/other.fsh",
-        1,
-        4,
-    );
+    let changed_index = index_bytes("StructureDefinition-example.json", "nested/other.fsh", 1, 4);
     let mapped = build_source_mapped_check_report(
         &report,
         &original_index,
@@ -372,13 +351,9 @@ fn renderer_rejects_fabricated_mapping_for_finding_without_after_filename() {
         3,
         6,
     );
-    let mut mapped = build_source_mapped_check_report(
-        &report,
-        &index,
-        repo.path(),
-        Path::new("input/fsh"),
-    )
-    .unwrap();
+    let mut mapped =
+        build_source_mapped_check_report(&report, &index, repo.path(), Path::new("input/fsh"))
+            .unwrap();
     mapped.mappings[0].status = SourceMappingStatus::Mapped;
     mapped.mappings[0].location = Some(SourceLocation {
         file: "input/fsh/nested/example.fsh".to_owned(),
