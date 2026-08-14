@@ -89,12 +89,7 @@ fn malformed_index_field_types_fail_closed() {
     ]"#;
 
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report(),
-            malformed,
-            repo.path(),
-            Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report(), malformed, repo.path(), Path::new("input/fsh"),),
         Err(SourceMapError::InvalidIndex(_))
     ));
 }
@@ -185,12 +180,7 @@ fn source_index_entry_count_overflow_fails_closed() {
     assert!(bytes.len() <= MAX_SUSHI_INDEX_INPUT_BYTES);
 
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report(),
-            &bytes,
-            repo.path(),
-            Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report(), &bytes, repo.path(), Path::new("input/fsh"),),
         Err(SourceMapError::TooManyEntries { .. })
     ));
 }
