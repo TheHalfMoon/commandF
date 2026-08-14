@@ -21,6 +21,7 @@ mod registry;
 mod resolver;
 mod source;
 mod terminology_error;
+mod terminology_index;
 mod terminology_model;
 mod terminology_set;
 
