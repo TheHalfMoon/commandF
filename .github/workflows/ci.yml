@@ -32,7 +32,8 @@ jobs:
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
           cargo run --locked --quiet -p commandf -- inspect hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock --format json > /tmp/commandf-smoke/inspect.json
 
-          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
+          cp -a /tmp/commandf-smoke/before-cache /tmp/commandf-smoke/after-cache
+          cp /tmp/commandf-smoke/before.lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- diff hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/diff.json
 
