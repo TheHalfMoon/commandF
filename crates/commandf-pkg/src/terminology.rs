@@ -12,31 +12,33 @@ use crate::{
     TerminologySetDelta,
 };
 
+pub struct TerminologyPackageState<'a> {
+    pub lockfile: &'a Lockfile,
+    pub cache: &'a PackageCache,
+    pub root_bytes: &'a [u8],
+}
+
 pub fn build_terminology_diff_report(
-    before_lock: &Lockfile,
-    before_cache: &PackageCache,
-    after_lock: &Lockfile,
-    after_cache: &PackageCache,
+    before: TerminologyPackageState<'_>,
+    after: TerminologyPackageState<'_>,
     structural: &StructuralDiffReport,
     compatibility: &CompatibilityReport,
-    before_root_bytes: &[u8],
-    after_root_bytes: &[u8],
 ) -> Result<TerminologyDiffReport, TerminologyError> {
     validate_report_contract(structural, compatibility)?;
-    validate_root_evidence(before_lock, &structural.package_name, &structural.before)?;
-    validate_root_evidence(after_lock, &structural.package_name, &structural.after)?;
+    validate_root_evidence(before.lockfile, &structural.package_name, &structural.before)?;
+    validate_root_evidence(after.lockfile, &structural.package_name, &structural.after)?;
 
-    let before_closure = TerminologyClosure::load(before_lock, before_cache)?;
-    let after_closure = TerminologyClosure::load(after_lock, after_cache)?;
+    let before_closure = TerminologyClosure::load(before.lockfile, before.cache)?;
+    let after_closure = TerminologyClosure::load(after.lockfile, after.cache)?;
 
     let pairs = matched_resource_pairs(
         &structural.package_name,
         &structural.before.version,
         &structural.before.archive_sha256,
-        before_root_bytes,
+        before.root_bytes,
         &structural.after.version,
         &structural.after.archive_sha256,
-        after_root_bytes,
+        after.root_bytes,
     )?;
 
     let mut code_systems = Vec::new();
