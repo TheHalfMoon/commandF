@@ -1,27 +1,29 @@
 # CF-03 Implementation Plan
 
-Status: Draft implementation plan
+Status: Implemented — convergence candidate
 
 ## Architecture
 
-Keep CF-03 inside the existing `commandf-pkg` trust boundary and `commandf` CLI. Do not add a workspace crate unless an independently exercised boundary becomes necessary.
+CF-03 stays inside the existing `commandf-pkg` trust boundary and `commandf` CLI. No new workspace crate was required.
 
-Refactor the bounded package-root resource scanner from CF-02 into a reusable internal helper so both inspection and diff consume the same archive limits and exclusion rules. This is a behavior-preserving CF-02 refactor, not a new acquisition path.
+The bounded package-root resource scanner from CF-02 is now a reusable internal helper consumed by both inspection and diff, preserving the same archive limits and exclusion rules. This is a behavior-preserving CF-02 refactor, not a new acquisition path.
 
 ## Inputs
 
-The CLI receives one package name plus explicit before/after lock and cache paths. Each lock selects one exact version of the package. Both archives are verified through CF-01 and rehashed by the structural parser.
+The CLI receives one validated package name plus explicit before/after lock and cache paths. Each lock must contain exactly one selected version of that package. Both selected cache objects are verified through CF-01, and both archives are independently rehashed by the structural parser before comparison.
+
+`commandf diff` performs no acquisition.
 
 ## Resource matching
 
-Build deterministic match keys in this order:
+Deterministic match keys are built in this order:
 
 1. canonical URL group;
 2. exact `url|version` identity when one URL has multiplicity on either side;
 3. unique `resourceType/id` for non-canonical resources;
 4. filename fallback.
 
-Any residual ambiguous non-canonical key fails rather than guessing.
+Any residual ambiguous non-canonical key fails rather than guessing. Duplicate package-root resource filenames also fail explicitly so the inspection inventory and raw structural inventory cannot diverge.
 
 ## StructureDefinition comparison
 
@@ -44,14 +46,14 @@ Structural element fields include:
 - `binding`;
 - `extension` when present on the ElementDefinition.
 
-Editorial-only fields such as `short`, `definition`, `comment`, `requirements`, `alias`, `example`, and `mapping` are not structural changes in CF-03.
+Editorial-only fields such as `short`, `definition`, `comment`, `requirements`, `alias`, `example`, and `mapping` are not emitted as StructureDefinition structural-field changes in CF-03. Exact resource-byte hash changes remain visible separately as `resource_bytes_changed`.
 
 ## Normalization
 
 Canonicalize JSON objects recursively. Normalize fields known to behave as sets:
 
 - `representation` and `condition`: sort scalar values;
-- `type`: sort by type code plus canonical content, and sort profile/targetProfile/aggregation lists inside each type;
+- `type`: sort by canonical content and sort `profile`, `targetProfile`, and `aggregation` lists inside each type;
 - `constraint`: sort by constraint key plus canonical content.
 
 Preserve array order for fields where order may be semantically meaningful, especially slicing structures and arbitrary fixed/pattern values.
@@ -70,7 +72,7 @@ Each change contains:
 - optional changed field;
 - optional normalized before/after JSON values.
 
-CF-03 contains no severity field.
+Resource-level structural facts include add/remove plus filename, canonical version, resourceType, id, and exact resource-byte SHA-256 changes. CF-03 contains no severity or compatibility field.
 
 ## CLI
 
@@ -85,6 +87,17 @@ All four before/after path options are required in v1 to avoid hidden workspace 
 
 ## Validation
 
-Synthetic tests use permitted generated package archives. Real CI resolves the same published R4 core package into two isolated lock/cache states and proves an empty self-diff.
+Synthetic tests use generated package archives and prove:
 
-No external FHIR validator is required for CF-03 because the slice computes structural deltas rather than conformance judgments. Differential oracle work begins in CF-06.
+- byte-stable no-op self-diff;
+- unique canonical matching across canonical-version changes;
+- `url|version` matching for multi-version canonical groups;
+- fail-closed ambiguous non-canonical ids and duplicate archive resource filenames;
+- view and element additions/removals;
+- cardinality/type/binding/slicing/fixed structural changes;
+- editorial-field exclusion;
+- set-like normalization for representation, condition, constraint, type/profile/targetProfile/aggregation ordering.
+
+Real CI resolves and verifies published `hl7.fhir.r4.core@4.0.1` into two independent lock/cache states, runs `commandf diff` through the CLI, and requires an empty change list.
+
+No external FHIR validator is required for CF-03 because this slice computes structural facts rather than conformance judgments. Differential oracle work begins in CF-06.
