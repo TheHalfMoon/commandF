@@ -90,6 +90,37 @@ fn run_diff(
         .expect("commandf diff must execute")
 }
 
+fn run_oracle(
+    before_lock: &Path,
+    before_cache: &Path,
+    after_lock: &Path,
+    after_cache: &Path,
+    adapter: &Path,
+) -> std::process::Output {
+    commandf()
+        .args([
+            "oracle",
+            "example.package",
+            "--before-lock",
+            before_lock.to_str().expect("UTF-8 path"),
+            "--before-cache",
+            before_cache.to_str().expect("UTF-8 path"),
+            "--after-lock",
+            after_lock.to_str().expect("UTF-8 path"),
+            "--after-cache",
+            after_cache.to_str().expect("UTF-8 path"),
+            "--oracle-adapter",
+            adapter.to_str().expect("UTF-8 path"),
+            "--format",
+            "json",
+        ])
+        .env("HTTP_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env("NO_PROXY", "")
+        .output()
+        .expect("commandf oracle must execute")
+}
+
 #[test]
 fn missing_subcommand_is_a_usage_error() {
     let output = commandf().output().expect("commandf must execute");
@@ -232,5 +263,78 @@ fn diff_succeeds_offline_and_emits_schema_v1_json() {
     assert!(stdout.contains("\"schema\": 1"));
     assert!(stdout.contains("\"package_name\": \"example.package\""));
     assert!(stdout.contains("\"changes\": []"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn oracle_help_exposes_explicit_state_and_adapter_inputs() {
+    let output = commandf()
+        .args(["oracle", "--help"])
+        .output()
+        .expect("commandf oracle help must execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 help");
+    for flag in [
+        "--before-lock",
+        "--before-cache",
+        "--after-lock",
+        "--after-cache",
+        "--oracle-adapter",
+        "--oracle-java",
+        "--format",
+    ] {
+        assert!(stdout.contains(flag), "missing {flag}");
+    }
+}
+
+#[test]
+fn oracle_missing_required_paths_is_a_usage_error() {
+    let output = commandf()
+        .args(["oracle", "example.package"])
+        .output()
+        .expect("commandf oracle must execute");
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn oracle_validates_adapter_even_before_lock_processing() {
+    let dir = unique_temp_dir("oracle-adapter-missing");
+    let missing = dir.join("missing-adapter");
+    let output = commandf()
+        .args([
+            "oracle",
+            "example.package",
+            "--before-lock",
+            "missing-before.lock",
+            "--before-cache",
+            "missing-before-cache",
+            "--after-lock",
+            "missing-after.lock",
+            "--after-cache",
+            "missing-after-cache",
+            "--oracle-adapter",
+            missing.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("commandf oracle must execute");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("oracle adapter path"));
+}
+
+#[test]
+fn oracle_requires_the_pinned_r4_core_context_in_both_states() {
+    let dir = unique_temp_dir("oracle-missing-core");
+    let (before_lock, before_cache) = write_locked_state(&dir.join("before"));
+    let (after_lock, after_cache) = write_locked_state(&dir.join("after"));
+    let adapter = Path::new(env!("CARGO_BIN_EXE_commandf"));
+    let output = run_oracle(
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+        adapter,
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("hl7.fhir.r4.core"));
     let _ = fs::remove_dir_all(&dir);
 }

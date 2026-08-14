@@ -1,7 +1,7 @@
 # CF-03 Convergence Review
 
 Status: Implementation and convergence complete — founder review candidate
-Date: 2026-08-14
+Date: 2026-08-15
 
 ## Scope result
 
@@ -35,7 +35,9 @@ The command:
 - emits deterministic resource add/remove and filename/version/resourceType/id/byte-hash facts;
 - compares StructureDefinition metadata plus snapshot/differential views separately and matches elements by exact `ElementDefinition.id`;
 - validates CF-03-owned structural field shapes before normalization without becoming a general FHIR validator;
-- preserves valid FHIR primitive `_field` metadata, including extension-only primitive metadata present in official R4 artifacts;
+- validates interpreted repeating primitive arrays at member level rather than accepting arbitrary JSON values merely because the container is an array;
+- preserves valid FHIR primitive `_field` metadata, including parallel repeating-primitive metadata arrays and extension-only primitive metadata present in official R4 artifacts;
+- permits a `null` slot in an interpreted repeating primitive only when a same-index meaningful metadata entry exists and requires value/metadata arrays to remain aligned;
 - normalizes only known set-like arrays and preserves ordering where semantics may depend on it, including `extension[]`;
 - serializes stable ordered JSON without severity or compatibility labels.
 
@@ -43,7 +45,7 @@ The command:
 
 CF-03 reuses the CF-02 archive limits: 512 MiB decompressed TAR traversal, 50,000 archive entries, and 64 MiB per package-root resource.
 
-Additionally, cache/archive digest mismatches, malformed JSON, canonical multiplicity without usable versions, ambiguous non-canonical keys, duplicate filenames, malformed/duplicate element ids, malformed interpreted structural shapes, and internal inventory disagreement fail explicitly rather than being guessed or silently normalized.
+Additionally, cache/archive digest mismatches, malformed JSON, canonical multiplicity without usable versions, ambiguous non-canonical keys, duplicate filenames, malformed/duplicate element ids, malformed interpreted structural shapes, malformed repeating-primitive member types, misaligned primitive metadata arrays, unpaired primitive nulls, and internal inventory disagreement fail explicitly rather than being guessed or silently normalized.
 
 ## Deterministic synthetic and CLI evidence
 
@@ -56,15 +58,17 @@ Tests prove:
 5. view/element additions and removals are explicit;
 6. cardinality, type, slicing, binding, fixed/pattern, boolean, metadata, and related structural changes are emitted;
 7. malformed CF-03-owned field shapes fail with `InvalidStructuralField`;
-8. valid primitive `_code` metadata remains accepted while malformed/empty metadata is rejected;
-9. editorial-only element fields are excluded from structural-field changes;
-10. representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation reorderings are normalized;
-11. `extension[]` order is preserved as structural;
-12. CLI required arguments, absent packages, corrupted before/after caches, and successful offline diff are covered.
+8. malformed members inside `representation`, `condition`, `contextInvariant`, `profile`, `targetProfile`, and `aggregation` fail closed rather than being normalized into valid-looking deltas;
+9. repeating primitive metadata arrays must align with their value arrays; unpaired `null` slots fail while meaningful same-index metadata remains accepted;
+10. valid primitive `_code` metadata remains accepted while malformed/empty metadata is rejected;
+11. editorial-only element fields are excluded from structural-field changes;
+12. representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation reorderings are normalized;
+13. `extension[]` order is preserved as structural;
+14. CLI required arguments, absent packages, corrupted before/after caches, and successful offline diff are covered.
 
 ## Green implementation evidence
 
-Exact implementation evidence head `a8fec0f2073abe1b9660457a493db6c2e437a2ec` passed GitHub Actions pull-request run `31761209998`:
+Exact implementation evidence head `65eff312d2eb1caa88d0aefe8eee81529b2e0d00` passed GitHub Actions pull-request run `31844706867`:
 
 - Format — PASS;
 - `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` — PASS;
@@ -76,7 +80,9 @@ Exact implementation evidence head `a8fec0f2073abe1b9660457a493db6c2e437a2ec` pa
 
 The second resolution is intentional. CF-03 acceptance requires reproducibility across two independently resolved explicit states; copying the first state would weaken that gate. Registry availability is therefore an accepted external dependency of this real-package reproducibility smoke.
 
-Documentation-only convergence commits follow the implementation evidence head. The exact final documentation head must pass the same full CI gate; that exact-head result is recorded in PR metadata to avoid a self-referential documentation commit chain.
+A founder exact-head audit after the earlier convergence record found one additional fail-closed gap: repeating primitive fields were validating array containers but not all member shapes. Commit `63382f71d4a1dc73b9e9cffa699b1a5864ad8a59` closed that gap with member-level validation, parallel primitive-metadata alignment, and regression coverage. Commit `65eff312d2eb1caa88d0aefe8eee81529b2e0d00` applied rustfmt-only layout. Run `31844706867` then passed the complete gate set above.
+
+Documentation-only convergence commits may follow this implementation evidence head. The exact final documentation head must pass the same full CI gate; that exact-head result is recorded in PR metadata to avoid a self-referential documentation commit chain.
 
 ## Reviewer evidence
 
@@ -85,10 +91,16 @@ Documentation-only convergence commits follow the implementation evidence head. 
 A manual review while PR #4 remained Draft returned three actionable threads:
 
 1. **CI repeatability — Minor.** The reviewer proposed copying the first resolved state to avoid a second registry dependency. **Not adopted by contract:** CF-03 acceptance explicitly requires two independently resolved states. CodeRabbit subsequently withdrew the finding after that acceptance requirement was clarified.
-2. **Malformed structural shapes — Major.** **Fixed:** pre-normalization CF-03-owned shape validation plus regression coverage was added while preserving valid FHIR primitive `_field` metadata required by official R4 artifacts.
+2. **Malformed structural shapes — Major.** **Fixed:** pre-normalization CF-03-owned shape validation plus regression coverage was added while preserving valid FHIR primitive `_field` metadata required by official R4 artifacts. The later founder audit strengthened the same boundary at repeating-primitive member level.
 3. **Global `extension[]` sorting — Minor.** **Not adopted by design:** CF-03 preserves extension order because unordered semantics are profile/slicing-context dependent. A regression pins that behavior, and CodeRabbit withdrew the finding.
 
-All three CodeRabbit review threads are resolved. The general CodeRabbit docstring-coverage warning is non-blocking for this slice and is not represented as a CF-03 correctness PASS requirement.
+All three CodeRabbit review threads are resolved. The current implementation head reports CodeRabbit commit status `success`. The general CodeRabbit docstring-coverage warning is non-blocking for this slice and is not represented as a CF-03 correctness PASS requirement. No separate fresh full CodeRabbit re-review PASS is claimed.
+
+### Greptile
+
+A manual `@greptile review` request was posted on PR #4. No Greptile-authored check result, general comment, PR review, or inline review finding has been observed at convergence time.
+
+Disposition: **NO EVIDENCE / NOT RETURNED**. No Greptile PASS is claimed.
 
 ### Qodo
 
