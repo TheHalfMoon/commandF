@@ -95,6 +95,47 @@ fn type_and_nested_set_reordering_is_not_a_structural_change() {
 }
 
 #[test]
+fn extension_reordering_remains_a_structural_change() {
+    let before = archive(
+        br#"{
+      "resourceType":"StructureDefinition",
+      "id":"example",
+      "url":"https://example.org/StructureDefinition/example",
+      "snapshot":{"element":[{
+        "id":"Observation.value[x]",
+        "path":"Observation.value[x]",
+        "extension":[
+          {"url":"https://example.org/a","valueString":"a"},
+          {"url":"https://example.org/b","valueString":"b"}
+        ]
+      }]}
+    }"#,
+    );
+    let after = archive(
+        br#"{
+      "resourceType":"StructureDefinition",
+      "id":"example",
+      "url":"https://example.org/StructureDefinition/example",
+      "snapshot":{"element":[{
+        "id":"Observation.value[x]",
+        "path":"Observation.value[x]",
+        "extension":[
+          {"url":"https://example.org/b","valueString":"b"},
+          {"url":"https://example.org/a","valueString":"a"}
+        ]
+      }]}
+    }"#,
+    );
+
+    let report = diff(&before, &after).unwrap();
+
+    assert!(report.changes.iter().any(|change| {
+        change.kind == StructuralChangeKind::ElementFieldChanged
+            && change.field.as_deref() == Some("extension")
+    }));
+}
+
+#[test]
 fn view_and_element_removals_are_explicit() {
     let before = archive(
         br#"{
