@@ -323,10 +323,10 @@ fn write_check_output(bytes: &[u8], output: Option<&Path>) -> io::Result<()> {
     let Some(path) = output else {
         return io::stdout().write_all(bytes);
     };
-    write_atomic_new(path, bytes)
+    write_atomic_replace(path, bytes)
 }
 
-fn write_atomic_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
+fn write_atomic_replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -364,7 +364,7 @@ fn write_atomic_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
             file.write_all(bytes)?;
             file.sync_all()?;
             drop(file);
-            fs::hard_link(&temporary, path)?;
+            fs::rename(&temporary, path)?;
             Ok(())
         })();
         let _ = fs::remove_file(&temporary);

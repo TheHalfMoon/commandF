@@ -198,6 +198,73 @@ fn sarif_output_file_is_complete_before_policy_exit_two() {
 }
 
 #[test]
+fn existing_output_is_replaced_on_policy_failure() {
+    let dir = unique_temp_dir("check-replace-fail");
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
+    let output_path = dir.join("result.json");
+    fs::write(&output_path, b"stale-report").expect("write stale output");
+    let output_string = output_path.to_str().expect("UTF-8 path").to_owned();
+
+    let output = run_check(
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+        &["--output", &output_string],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let contents = fs::read_to_string(&output_path).expect("replacement output");
+    assert!(contents.contains("\"passed\": false"));
+    assert!(!contents.contains("stale-report"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn existing_output_is_replaced_on_policy_pass() {
+    let dir = unique_temp_dir("check-replace-pass");
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
+    let output_path = dir.join("result.json");
+    fs::write(&output_path, b"stale-report").expect("write stale output");
+    let output_string = output_path.to_str().expect("UTF-8 path").to_owned();
+
+    let output = run_check(
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+        &["--fail-on", "none", "--output", &output_string],
+    );
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
+    let contents = fs::read_to_string(&output_path).expect("replacement output");
+    assert!(contents.contains("\"passed\": true"));
+    assert!(!contents.contains("stale-report"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn missing_output_parent_is_operational_exit_one() {
+    let dir = unique_temp_dir("check-missing-parent");
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
+    let output_path = dir.join("missing").join("result.json");
+    let output_string = output_path.to_str().expect("UTF-8 path").to_owned();
+
+    let output = run_check(
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+        &["--fail-on", "none", "--output", &output_string],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("output parent directory does not exist"));
+    assert!(!output_path.exists());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn corrupted_cache_is_operational_exit_one_not_policy_exit_two() {
     let dir = unique_temp_dir("check-corrupt");
     let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
