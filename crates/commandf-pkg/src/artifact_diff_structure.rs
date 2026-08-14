@@ -15,6 +15,68 @@ use crate::{
 
 type ElementMap = BTreeMap<String, Map<String, Value>>;
 
+#[derive(Clone, Debug)]
+pub(crate) struct MatchedElementBinding {
+    pub view: ElementView,
+    pub element_id: String,
+    pub before: Option<Value>,
+    pub after: Option<Value>,
+}
+
+pub(crate) fn matched_element_bindings(
+    before_resource: &ResourceArtifact,
+    after_resource: &ResourceArtifact,
+    before: &Value,
+    after: &Value,
+) -> Result<Vec<MatchedElementBinding>, StructuralDiffError> {
+    let before = structural_object(before, &before_resource.filename, "resource")?;
+    let after = structural_object(after, &after_resource.filename, "resource")?;
+    let mut output = Vec::new();
+
+    for (view_name_value, view) in [
+        ("snapshot", ElementView::Snapshot),
+        ("differential", ElementView::Differential),
+    ] {
+        let before_view = parse_view(before, view_name_value, &before_resource.filename)?
+            .unwrap_or_default();
+        let after_view =
+            parse_view(after, view_name_value, &after_resource.filename)?.unwrap_or_default();
+        for element_id in before_view.keys().filter(|id| after_view.contains_key(*id)) {
+            let before_element = &before_view[element_id];
+            let after_element = &after_view[element_id];
+            let before_binding = normalized_optional_element_field(
+                before_element,
+                "binding",
+                &before_resource.filename,
+                view,
+                element_id,
+            )?;
+            let after_binding = normalized_optional_element_field(
+                after_element,
+                "binding",
+                &after_resource.filename,
+                view,
+                element_id,
+            )?;
+            if before_binding.is_some() || after_binding.is_some() {
+                output.push(MatchedElementBinding {
+                    view,
+                    element_id: element_id.clone(),
+                    before: before_binding,
+                    after: after_binding,
+                });
+            }
+        }
+    }
+
+    output.sort_by(|left, right| {
+        view_rank(left.view)
+            .cmp(&view_rank(right.view))
+            .then_with(|| left.element_id.cmp(&right.element_id))
+    });
+    Ok(output)
+}
+
 pub(crate) fn compare_structure_definition(
     key: &ResourceKey,
     before_resource: &ResourceArtifact,
@@ -54,12 +116,12 @@ pub(crate) fn compare_structure_definition(
         }
     }
 
-    for (view_name, view) in [
+    for (view_name_value, view) in [
         ("snapshot", ElementView::Snapshot),
         ("differential", ElementView::Differential),
     ] {
-        let before_view = parse_view(before, view_name, &before_resource.filename)?;
-        let after_view = parse_view(after, view_name, &after_resource.filename)?;
+        let before_view = parse_view(before, view_name_value, &before_resource.filename)?;
+        let after_view = parse_view(after, view_name_value, &after_resource.filename)?;
         compare_view(
             key,
             before_resource,
@@ -322,5 +384,12 @@ fn view_name(view: ElementView) -> &'static str {
     match view {
         ElementView::Snapshot => "snapshot",
         ElementView::Differential => "differential",
+    }
+}
+
+fn view_rank(view: ElementView) -> u8 {
+    match view {
+        ElementView::Snapshot => 0,
+        ElementView::Differential => 1,
     }
 }

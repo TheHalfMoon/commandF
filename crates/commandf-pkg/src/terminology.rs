@@ -3,7 +3,8 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::{
-    artifact_diff::matched_resource_pairs,
+    artifact_diff::{matched_resource_pairs, MatchedResourcePair},
+    artifact_diff_structure::matched_element_bindings,
     compare_complete_code_systems, compare_value_set_expansions,
     terminology_index::{TerminologyClosure, TerminologyResource},
     BindingRefinement, CompatibilityDirection, CompatibilityReport, CompatibilitySeverity,
@@ -47,7 +48,7 @@ pub fn build_terminology_diff_report(
 
     let mut code_systems = Vec::new();
     let mut value_sets = Vec::new();
-    for pair in pairs {
+    for pair in &pairs {
         if pair.before.sha256 == pair.after.sha256 || pair.key.kind != ResourceKeyKind::Canonical {
             continue;
         }
@@ -56,12 +57,12 @@ pub fn build_terminology_diff_report(
             pair.after.resource_type.as_str(),
         ) {
             ("CodeSystem", "CodeSystem") => code_systems.push(compare_complete_code_systems(
-                pair.key,
+                pair.key.clone(),
                 &pair.before_value,
                 &pair.after_value,
             )?),
             ("ValueSet", "ValueSet") => value_sets.push(compare_value_set_expansions(
-                pair.key,
+                pair.key.clone(),
                 &pair.before_value,
                 &pair.after_value,
             )?),
@@ -72,7 +73,7 @@ pub fn build_terminology_diff_report(
     sort_set_deltas(&mut value_sets);
 
     let mut binding_refinements =
-        build_binding_refinements(compatibility, &before_closure, &after_closure)?;
+        build_binding_refinements(&pairs, &before_closure, &after_closure)?;
     sort_binding_refinements(&mut binding_refinements);
 
     Ok(TerminologyDiffReport {
@@ -154,119 +155,115 @@ fn validate_root_evidence(
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct BindingKey {
     resource: crate::ResourceKey,
-    view: u8,
-    element_id: Option<String>,
+    element_id: String,
     before_value_set: Option<String>,
     after_value_set: Option<String>,
+    before_strength: Option<String>,
+    after_strength: Option<String>,
 }
 
 fn build_binding_refinements(
-    compatibility: &CompatibilityReport,
+    pairs: &[MatchedResourcePair],
     before_closure: &TerminologyClosure,
     after_closure: &TerminologyClosure,
 ) -> Result<Vec<BindingRefinement>, TerminologyError> {
     let mut seen = BTreeSet::new();
     let mut output = Vec::new();
 
-    for finding in compatibility
-        .findings
-        .iter()
-        .filter(|finding| finding.rule_id == "CF04-BIND-005")
-    {
-        let before_value_set =
-            binding_string(finding.before.as_ref(), "valueSet", &finding.resource.value)?;
-        let after_value_set =
-            binding_string(finding.after.as_ref(), "valueSet", &finding.resource.value)?;
-        let before_strength =
-            binding_string(finding.before.as_ref(), "strength", &finding.resource.value)?;
-        let after_strength =
-            binding_string(finding.after.as_ref(), "strength", &finding.resource.value)?;
-        validate_binding_strength(before_strength.as_deref(), &finding.resource.value)?;
-        validate_binding_strength(after_strength.as_deref(), &finding.resource.value)?;
+    for pair in pairs.iter().filter(|pair| {
+        pair.before.resource_type == "StructureDefinition"
+            && pair.after.resource_type == "StructureDefinition"
+    }) {
+        for binding in matched_element_bindings(
+            &pair.before,
+            &pair.after,
+            &pair.before_value,
+            &pair.after_value,
+        )? {
+            let before_value_set =
+                binding_string(binding.before.as_ref(), "valueSet", &pair.key.value)?;
+            let after_value_set =
+                binding_string(binding.after.as_ref(), "valueSet", &pair.key.value)?;
+            let before_strength =
+                binding_string(binding.before.as_ref(), "strength", &pair.key.value)?;
+            let after_strength =
+                binding_string(binding.after.as_ref(), "strength", &pair.key.value)?;
+            validate_binding_strength(before_strength.as_deref(), &pair.key.value)?;
+            validate_binding_strength(after_strength.as_deref(), &pair.key.value)?;
 
-        let key = BindingKey {
-            resource: finding.resource.clone(),
-            view: view_rank(finding.view),
-            element_id: finding.element_id.clone(),
-            before_value_set: before_value_set.clone(),
-            after_value_set: after_value_set.clone(),
-        };
-        if !seen.insert(key) {
-            continue;
-        }
-
-        let (Some(before_reference), Some(after_reference)) =
-            (before_value_set.as_deref(), after_value_set.as_deref())
-        else {
-            output.push(indeterminate_refinement(
-                finding,
-                before_value_set,
-                after_value_set,
-                TerminologyIndeterminateReason::UnsupportedBindingInteraction,
-            ));
-            continue;
-        };
-
-        let before_resolution = resolve_binding_value_set(before_closure, before_reference)?;
-        let after_resolution = resolve_binding_value_set(after_closure, after_reference)?;
-        let (before_resource, after_resource) = match (before_resolution, after_resolution) {
-            (BindingResolution::Found(before), BindingResolution::Found(after)) => (before, after),
-            (BindingResolution::Ambiguous, _) | (_, BindingResolution::Ambiguous) => {
-                output.push(indeterminate_refinement(
-                    finding,
-                    before_value_set,
-                    after_value_set,
-                    TerminologyIndeterminateReason::AmbiguousCanonical,
-                ));
+            let key = BindingKey {
+                resource: pair.key.clone(),
+                element_id: binding.element_id.clone(),
+                before_value_set: before_value_set.clone(),
+                after_value_set: after_value_set.clone(),
+                before_strength: before_strength.clone(),
+                after_strength: after_strength.clone(),
+            };
+            if !seen.insert(key) {
                 continue;
             }
-            _ => {
+
+            let (Some(before_reference), Some(after_reference)) =
+                (before_value_set.as_deref(), after_value_set.as_deref())
+            else {
+                if before_value_set != after_value_set {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::UnsupportedBindingInteraction,
+                    ));
+                }
+                continue;
+            };
+
+            let before_resource = before_closure.resolve_value_set(before_reference)?;
+            let after_resource = after_closure.resolve_value_set(after_reference)?;
+            let (Some(before_resource), Some(after_resource)) = (before_resource, after_resource)
+            else {
                 output.push(indeterminate_refinement(
-                    finding,
+                    &pair.key,
+                    binding.view,
+                    &binding.element_id,
                     before_value_set,
                     after_value_set,
                     TerminologyIndeterminateReason::UnresolvedValueSet,
                 ));
                 continue;
-            }
-        };
+            };
 
-        let delta =
-            compare_binding_value_sets(finding.resource.clone(), before_resource, after_resource)?;
-        let stable_required = before_strength.as_deref() == Some("required")
-            && after_strength.as_deref() == Some("required");
-        let interaction_reason = (before_strength != after_strength)
-            .then_some(TerminologyIndeterminateReason::UnsupportedBindingInteraction);
-        emit_binding_relation(
-            &mut output,
-            finding,
-            before_value_set,
-            after_value_set,
-            &delta,
-            stable_required,
-            interaction_reason,
-        );
+            let references_changed = before_reference != after_reference;
+            if !references_changed && before_resource.value == after_resource.value {
+                continue;
+            }
+
+            let delta = compare_binding_value_sets(
+                pair.key.clone(),
+                before_resource,
+                after_resource,
+            )?;
+            let stable_required = before_strength.as_deref() == Some("required")
+                && after_strength.as_deref() == Some("required");
+            let interaction_reason = (before_strength != after_strength)
+                .then_some(TerminologyIndeterminateReason::UnsupportedBindingInteraction);
+            emit_binding_relation(
+                &mut output,
+                &pair.key,
+                binding.view,
+                &binding.element_id,
+                before_value_set,
+                after_value_set,
+                &delta,
+                stable_required,
+                interaction_reason,
+                references_changed,
+            );
+        }
     }
 
     Ok(output)
-}
-
-enum BindingResolution<'a> {
-    Found(&'a TerminologyResource),
-    Missing,
-    Ambiguous,
-}
-
-fn resolve_binding_value_set<'a>(
-    closure: &'a TerminologyClosure,
-    reference: &str,
-) -> Result<BindingResolution<'a>, TerminologyError> {
-    match closure.resolve_value_set(reference) {
-        Ok(Some(resource)) => Ok(BindingResolution::Found(resource)),
-        Ok(None) => Ok(BindingResolution::Missing),
-        Err(TerminologyError::AmbiguousCanonical { .. }) => Ok(BindingResolution::Ambiguous),
-        Err(error) => Err(error),
-    }
 }
 
 fn compare_binding_value_sets(
@@ -293,27 +290,35 @@ fn compare_binding_value_sets(
                 field: "resource".to_owned(),
                 message: "resolved ValueSet must be an object".to_owned(),
             })?;
-    // Root ValueSet comparison requires the same canonical as a matched-resource guard.
-    // Binding replacement intentionally compares two different ValueSet canonicals by
-    // membership, so only that guard field is normalized on this owned copy.
+    // The public root-resource comparator guards matched canonical identity. A binding can
+    // intentionally move between distinct ValueSet canonicals, so this owned comparison copy
+    // normalizes only that guard field; expansion/member evidence is left unchanged.
     after_object.insert("url".to_owned(), before_url);
     compare_value_set_expansions(resource, &before.value, &after_value)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_binding_relation(
     output: &mut Vec<BindingRefinement>,
-    finding: &crate::CompatibilityFinding,
+    resource: &crate::ResourceKey,
+    view: ElementView,
+    element_id: &str,
     before_value_set: Option<String>,
     after_value_set: Option<String>,
     delta: &TerminologySetDelta,
     stable_required: bool,
     interaction_reason: Option<TerminologyIndeterminateReason>,
+    references_changed: bool,
 ) {
+    if !references_changed && delta.relation == TerminologyRelation::Equal {
+        return;
+    }
+
     let reason = interaction_reason.or(delta.reason);
     let base = BindingRefinement {
-        resource: finding.resource.clone(),
-        view: finding.view,
-        element_id: finding.element_id.clone(),
+        resource: resource.clone(),
+        view: Some(view),
+        element_id: Some(element_id.to_owned()),
         before_value_set,
         after_value_set,
         relation: delta.relation,
@@ -326,7 +331,7 @@ fn emit_binding_relation(
         message: None,
     };
 
-    if !stable_required || !delta.binding_proof_eligible {
+    if interaction_reason.is_some() || !stable_required || !delta.binding_proof_eligible {
         output.push(base);
         return;
     }
@@ -376,15 +381,17 @@ fn hard_refinement(
 }
 
 fn indeterminate_refinement(
-    finding: &crate::CompatibilityFinding,
+    resource: &crate::ResourceKey,
+    view: ElementView,
+    element_id: &str,
     before_value_set: Option<String>,
     after_value_set: Option<String>,
     reason: TerminologyIndeterminateReason,
 ) -> BindingRefinement {
     BindingRefinement {
-        resource: finding.resource.clone(),
-        view: finding.view,
-        element_id: finding.element_id.clone(),
+        resource: resource.clone(),
+        view: Some(view),
+        element_id: Some(element_id.to_owned()),
         before_value_set,
         after_value_set,
         relation: TerminologyRelation::Indeterminate,
