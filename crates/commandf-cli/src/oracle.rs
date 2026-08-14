@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -65,45 +64,41 @@ pub fn run(
         &after_locked.sha256,
         &after_bytes,
     )?;
-    let changed_resources = structural_diff
-        .changes
-        .iter()
-        .map(|change| change.resource.clone())
-        .collect::<BTreeSet<_>>();
-    let pairs = matched_structure_definition_pairs(
-        package_name.as_str(),
-        &before_locked.version,
-        &before_locked.sha256,
-        &before_bytes,
-        &after_locked.version,
-        &after_locked.sha256,
-        &after_bytes,
-    )?;
 
     let mut observations = Vec::new();
-    for pair in pairs {
-        if !changed_resources.contains(&pair.resource)
-            || pair.resource.kind != ResourceKeyKind::Canonical
-        {
-            continue;
-        }
-        let (url, version) = canonical_parts(&pair.resource)?;
-        let invocation = Hl7OracleInvocation {
-            core_package: &core_archive,
-            left_package: &before_archive,
-            right_package: &after_archive,
-            left_url: url,
-            left_version: version,
-            right_url: url,
-            right_version: version,
-        };
-        let observation = run_hl7_oracle_adapter(
-            &oracle_adapter,
-            oracle_java.as_deref(),
-            &invocation,
-            Duration::from_secs(DEFAULT_ORACLE_TIMEOUT_SECS),
+    if before_locked.sha256 != after_locked.sha256 {
+        let pairs = matched_structure_definition_pairs(
+            package_name.as_str(),
+            &before_locked.version,
+            &before_locked.sha256,
+            &before_bytes,
+            &after_locked.version,
+            &after_locked.sha256,
+            &after_bytes,
         )?;
-        observations.push((pair.resource, observation));
+
+        for pair in pairs {
+            if pair.resource.kind != ResourceKeyKind::Canonical {
+                continue;
+            }
+            let (url, version) = canonical_parts(&pair.resource)?;
+            let invocation = Hl7OracleInvocation {
+                core_package: &core_archive,
+                left_package: &before_archive,
+                right_package: &after_archive,
+                left_url: url,
+                left_version: version,
+                right_url: url,
+                right_version: version,
+            };
+            let observation = run_hl7_oracle_adapter(
+                &oracle_adapter,
+                oracle_java.as_deref(),
+                &invocation,
+                Duration::from_secs(DEFAULT_ORACLE_TIMEOUT_SECS),
+            )?;
+            observations.push((pair.resource, observation));
+        }
     }
 
     let report = reconcile_hl7_oracle(structural_diff, observations)?;
