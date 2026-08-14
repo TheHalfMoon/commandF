@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -150,7 +151,23 @@ enum PkgCommand {
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    let is_check = std::env::args_os().nth(1).as_deref() == Some(OsStr::new("check"));
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let clap_exit = error.exit_code();
+            let _ = error.print();
+            if clap_exit == 0 {
+                return ExitCode::SUCCESS;
+            }
+            if is_check {
+                return ExitCode::from(1);
+            }
+            return ExitCode::from(clap_exit as u8);
+        }
+    };
+
+    match run(cli) {
         Ok(exit_code) => exit_code,
         Err(error) => {
             eprintln!("commandf: {error}");
