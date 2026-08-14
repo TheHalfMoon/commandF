@@ -36,12 +36,10 @@ pub(crate) fn compare_structure_definition(
         "context",
         "contextInvariant",
     ] {
-        let before_value = normalized_optional_resource_field(
-            before,
-            field,
-            &before_resource.filename,
-        )?;
-        let after_value = normalized_optional_resource_field(after, field, &after_resource.filename)?;
+        let before_value =
+            normalized_optional_resource_field(before, field, &before_resource.filename)?;
+        let after_value =
+            normalized_optional_resource_field(after, field, &after_resource.filename)?;
         if before_value != after_value {
             let mut change = base_change(
                 StructuralChangeKind::StructureFieldChanged,
