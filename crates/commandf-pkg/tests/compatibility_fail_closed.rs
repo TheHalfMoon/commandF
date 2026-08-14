@@ -20,7 +20,11 @@ fn report(change: StructuralChange) -> StructuralDiffReport {
     }
 }
 
-fn constraint_change(before: serde_json::Value, after: serde_json::Value) -> StructuralChange {
+fn element_field(
+    field: &str,
+    before: serde_json::Value,
+    after: serde_json::Value,
+) -> StructuralChange {
     StructuralChange {
         kind: StructuralChangeKind::ElementFieldChanged,
         resource: ResourceKey {
@@ -31,7 +35,7 @@ fn constraint_change(before: serde_json::Value, after: serde_json::Value) -> Str
         after_filename: Some("StructureDefinition-example.json".to_owned()),
         view: Some(ElementView::Snapshot),
         element_id: Some("Observation".to_owned()),
-        field: Some("constraint".to_owned()),
+        field: Some(field.to_owned()),
         before: Some(before),
         after: Some(after),
     }
@@ -39,7 +43,8 @@ fn constraint_change(before: serde_json::Value, after: serde_json::Value) -> Str
 
 #[test]
 fn duplicate_constraint_keys_fail_closed_before_classification() {
-    let change = constraint_change(
+    let change = element_field(
+        "constraint",
         json!([
             {"key": "obs-1", "severity": "error", "expression": "status.exists()"},
             {"key": "obs-1", "severity": "warning", "expression": "code.exists()"}
@@ -56,7 +61,8 @@ fn duplicate_constraint_keys_fail_closed_before_classification() {
 
 #[test]
 fn distinct_constraint_keys_continue_to_classify() {
-    let change = constraint_change(
+    let change = element_field(
+        "constraint",
         json!([
             {"key": "obs-1", "severity": "error", "expression": "status.exists()"},
             {"key": "obs-2", "severity": "warning", "expression": "code.exists()"}
@@ -65,4 +71,64 @@ fn distinct_constraint_keys_continue_to_classify() {
     );
     let classified = classify_structural_diff(&report(change)).unwrap();
     assert!(!classified.findings.is_empty());
+}
+
+#[test]
+fn unrecognized_binding_strength_fails_closed() {
+    let change = element_field(
+        "binding",
+        json!({"strength": "required"}),
+        json!({"strength": "mandatory-plus"}),
+    );
+    let error = classify_structural_diff(&report(change)).unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::InvalidChangeValue { ref field, ref message }
+            if field == "binding" && message.contains("unrecognized")
+    ));
+}
+
+#[test]
+fn malformed_binding_strength_type_fails_closed() {
+    let change = element_field(
+        "binding",
+        json!({"strength": "required"}),
+        json!({"strength": 3}),
+    );
+    let error = classify_structural_diff(&report(change)).unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::InvalidChangeValue { ref field, .. }
+            if field == "binding"
+    ));
+}
+
+#[test]
+fn unrecognized_slicing_rules_fail_closed() {
+    let change = element_field(
+        "slicing",
+        json!({"rules": "open", "ordered": false}),
+        json!({"rules": "semiClosed", "ordered": false}),
+    );
+    let error = classify_structural_diff(&report(change)).unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::InvalidChangeValue { ref field, ref message }
+            if field == "slicing" && message.contains("unrecognized")
+    ));
+}
+
+#[test]
+fn malformed_slicing_rules_type_fails_closed() {
+    let change = element_field(
+        "slicing",
+        json!({"rules": "open", "ordered": false}),
+        json!({"rules": 1, "ordered": false}),
+    );
+    let error = classify_structural_diff(&report(change)).unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::InvalidChangeValue { ref field, .. }
+            if field == "slicing"
+    ));
 }

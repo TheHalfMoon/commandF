@@ -7,7 +7,6 @@ on:
       - feat/cf-01-package-resolution
       - feat/cf-02-canonical-inspect
       - feat/cf-03-structural-diff
-      - feat/cf-04-compatibility-rules
 
 permissions:
   contents: read
