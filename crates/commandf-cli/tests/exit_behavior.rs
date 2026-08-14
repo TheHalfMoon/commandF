@@ -10,7 +10,7 @@ const SYNTHETIC_ARCHIVE: &[u8] = &[
     31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 237, 210, 205, 106, 2, 49, 20, 134, 225, 92, 74, 201, 90,
     38, 9, 254, 44, 188, 141, 22, 247, 97, 60, 216, 177, 83, 103, 200, 207, 160, 136, 247, 238, 81,
     208, 69, 215, 210, 141, 239, 179, 57, 201, 151, 156, 4, 66, 198, 216, 254, 196, 157, 184, 41,
-    246, 85, 154, 125, 30, 14, 230, 229, 188, 90, 45, 22, 247, 170, 254, 86, 31, 150, 171, 231,
+    246, 85, 154, 125, 30, 14, 230, 229, 188, 90, 45, 22, 150, 247, 170, 254, 86, 31, 150, 171, 231,
     248, 158, 135, 48, 95, 6, 243, 225, 205, 63, 168, 185, 196, 164, 215, 155, 247, 116, 182, 221,
     214, 174, 237, 209, 206, 108, 146, 60, 212, 212, 202, 215, 105, 20, 141, 54, 183, 31, 241, 41,
     69, 87, 244, 137, 74, 205, 154, 197, 182, 116, 147, 104, 82, 83, 175, 211, 239, 82, 198, 181,
@@ -88,6 +88,37 @@ fn run_diff(
         .env("NO_PROXY", "")
         .output()
         .expect("commandf diff must execute")
+}
+
+fn run_oracle(
+    before_lock: &Path,
+    before_cache: &Path,
+    after_lock: &Path,
+    after_cache: &Path,
+    adapter: &Path,
+) -> std::process::Output {
+    commandf()
+        .args([
+            "oracle",
+            "example.package",
+            "--before-lock",
+            before_lock.to_str().expect("UTF-8 path"),
+            "--before-cache",
+            before_cache.to_str().expect("UTF-8 path"),
+            "--after-lock",
+            after_lock.to_str().expect("UTF-8 path"),
+            "--after-cache",
+            after_cache.to_str().expect("UTF-8 path"),
+            "--oracle-adapter",
+            adapter.to_str().expect("UTF-8 path"),
+            "--format",
+            "json",
+        ])
+        .env("HTTP_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env("NO_PROXY", "")
+        .output()
+        .expect("commandf oracle must execute")
 }
 
 #[test]
@@ -232,5 +263,78 @@ fn diff_succeeds_offline_and_emits_schema_v1_json() {
     assert!(stdout.contains("\"schema\": 1"));
     assert!(stdout.contains("\"package_name\": \"example.package\""));
     assert!(stdout.contains("\"changes\": []"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn oracle_help_exposes_explicit_state_and_adapter_inputs() {
+    let output = commandf()
+        .args(["oracle", "--help"])
+        .output()
+        .expect("commandf oracle help must execute");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 help");
+    for flag in [
+        "--before-lock",
+        "--before-cache",
+        "--after-lock",
+        "--after-cache",
+        "--oracle-adapter",
+        "--oracle-java",
+        "--format",
+    ] {
+        assert!(stdout.contains(flag), "missing {flag}");
+    }
+}
+
+#[test]
+fn oracle_missing_required_paths_is_a_usage_error() {
+    let output = commandf()
+        .args(["oracle", "example.package"])
+        .output()
+        .expect("commandf oracle must execute");
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn oracle_validates_adapter_even_before_lock_processing() {
+    let dir = unique_temp_dir("oracle-adapter-missing");
+    let missing = dir.join("missing-adapter");
+    let output = commandf()
+        .args([
+            "oracle",
+            "example.package",
+            "--before-lock",
+            "missing-before.lock",
+            "--before-cache",
+            "missing-before-cache",
+            "--after-lock",
+            "missing-after.lock",
+            "--after-cache",
+            "missing-after-cache",
+            "--oracle-adapter",
+            missing.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("commandf oracle must execute");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("oracle adapter path"));
+}
+
+#[test]
+fn oracle_requires_the_pinned_r4_core_context_in_both_states() {
+    let dir = unique_temp_dir("oracle-missing-core");
+    let (before_lock, before_cache) = write_locked_state(&dir.join("before"));
+    let (after_lock, after_cache) = write_locked_state(&dir.join("after"));
+    let adapter = Path::new(env!("CARGO_BIN_EXE_commandf"));
+    let output = run_oracle(
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+        adapter,
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("hl7.fhir.r4.core"));
     let _ = fs::remove_dir_all(&dir);
 }

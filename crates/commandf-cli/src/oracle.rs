@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use commandf_pkg::{
     diff_package_archives, matched_structure_definition_pairs, reconcile_hl7_oracle,
-    run_hl7_oracle_adapter, Hl7OracleInvocation, LockedPackage, Lockfile, PackageCache,
-    PackageName, ResourceKey, ResourceKeyKind, DEFAULT_ORACLE_TIMEOUT_SECS,
+    run_hl7_oracle_adapter, validate_hl7_oracle_adapter, Hl7OracleInvocation, LockedPackage,
+    Lockfile, PackageCache, PackageName, ResourceKey, ResourceKeyKind, DEFAULT_ORACLE_TIMEOUT_SECS,
 };
 
 const ORACLE_CORE_PACKAGE: &str = "hl7.fhir.r4.core";
@@ -23,6 +23,8 @@ pub fn run(
     oracle_java: Option<PathBuf>,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
+    validate_hl7_oracle_adapter(&oracle_adapter, oracle_java.as_deref())?;
+
     let before_lockfile = Lockfile::from_slice(&fs::read(&before_lock)?)?;
     let after_lockfile = Lockfile::from_slice(&fs::read(&after_lock)?)?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;

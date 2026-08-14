@@ -20,30 +20,36 @@ pub struct Hl7OracleInvocation<'a> {
     pub right_version: Option<&'a str>,
 }
 
-pub fn run_hl7_oracle_adapter(
+pub fn validate_hl7_oracle_adapter(
     adapter: &Path,
     java: Option<&Path>,
-    invocation: &Hl7OracleInvocation<'_>,
-    timeout: Duration,
-) -> Result<Hl7OracleReport, OracleError> {
+) -> Result<(), OracleError> {
     if !adapter.is_file() {
         return Err(OracleError::AdapterPath {
             path: adapter.display().to_string(),
         });
     }
-
-    let is_jar = adapter
-        .extension()
-        .map(|extension| extension.to_string_lossy().eq_ignore_ascii_case("jar"))
-        .unwrap_or(false);
-
-    let mut command = if is_jar {
+    if adapter_is_jar(adapter) {
         let java = java.ok_or(OracleError::JavaRequiredForJar)?;
         if !java.is_file() {
             return Err(OracleError::JavaPath {
                 path: java.display().to_string(),
             });
         }
+    }
+    Ok(())
+}
+
+pub fn run_hl7_oracle_adapter(
+    adapter: &Path,
+    java: Option<&Path>,
+    invocation: &Hl7OracleInvocation<'_>,
+    timeout: Duration,
+) -> Result<Hl7OracleReport, OracleError> {
+    validate_hl7_oracle_adapter(adapter, java)?;
+
+    let mut command = if adapter_is_jar(adapter) {
+        let java = java.ok_or(OracleError::JavaRequiredForJar)?;
         let mut command = Command::new(java);
         command.arg("-jar").arg(adapter);
         command
@@ -125,6 +131,13 @@ pub fn run_hl7_oracle_adapter(
     }
 
     parse_hl7_oracle_report(&stdout)
+}
+
+fn adapter_is_jar(adapter: &Path) -> bool {
+    adapter
+        .extension()
+        .map(|extension| extension.to_string_lossy().eq_ignore_ascii_case("jar"))
+        .unwrap_or(false)
 }
 
 fn read_bounded<R: Read>(reader: R, limit: usize) -> io::Result<Vec<u8>> {
