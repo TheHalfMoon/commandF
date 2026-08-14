@@ -53,12 +53,8 @@ impl TerminologyClosure {
                 });
             }
 
-            let inspection = inspect_package(
-                &package.name,
-                &package.version,
-                &package.sha256,
-                &bytes,
-            )?;
+            let inspection =
+                inspect_package(&package.name, &package.version, &package.sha256, &bytes)?;
             let mut raw = BTreeMap::new();
             for resource in scan_package_resources(&bytes)? {
                 let filename = resource.filename;

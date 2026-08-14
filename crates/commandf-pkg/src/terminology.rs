@@ -42,9 +42,7 @@ pub fn build_terminology_diff_report(
     let mut code_systems = Vec::new();
     let mut value_sets = Vec::new();
     for pair in pairs {
-        if pair.before.sha256 == pair.after.sha256
-            || pair.key.kind != ResourceKeyKind::Canonical
-        {
+        if pair.before.sha256 == pair.after.sha256 || pair.key.kind != ResourceKeyKind::Canonical {
             continue;
         }
         match (
@@ -169,26 +167,14 @@ fn build_binding_refinements(
         .iter()
         .filter(|finding| finding.rule_id == "CF04-BIND-005")
     {
-        let before_value_set = binding_string(
-            finding.before.as_ref(),
-            "valueSet",
-            &finding.resource.value,
-        )?;
-        let after_value_set = binding_string(
-            finding.after.as_ref(),
-            "valueSet",
-            &finding.resource.value,
-        )?;
-        let before_strength = binding_string(
-            finding.before.as_ref(),
-            "strength",
-            &finding.resource.value,
-        )?;
-        let after_strength = binding_string(
-            finding.after.as_ref(),
-            "strength",
-            &finding.resource.value,
-        )?;
+        let before_value_set =
+            binding_string(finding.before.as_ref(), "valueSet", &finding.resource.value)?;
+        let after_value_set =
+            binding_string(finding.after.as_ref(), "valueSet", &finding.resource.value)?;
+        let before_strength =
+            binding_string(finding.before.as_ref(), "strength", &finding.resource.value)?;
+        let after_strength =
+            binding_string(finding.after.as_ref(), "strength", &finding.resource.value)?;
         validate_binding_strength(before_strength.as_deref(), &finding.resource.value)?;
         validate_binding_strength(after_strength.as_deref(), &finding.resource.value)?;
 
@@ -239,11 +225,8 @@ fn build_binding_refinements(
             }
         };
 
-        let delta = compare_binding_value_sets(
-            finding.resource.clone(),
-            before_resource,
-            after_resource,
-        )?;
+        let delta =
+            compare_binding_value_sets(finding.resource.clone(), before_resource, after_resource)?;
         let stable_required = before_strength.as_deref() == Some("required")
             && after_strength.as_deref() == Some("required");
         let interaction_reason = (before_strength != after_strength)
@@ -286,22 +269,24 @@ fn compare_binding_value_sets(
     after: &TerminologyResource,
 ) -> Result<TerminologySetDelta, TerminologyError> {
     let mut after_value = after.value.clone();
-    let before_url = before
-        .value
-        .get("url")
-        .cloned()
-        .ok_or_else(|| TerminologyError::InvalidField {
-            resource: before.filename.clone(),
-            field: "url".to_owned(),
-            message: "resolved ValueSet is missing its canonical URL".to_owned(),
-        })?;
-    let after_object = after_value
-        .as_object_mut()
-        .ok_or_else(|| TerminologyError::InvalidField {
-            resource: after.filename.clone(),
-            field: "resource".to_owned(),
-            message: "resolved ValueSet must be an object".to_owned(),
-        })?;
+    let before_url =
+        before
+            .value
+            .get("url")
+            .cloned()
+            .ok_or_else(|| TerminologyError::InvalidField {
+                resource: before.filename.clone(),
+                field: "url".to_owned(),
+                message: "resolved ValueSet is missing its canonical URL".to_owned(),
+            })?;
+    let after_object =
+        after_value
+            .as_object_mut()
+            .ok_or_else(|| TerminologyError::InvalidField {
+                resource: after.filename.clone(),
+                field: "resource".to_owned(),
+                message: "resolved ValueSet must be an object".to_owned(),
+            })?;
     // Root ValueSet comparison requires the same canonical as a matched-resource guard.
     // Binding replacement intentionally compares two different ValueSet canonicals by
     // membership, so only that guard field is normalized on this owned copy.
@@ -440,7 +425,10 @@ fn validate_binding_strength(
     resource: &str,
 ) -> Result<(), TerminologyError> {
     if strength.is_none_or(|strength| {
-        matches!(strength, "example" | "preferred" | "extensible" | "required")
+        matches!(
+            strength,
+            "example" | "preferred" | "extensible" | "required"
+        )
     }) {
         Ok(())
     } else {
