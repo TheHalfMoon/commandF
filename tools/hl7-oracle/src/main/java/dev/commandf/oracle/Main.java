@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.hl7.fhir.r5.comparison.CanonicalResourceComparer.ChangeAnalysisState;
 import org.hl7.fhir.r5.comparison.ComparisonSession;
+import org.hl7.fhir.r5.comparison.ResourceComparer;
 import org.hl7.fhir.r5.comparison.ResourceComparer.ResourceComparison;
 import org.hl7.fhir.r5.comparison.StructuralMatch;
 import org.hl7.fhir.r5.comparison.StructureDefinitionComparer.ProfileComparison;
@@ -78,6 +79,13 @@ public final class Main {
     ResourceComparison comparison = session.compare(leftResource, rightResource);
     if (!(comparison instanceof ProfileComparison profile)) {
       String actual = comparison == null ? "null" : comparison.getClass().getName();
+      if (comparison instanceof ResourceComparer.PlaceHolderComparison placeholder
+          && placeholder.getE() != null) {
+        Throwable cause = placeholder.getE();
+        throw new IllegalStateException(
+            "HL7 comparison failed inside " + actual + ": "
+                + cause.getClass().getName() + ": " + safeMessage(cause));
+      }
       throw new IllegalStateException("HL7 comparison did not return ProfileComparison: " + actual);
     }
 
