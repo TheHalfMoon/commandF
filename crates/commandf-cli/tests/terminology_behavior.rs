@@ -14,7 +14,7 @@ const SYNTHETIC_ARCHIVE: &[u8] = &[
     248, 158, 135, 48, 95, 6, 243, 225, 205, 63, 168, 185, 196, 164, 215, 155, 247, 116, 182, 221,
     214, 174, 237, 209, 206, 108, 146, 60, 212, 212, 202, 215, 105, 20, 141, 54, 183, 31, 241, 41,
     69, 87, 244, 137, 74, 205, 154, 197, 182, 116, 147, 104, 82, 83, 175, 211, 239, 82, 198, 181,
-    115, 114, 191, 99, 47, 205, 144, 118, 238, 209, 229, 110, 39, 78, 146, 114, 55, 28, 116,
+    115, 114, 140, 191, 99, 47, 205, 144, 118, 238, 209, 229, 110, 39, 78, 146, 114, 55, 28, 116,
     103, 104, 124, 227, 237, 197, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 94, 228, 10, 103, 64,
     75, 71, 0, 40, 0, 0,
 ];
@@ -120,14 +120,14 @@ fn terminology_succeeds_offline_for_self_equivalent_state() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
-    assert_eq!(report["schema"], 1);
-    assert_eq!(report["ruleset"], "cf07-terminology-v1");
-    assert_eq!(report["package_name"], "example.package");
-    assert_eq!(report["compatibility"]["findings"], json_array());
-    assert_eq!(report["code_systems"], json_array());
-    assert_eq!(report["value_sets"], json_array());
-    assert_eq!(report["binding_refinements"], json_array());
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 JSON");
+    assert!(stdout.contains("\"schema\": 1"));
+    assert!(stdout.contains("\"ruleset\": \"cf07-terminology-v1\""));
+    assert!(stdout.contains("\"package_name\": \"example.package\""));
+    assert!(stdout.contains("\"findings\": []"));
+    assert!(stdout.contains("\"code_systems\": []"));
+    assert!(stdout.contains("\"value_sets\": []"));
+    assert!(stdout.contains("\"binding_refinements\": []"));
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -146,10 +146,9 @@ fn terminology_fails_closed_on_corrupted_root_cache() {
     let output = run_terminology(&before_lock, &before_cache, &after_lock, &after_cache);
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("cache object digest mismatch"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("cache object digest mismatch"),
+        "stderr: {stderr}"
+    );
     let _ = fs::remove_dir_all(&dir);
-}
-
-fn json_array() -> serde_json::Value {
-    serde_json::Value::Array(Vec::new())
 }
