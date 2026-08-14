@@ -67,7 +67,8 @@ fn malformed_element_structural_fields_fail_closed() {
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","representation":"xmlAttr"}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","condition":{"bad":true}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":{"code":"string"}}"#.as_slice(),
-        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"profile":["x"]}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":["string"]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":42}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"string","profile":"x"}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":{"key":"a"}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":[{"severity":"error"}]}"#.as_slice(),
@@ -111,7 +112,7 @@ fn malformed_resource_context_fields_fail_closed() {
 
     let before = archive_with_entries(&[(
         "package/StructureDefinition-example.json",
-        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":"element"}],"snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
+        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":42}],"snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
     )]);
     assert!(matches!(
         diff(&before, &after),
@@ -123,11 +124,11 @@ fn malformed_resource_context_fields_fail_closed() {
 fn valid_context_and_interpreted_arrays_continue_to_diff() {
     let before = archive_with_entries(&[(
         "package/StructureDefinition-example.json",
-        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":"element","expression":"Observation"}],"contextInvariant":["b","a"],"snapshot":{"element":[{"id":"Observation.value[x]","path":"Observation.value[x]","representation":["xmlAttr","typeAttr"],"condition":["b","a"],"type":[{"code":"string","profile":["z","a"]}],"constraint":[{"key":"a","severity":"error"}]}]}}"#,
+        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":"element","expression":"Observation"}],"contextInvariant":["b","a"],"snapshot":{"element":[{"id":"Observation.value[x]","path":"Observation.value[x]","representation":["xmlAttr","typeAttr"],"condition":["b","a"],"type":[{"code":"string","profile":["z","a"]},{"_code":{"extension":[{"url":"x","valueString":"y"}]}}],"constraint":[{"key":"a","severity":"error"}]}]}}"#,
     )]);
     let after = archive_with_entries(&[(
         "package/StructureDefinition-example.json",
-        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":"element","expression":"Observation"}],"contextInvariant":["a","b"],"snapshot":{"element":[{"id":"Observation.value[x]","path":"Observation.value[x]","representation":["typeAttr","xmlAttr"],"condition":["a","b"],"type":[{"code":"string","profile":["a","z"]}],"constraint":[{"key":"a","severity":"error"}]}]}}"#,
+        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":"element","expression":"Observation"}],"contextInvariant":["a","b"],"snapshot":{"element":[{"id":"Observation.value[x]","path":"Observation.value[x]","representation":["typeAttr","xmlAttr"],"condition":["a","b"],"type":[{"_code":{"extension":[{"url":"x","valueString":"y"}]}},{"code":"string","profile":["a","z"]}],"constraint":[{"key":"a","severity":"error"}]}]}}"#,
     )]);
 
     let report = diff(&before, &after).unwrap();

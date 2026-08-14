@@ -11,7 +11,7 @@ pub(crate) fn normalize_structural_field(field: &str, value: &Value) -> Value {
 
 pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
-        "contextInvariant" => validate_string_array(value, "expected an array of strings"),
+        "contextInvariant" => validate_array(value, "expected an array"),
         "context" => {
             let entries = value
                 .as_array()
@@ -20,8 +20,8 @@ pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> 
                 let object = entry
                     .as_object()
                     .ok_or_else(|| format!("context[{index}] must be an object"))?;
-                require_string(object, "type", &format!("context[{index}]"))?;
-                require_string(object, "expression", &format!("context[{index}]"))?;
+                validate_optional_string(object, "type", &format!("context[{index}]"))?;
+                validate_optional_string(object, "expression", &format!("context[{index}]"))?;
             }
             Ok(())
         }
@@ -31,9 +31,7 @@ pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> 
 
 pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
-        "representation" | "condition" => {
-            validate_string_array(value, "expected an array of strings")
-        }
+        "representation" | "condition" => validate_array(value, "expected an array"),
         "type" => {
             let types = value
                 .as_array()
@@ -42,12 +40,12 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
                 let object = entry
                     .as_object()
                     .ok_or_else(|| format!("type[{index}] must be an object"))?;
-                require_string(object, "code", &format!("type[{index}]"))?;
+                validate_optional_string(object, "code", &format!("type[{index}]"))?;
                 for nested in ["profile", "targetProfile", "aggregation"] {
                     if let Some(value) = object.get(nested) {
-                        validate_string_array(
+                        validate_array(
                             value,
-                            &format!("type[{index}].{nested} must be an array of strings"),
+                            &format!("type[{index}].{nested} must be an array"),
                         )?;
                     }
                 }
@@ -141,19 +139,29 @@ fn constraint_key(value: &Value) -> &str {
         .unwrap_or("")
 }
 
-fn validate_string_array(value: &Value, message: &str) -> Result<(), String> {
-    let values = value.as_array().ok_or_else(|| message.to_owned())?;
-    if values.iter().all(Value::is_string) {
+fn validate_array(value: &Value, message: &str) -> Result<(), String> {
+    if value.is_array() {
         Ok(())
     } else {
         Err(message.to_owned())
     }
 }
 
+fn validate_optional_string(
+    object: &Map<String, Value>,
+    field: &str,
+    path: &str,
+) -> Result<(), String> {
+    match object.get(field) {
+        None | Some(Value::String(_)) => Ok(()),
+        Some(_) => Err(format!("{path}.{field} must be a string when present")),
+    }
+}
+
 fn require_string(object: &Map<String, Value>, field: &str, path: &str) -> Result<(), String> {
     match object.get(field) {
-        Some(Value::String(value)) if !value.is_empty() => Ok(()),
-        _ => Err(format!("{path}.{field} must be a non-empty string")),
+        Some(Value::String(_)) => Ok(()),
+        _ => Err(format!("{path}.{field} must be a string")),
     }
 }
 
