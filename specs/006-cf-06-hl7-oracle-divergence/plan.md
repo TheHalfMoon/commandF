@@ -1,6 +1,6 @@
 # CF-06 Implementation Plan
 
-Status: Implementation in progress
+Status: Implemented — convergence evidence is recorded in `convergence.md` and final-head GitHub metadata
 
 ## Architecture
 
