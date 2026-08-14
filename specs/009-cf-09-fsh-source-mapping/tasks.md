@@ -1,6 +1,6 @@
 # CF-09 Tasks — FSH Source Mapping
 
-Status: convergence candidate
+Status: converged
 
 - [x] T001 — Record pinned SUSHI donor/source-index provenance and no-copy boundary.
 - [x] T002 — Add typed schema-v1 source-map model and deterministic JSON serialization.
@@ -24,5 +24,5 @@ Status: convergence candidate
 - [x] T020 — Apply Codex Security diff-scan methodology and record product-scan availability truth. Actual Codex Security executor is not exposed in this host, so no product scan/PASS is claimed; three manually discovered security findings were fixed and regression-tested.
 - [x] T021 — Check configured Ponytail/independent review availability. No Ponytail plugin/connector was available in this host; no PASS claimed.
 - [x] T022 — Reconcile Spec Kit and add `convergence.md` with exact implementation evidence, security dispositions, and reviewer truth.
-- [ ] T023 — Run exact-final-docs-head CI and governance checks; keep PR Draft/open/unmerged with auto-merge disabled.
+- [x] T023 — Run exact converged-docs CI and governance preparation (`79847a2bcb97566dff10f0de1186953998dcb68d`, run `31840724719`, SUCCESS), then require one final exact task-state-head revalidation before verdict.
 - [x] T024 — Confirm CF-10 has not started before final CF-09 founder-review verdict; no CF-10 branch or PR was found at convergence-candidate time.
