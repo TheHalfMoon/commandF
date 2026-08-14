@@ -51,8 +51,34 @@ case "$check_code" in
       exit 1
     fi
 
+    renderer_args=(github-annotations --input "$report_path")
+    if [[ -n "${COMMANDF_FSH_INDEX:-}" ]]; then
+      source_map_path="${COMMANDF_SOURCE_MAP_PATH:-}"
+      if [[ -z "$source_map_path" || -z "${GITHUB_WORKSPACE:-}" || -z "${COMMANDF_FSH_ROOT:-}" ]]; then
+        printf '::error title=commandF operational failure::commandF source mapping is enabled without complete runner source-map state\n'
+        write_outputs 1
+        exit 1
+      fi
+
+      set +e
+      "$binary" source-map \
+        --input "$report_path" \
+        --fsh-index "$COMMANDF_FSH_INDEX" \
+        --repo-root "$GITHUB_WORKSPACE" \
+        --fsh-root "$COMMANDF_FSH_ROOT" \
+        --output "$source_map_path"
+      source_map_code=$?
+      set -e
+      if [[ "$source_map_code" -ne 0 || ! -f "$source_map_path" ]]; then
+        printf '::error title=commandF operational failure::commandF could not produce a trusted FSH source map from the complete report\n'
+        write_outputs 1
+        exit 1
+      fi
+      renderer_args+=(--source-map "$source_map_path")
+    fi
+
     set +e
-    "$binary" github-annotations --input "$report_path"
+    "$binary" "${renderer_args[@]}"
     renderer_code=$?
     set -e
     if [[ "$renderer_code" -ne 0 ]]; then
