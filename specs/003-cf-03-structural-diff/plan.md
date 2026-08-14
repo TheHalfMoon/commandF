@@ -52,17 +52,9 @@ Editorial-only fields such as `short`, `definition`, `comment`, `requirements`, 
 
 CF-03 validates the shape of fields it interprets **before** normalization. It is not a general FHIR validator; the purpose is to stop malformed values from being canonicalized into valid-looking structural deltas.
 
-Examples of enforced shapes include:
+Enforced CF-03-owned shapes include selected StructureDefinition metadata, cardinality values, boolean flags, `slicing`, `binding`, `type`, `constraint`, `extension`, and `maxLength`.
 
-- selected StructureDefinition metadata strings/booleans/arrays;
-- `min` as a non-negative integer and `max` as a non-empty string;
-- boolean flags as booleans;
-- `slicing` and `binding` as objects;
-- `type` and `constraint` as arrays of objects;
-- `extension` as an array of objects;
-- `maxLength` as an integer.
-
-Required primitive string fields such as `ElementDefinition.type.code` and `constraint.key` accept either a normal non-empty string value or a meaningful FHIR JSON `_field` metadata object when the primitive value is absent. Empty/malformed metadata fails closed. This preserves official R4 extension-only primitive shapes such as `_code` while retaining strict malformed-input rejection.
+Required primitive string fields such as `ElementDefinition.type.code` and `constraint.key` accept either a normal non-empty string value or meaningful FHIR JSON `_field` primitive metadata when the primitive value is absent. Empty/malformed metadata fails closed. This preserves official R4 extension-only primitive shapes such as `_code` while retaining malformed-input rejection.
 
 ## Normalization
 
@@ -76,19 +68,9 @@ Preserve array order where semantics may depend on order. In particular, CF-03 i
 
 ## Output model
 
-`StructuralDiffReport` contains schema, package name, before/after package evidence, and ordered `StructuralChange` entries.
+`StructuralDiffReport` contains schema, package name, before/after package evidence, and ordered `StructuralChange` entries. Each change contains a typed change kind, stable resource key, before/after filenames where relevant, optional StructureDefinition view, optional element id, optional changed field, and optional normalized before/after JSON values.
 
-Each change contains:
-
-- typed change kind;
-- stable resource key;
-- before/after filenames where relevant;
-- optional StructureDefinition view;
-- optional element id;
-- optional changed field;
-- optional normalized before/after JSON values.
-
-Resource-level structural facts include add/remove plus filename, canonical version, resourceType, id, and exact resource-byte SHA-256 changes. CF-03 contains no severity or compatibility field.
+Resource-level facts include add/remove plus filename, canonical version, resourceType, id, and exact resource-byte SHA-256 changes. CF-03 contains no severity or compatibility field.
 
 ## CLI
 
@@ -103,7 +85,7 @@ All four before/after path options are required in v1 to avoid hidden workspace 
 
 ## Validation
 
-Synthetic tests prove:
+Synthetic and CLI tests prove:
 
 - byte-stable no-op self-diff;
 - unique canonical matching across canonical-version changes;
@@ -115,8 +97,9 @@ Synthetic tests prove:
 - valid primitive `_field` metadata forms remain accepted;
 - editorial-field exclusion;
 - set-like normalization for representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation ordering;
-- extension ordering remains structural.
+- extension ordering remains structural;
+- CLI usage errors, absent packages, corrupt before/after caches, and successful offline diff.
 
-Real CI resolves and verifies published `hl7.fhir.r4.core@4.0.1` once, inspects it, copies the verified content-addressed lock/cache state to explicit after paths, verifies the copied after state, then runs the real CLI self-diff and requires an empty change list.
+Real CI independently resolves and verifies published `hl7.fhir.r4.core@4.0.1` into two distinct cache/lock states, inspects the before state, then runs the real CLI self-diff and requires an empty change list. The second independent resolution is intentional reproducibility evidence, even though it makes the real-package gate depend on registry availability.
 
 No external FHIR validator is required for CF-03 because this slice computes structural facts rather than conformance judgments. Differential oracle work begins in CF-06.

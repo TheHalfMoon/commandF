@@ -11,14 +11,7 @@ It does **not** classify a change as breaking, risky, additive, safe, producer-f
 
 ## Architecture reconciliation
 
-CF-03 required no new workspace crate.
-
-The final design uses:
-
-- `commandf-pkg` for CF-01 lock/cache authority, the shared bounded package-root resource scanner, CF-02 inspection, and CF-03 deterministic structural diff;
-- `commandf` for the explicit two-state `diff` CLI surface.
-
-The CF-02 scanner is one internal helper so inspect and diff consume identical package-root filtering and safety bounds. The committed dependency graph remains unchanged and CI runs with the existing `Cargo.lock` and `--locked`.
+CF-03 required no new workspace crate. The final design uses `commandf-pkg` for CF-01 lock/cache authority, the shared bounded package-root scanner, CF-02 inspection, and CF-03 structural diff; `commandf` provides the explicit two-state `diff` CLI. The dependency graph remains unchanged and CI uses the committed `Cargo.lock` with `--locked`.
 
 ## Contract achieved
 
@@ -29,103 +22,83 @@ commandf diff <package-name> \
   --format json
 ```
 
-now:
+The command:
 
-- validates one FHIR package name;
-- requires exactly one selected version of that package in each explicit lockfile;
+- validates one FHIR package name and requires exactly one selected version in each supplied lockfile;
 - performs no package acquisition;
-- verifies each selected CF-01 cache object before reading;
-- independently rechecks each archive SHA-256 before structural parsing;
+- verifies each selected CF-01 cache object and independently rechecks each archive SHA-256 before structural parsing;
 - rebuilds inventory from package-root FHIR JSON rather than trusting `.index.json`;
 - matches unique canonical resources by canonical URL;
-- upgrades a canonical URL group to exact `url|version` matching when multiplicity exists and fails closed when a group member lacks a usable version;
-- matches non-canonical resources by unique `resourceType/id`, then filename fallback;
-- fails closed on ambiguous resource keys and duplicate package-root filenames;
+- upgrades a multiplicity group to exact `url|version` matching and fails closed when a member lacks a usable version;
+- matches non-canonical resources by unique `resourceType/id`, then filename;
+- fails closed on ambiguity and duplicate package-root filenames;
 - emits deterministic resource add/remove and filename/version/resourceType/id/byte-hash facts;
-- compares StructureDefinition metadata plus snapshot/differential views separately;
-- matches StructureDefinition elements by exact `ElementDefinition.id`;
-- validates interpreted structural field shapes before normalization;
-- preserves valid FHIR primitive `_field` metadata forms, including extension-only primitive metadata used by official R4 artifacts;
-- emits deterministic view/element additions/removals and selected structural-field changes;
-- suppresses editorial-only fields from element structural-field changes;
-- normalizes only known set-like arrays and preserves ordering where semantics may depend on it, including `extension[]` in CF-03;
+- compares StructureDefinition metadata plus snapshot/differential views separately and matches elements by exact `ElementDefinition.id`;
+- validates CF-03-owned structural field shapes before normalization without becoming a general FHIR validator;
+- preserves valid FHIR primitive `_field` metadata, including extension-only primitive metadata present in official R4 artifacts;
+- normalizes only known set-like arrays and preserves ordering where semantics may depend on it, including `extension[]`;
 - serializes stable ordered JSON without severity or compatibility labels.
 
 ## Safety and fail-closed behavior
 
-CF-03 reuses the CF-02 archive safety boundary:
+CF-03 reuses the CF-02 archive limits: 512 MiB decompressed TAR traversal, 50,000 archive entries, and 64 MiB per package-root resource.
 
-- decompressed TAR traversal: 512 MiB maximum;
-- archive entries: 50,000 maximum;
-- one package-root resource: 64 MiB maximum.
-
-Additionally:
-
-- cache digest mismatch fails before archive comparison;
-- archive digest mismatch fails before structural parsing;
-- malformed resource or structural JSON fails explicitly;
-- duplicate canonical identities continue to fail under CF-02 inspection rules;
-- canonical multiplicity without usable versions fails rather than mixing bare and qualified identities;
-- ambiguous non-canonical resource keys fail rather than guessing;
-- duplicate package-root filenames fail before raw structural lookup can become ambiguous;
-- malformed or duplicate StructureDefinition element ids fail;
-- malformed CF-03-owned structural field shapes fail before normalization;
-- primitive metadata is accepted only when structurally meaningful rather than as an empty escape hatch;
-- no external-archive lookup uses a panic path.
+Additionally, cache/archive digest mismatches, malformed JSON, canonical multiplicity without usable versions, ambiguous non-canonical keys, duplicate filenames, malformed/duplicate element ids, malformed interpreted structural shapes, and internal inventory disagreement fail explicitly rather than being guessed or silently normalized.
 
 ## Deterministic synthetic and CLI evidence
 
-CF-03 tests prove:
+Tests prove:
 
-1. self-diff produces an empty change list and byte-stable JSON;
-2. one unique canonical URL stays matched across canonical-version change;
-3. multi-version canonical groups use exact `url|version` keys;
-4. canonical multiplicity without usable versions fails closed;
-5. duplicate non-canonical `resourceType/id` keys fail closed;
-6. duplicate package-root resource filenames fail closed;
-7. cardinality, type, slicing, binding, fixed-value, and selected metadata changes are emitted as structural facts;
-8. malformed interpreted field shapes fail with `InvalidStructuralField` instead of becoming normal deltas;
-9. valid primitive `_code` metadata without a primitive value remains accepted while empty/malformed metadata is rejected;
-10. editorial `short` changes are excluded from element structural-field changes;
-11. representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation reordering is normalized;
-12. `extension[]` ordering remains structural rather than being globally sorted;
-13. snapshot/differential view additions and removals are explicit;
-14. element additions and removals are explicit;
-15. CLI usage errors, missing packages, corrupted before/after caches, and offline successful diff behavior are covered.
+1. self-diff is empty and byte-stable;
+2. unique canonical URLs remain matched across canonical-version changes;
+3. multiplicity groups use exact `url|version` and missing versions fail closed;
+4. duplicate non-canonical ids and duplicate archive filenames fail closed;
+5. view/element additions and removals are explicit;
+6. cardinality, type, slicing, binding, fixed/pattern, boolean, metadata, and related structural changes are emitted;
+7. malformed CF-03-owned field shapes fail with `InvalidStructuralField`;
+8. valid primitive `_code` metadata remains accepted while malformed/empty metadata is rejected;
+9. editorial-only element fields are excluded from structural-field changes;
+10. representation, condition, contextInvariant, constraint, and type/profile/targetProfile/aggregation reorderings are normalized;
+11. `extension[]` order is preserved as structural;
+12. CLI required arguments, absent packages, corrupted before/after caches, and successful offline diff are covered.
 
 ## Green implementation evidence
 
-Exact implementation head `0b5bb366e0cd3f8e2198f4e3ee3eb0841b618fdc` passed GitHub Actions run `31761159980`:
+Exact implementation evidence head `a8fec0f2073abe1b9660457a493db6c2e437a2ec` passed GitHub Actions pull-request run `31761209998`:
 
 - Format — PASS;
 - `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` — PASS;
 - `cargo test --locked --workspace --all-features` — PASS;
-- real registry resolve/verify for `hl7.fhir.r4.core@4.0.1` — PASS;
+- first real registry resolve/verify for `hl7.fhir.r4.core@4.0.1` — PASS;
 - real `commandf inspect hl7.fhir.r4.core@4.0.1 --format json` smoke — PASS;
-- copied explicit after-state verification — PASS;
+- second independent registry resolve/verify for the same exact package into a distinct lock/cache state — PASS;
 - real `commandf diff hl7.fhir.r4.core ... --format json` self-diff — PASS with an empty change list.
 
-The real smoke performs one pinned registry resolution, then copies the verified content-addressed state into explicit after paths and verifies the copied after state before diff. This isolates CF-03 from a second registry call while still exercising the real two-path CLI and both cache-verification boundaries.
+The second resolution is intentional. CF-03 acceptance requires reproducibility across two independently resolved explicit states; copying the first state would weaken that gate. Registry availability is therefore an accepted external dependency of this real-package reproducibility smoke.
 
-Documentation-only convergence commits follow that implementation head. The exact final PR docs head must also pass the same complete gate set; that exact-head run is recorded in PR metadata rather than creating a self-referential documentation commit chain.
+Documentation-only convergence commits follow the implementation evidence head. The exact final documentation head must pass the same full CI gate; that exact-head result is recorded in PR metadata to avoid a self-referential documentation commit chain.
 
 ## Reviewer evidence
 
 ### CodeRabbit
 
-A manual review was triggered while PR #4 remained Draft. The actual review returned three actionable threads:
+A manual review while PR #4 remained Draft returned three actionable threads:
 
-1. **CI repeatability — Minor:** second remote resolution made the self-diff smoke unnecessarily dependent on a second registry call. **Fixed** by one pinned resolve followed by copied explicit after-state paths and independent after-cache verification.
-2. **Malformed structural shapes — Major:** interpreted fields could be normalized without sufficient type/shape checks. **Fixed** with pre-normalization structural validation plus regression coverage, while retaining valid FHIR primitive `_field` metadata support required by official R4 artifacts.
-3. **Global `extension[]` sorting — Minor:** reviewer proposed treating all extension arrays as set-like. **Not applied by design.** CF-03 preserves extension order because unordered semantics are profile/slicing-context dependent; global sorting could erase a real structural change. CodeRabbit withdrew the finding after the contract was clarified.
+1. **CI repeatability — Minor.** The reviewer proposed copying the first resolved state to avoid a second registry dependency. **Not adopted by contract:** CF-03 acceptance explicitly requires two independently resolved states. CodeRabbit subsequently withdrew the finding after that acceptance requirement was clarified.
+2. **Malformed structural shapes — Major.** **Fixed:** pre-normalization CF-03-owned shape validation plus regression coverage was added while preserving valid FHIR primitive `_field` metadata required by official R4 artifacts.
+3. **Global `extension[]` sorting — Minor.** **Not adopted by design:** CF-03 preserves extension order because unordered semantics are profile/slicing-context dependent. A regression pins that behavior, and CodeRabbit withdrew the finding.
 
-All three CodeRabbit threads are resolved. CodeRabbit status on the implementation head is **SUCCESS**.
+All three CodeRabbit review threads are resolved. The general CodeRabbit docstring-coverage warning is non-blocking for this slice and is not represented as a CF-03 correctness PASS requirement.
 
 ### Qodo
 
-`/review` was requested. No Qodo review result or finding was returned at convergence time.
+`/review` was requested. No Qodo review result or finding has been observed at convergence time.
 
 Disposition: **NO EVIDENCE / NOT RETURNED**. No Qodo PASS is claimed.
+
+### Cubic
+
+Cubic has maintained an automated PR summary describing the CF-03 diff. No separate substantive Cubic blocking finding has been observed in the PR conversation at convergence time. The generated summary is not treated as certification.
 
 ## Convergence decision
 
