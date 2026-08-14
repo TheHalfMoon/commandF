@@ -6,11 +6,12 @@ use std::process::{self, ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
-    classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
-    inspect_package, CheckDirection, CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource,
-    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest,
-    Resolver, StructuralDiffReport, VersionConstraint,
+    build_terminology_diff_report, check_report_to_github_annotations_bytes,
+    check_report_to_sarif_bytes, classify_structural_diff, diff_package_archives,
+    evaluate_compatibility_policy, inspect_package, CheckDirection, CheckFailOn, CheckPolicy,
+    CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache,
+    PackageName, PackageRequest, Resolver, StructuralDiffReport, TerminologyDiffReport,
+    TerminologyPackageState, VersionConstraint,
 };
 
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
@@ -85,6 +86,19 @@ enum Command {
         format: CheckOutputFormat,
         #[arg(long)]
         output: Option<PathBuf>,
+    },
+    Terminology {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
     },
     GithubAnnotations {
         #[arg(long)]
@@ -322,6 +336,25 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             }
             return Ok(ExitCode::from(2));
         }
+        Command::Terminology {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            format,
+        } => {
+            let report = build_terminology_report(
+                package,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
+            )?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
+            }
+        }
         Command::GithubAnnotations { input } => {
             let bytes = read_bounded_file(&input, MAX_CHECK_REPORT_INPUT_BYTES)?;
             let report = CheckReport::from_json_slice(&bytes)?;
@@ -442,6 +475,60 @@ fn build_diff_report(
         &after_locked.sha256,
         &after_bytes,
     )?)
+}
+
+fn build_terminology_report(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+) -> Result<TerminologyDiffReport, Box<dyn std::error::Error>> {
+    let package_name = PackageName::parse(package)?;
+    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
+    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
+    let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
+    let before_cache = PackageCache::new(before_cache);
+    let after_cache = PackageCache::new(after_cache);
+
+    before_cache.verify(&before_locked.sha256)?;
+    after_cache.verify(&after_locked.sha256)?;
+    let before_bytes = read_locked_archive(&before_cache, before_locked)?;
+    let after_bytes = read_locked_archive(&after_cache, after_locked)?;
+    let diff = diff_package_archives(
+        package_name.to_string(),
+        &before_locked.version,
+        &before_locked.sha256,
+        &before_bytes,
+        &after_locked.version,
+        &after_locked.sha256,
+        &after_bytes,
+    )?;
+    let compatibility = classify_structural_diff(&diff)?;
+    Ok(build_terminology_diff_report(
+        TerminologyPackageState {
+            lockfile: &before_lockfile,
+            cache: &before_cache,
+            root_bytes: &before_bytes,
+        },
+        TerminologyPackageState {
+            lockfile: &after_lockfile,
+            cache: &after_cache,
+            root_bytes: &after_bytes,
+        },
+        &diff,
+        &compatibility,
+    )?)
+}
+
+fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> Result<Vec<u8>, io::Error> {
+    fs::read(
+        cache
+            .root()
+            .join("sha256")
+            .join(format!("{}.tgz", locked.sha256)),
+    )
 }
 
 fn select_locked_package<'a>(

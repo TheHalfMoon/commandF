@@ -7,6 +7,7 @@ on:
       - feat/cf-01-package-resolution
       - feat/cf-02-canonical-inspect
       - feat/cf-03-structural-diff
+      - feat/cf-07-terminology-diff
 
 permissions:
   contents: read
@@ -84,6 +85,24 @@ jobs:
           assert sarif["runs"][0]["results"] == []
           assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
           assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
+          PY
+      - name: Real FHIR self-terminology smoke
+        run: |
+          cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          terminology = json.loads(Path("/tmp/commandf-smoke/terminology.json").read_text())
+          assert terminology["schema"] == 1
+          assert terminology["ruleset"] == "cf07-terminology-v1"
+          assert terminology["package_name"] == "hl7.fhir.r4.core"
+          assert terminology["before"]["version"] == "4.0.1"
+          assert terminology["after"]["version"] == "4.0.1"
+          assert terminology["compatibility"]["findings"] == []
+          assert terminology["code_systems"] == []
+          assert terminology["value_sets"] == []
+          assert terminology["binding_refinements"] == []
           PY
       - name: Local GitHub Action self-check smoke
         id: cf08-action

@@ -25,6 +25,11 @@ mod model;
 mod registry;
 mod resolver;
 mod source;
+mod terminology;
+mod terminology_error;
+mod terminology_index;
+mod terminology_model;
+mod terminology_set;
 
 pub use artifact_diff::diff_package_archives;
 pub use artifact_diff_error::StructuralDiffError;
@@ -52,3 +57,10 @@ pub use model::{PackageName, PackageRequest, VersionConstraint};
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
+pub use terminology::{build_terminology_diff_report, TerminologyPackageState};
+pub use terminology_error::TerminologyError;
+pub use terminology_model::{
+    BindingRefinement, TerminologyDiffReport, TerminologyIndeterminateReason, TerminologyMember,
+    TerminologyProofMode, TerminologyRelation, TerminologySetDelta,
+};
+pub use terminology_set::{compare_complete_code_systems, compare_value_set_expansions};
