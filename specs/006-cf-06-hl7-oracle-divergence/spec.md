@@ -12,14 +12,12 @@ CF-06 does **not** replace CF-03 authority and does **not** classify compatibili
 
 CF-06 depends on CF-03 only.
 
-Exact base:
-
 ```text
-branch: feat/cf-03-structural-diff
-sha: aa212b108e05fa0e22312f244f393c59602192b9
+base branch: feat/cf-03-structural-diff
+base SHA: aa212b108e05fa0e22312f244f393c59602192b9
 ```
 
-CF-04/CF-05 rules, severities, policy decisions, SARIF, and CI exit semantics are out of scope for this slice.
+CF-04/CF-05 rules, severities, policy decisions, SARIF, and CI exit semantics are out of scope.
 
 ## Pinned oracle identity
 
@@ -29,60 +27,66 @@ Official project:
 https://github.com/hapifhir/org.hl7.fhir.core
 ```
 
-Pinned release:
+Pinned release/source:
 
 ```text
-6.10.2
+release: 6.10.2
+source commit: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
 ```
 
-Pinned source commit:
-
-```text
-d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
-```
-
-Official validator release artifact evidence:
+Official release artifact provenance:
 
 ```text
 validator_cli.jar
-sha256: a3addadf23fac3ab7acf74b63730ceb02c9073564235d29fca98d899c9e4ccd6
+sha256: a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6
 ```
 
-The CF-06 adapter should prefer the published Java libraries at exactly `6.10.2`; commandF MUST NOT commit the 200+ MiB validator jar. The jar digest is recorded as release provenance, not as a requirement to execute the fat jar when the library API is sufficient.
+The adapter uses the published Java libraries at exact version `6.10.2`; commandF MUST NOT commit the large validator jar. The jar digest is provenance evidence, not a requirement to execute the fat jar when the library API is sufficient.
 
-Changing the oracle version is a contract change and requires an explicit later slice/reconciliation.
+Changing oracle release/source is a later explicit contract change.
 
 ## Official structured comparison surface
 
-CF-06 uses the official structured comparison model **before rendering**, not generated HTML.
+CF-06 consumes the official structured comparison model **before rendering**:
 
-At 6.10.2:
-
-- `ComparisonSession.compare(...)` dispatches `StructureDefinition` pairs to `StructureDefinitionComparer`;
-- `StructureDefinitionComparer.compare(...)` returns `ProfileComparison`;
-- `ProfileComparison` exposes canonical comparison state and a `StructuralMatch` tree;
+- `ComparisonSession.compare(...)` dispatches StructureDefinition pairs to `StructureDefinitionComparer`;
+- the comparison returns `StructureDefinitionComparer.ProfileComparison`;
+- canonical comparison states are exposed through public state accessors;
+- metadata is exposed as public `StructuralMatch<String>` values;
 - `StructuralMatch` exposes public children and `ValidationMessage` lists;
-- canonical comparison metadata is exposed through `getMetadata()` and change-state accessors;
-- `ValidationMessage` carries issue severity, location/path, and message text;
-- `ComparisonRenderer` is a presentation layer and MUST NOT be parsed as oracle data.
+- `ValidationMessage` carries severity, location/path, and message text;
+- `ComparisonRenderer` is presentation only and MUST NOT be parsed as oracle evidence.
 
-CF-06 MUST use only public API surfaces. No reflection into private `ElementDefinitionNode` internals is permitted.
+CF-06 MUST use public API surfaces only. Reflection into private comparer node types is forbidden.
 
-## Oracle adapter contract
+## Deterministic local context boundary
 
-Add a small isolated Java adapter under `tools/hl7-oracle/`.
+The official comparer requires populated snapshots and worker contexts for referenced FHIR definitions. CF-06 therefore makes all context packages explicit and local.
 
-The adapter accepts one invocation containing two normalized `StructureDefinition` JSON files and produces exactly one UTF-8 JSON document on stdout.
+For R4 v1, the core context is exactly:
 
-Recommended CLI:
+```text
+hl7.fhir.r4.core@4.0.1
+```
+
+The Java adapter invocation receives:
 
 ```text
 java -jar commandf-hl7-oracle.jar \
-  --left <StructureDefinition.json> \
-  --right <StructureDefinition.json>
+  --core-package <verified-hl7.fhir.r4.core-4.0.1.tgz> \
+  --left-package <verified-before-package.tgz> \
+  --right-package <verified-after-package.tgz> \
+  --left-url <canonical-url> [--left-version <canonical-version>] \
+  --right-url <canonical-url> [--right-version <canonical-version>]
 ```
 
-The adapter output schema is commandF-owned and versioned:
+The adapter loads NPM `.tgz` files locally with the official HL7 package/context APIs. It MUST NOT rely on an implicit user-level HL7 package cache or package download during comparison.
+
+Missing context, wrong core identity/version, empty snapshots, unsupported derivation, unresolved matched canonical resource, or comparison exception is an **oracle operational failure**.
+
+## Java adapter output
+
+The adapter emits exactly one UTF-8 JSON document plus trailing newline on stdout:
 
 ```text
 Hl7OracleReport {
@@ -93,15 +97,21 @@ Hl7OracleReport {
   states,
   messages
 }
-```
 
-`oracle` contains the pinned project/release/source identity.
+OracleResourceIdentity {
+  url,
+  version,
+  id,
+  type
+}
 
-`states` contains the public HL7 comparison states that are stable enough to expose, including metadata and definitions state. Unknown future state values fail closed rather than being coerced.
+OracleStates {
+  metadata,
+  definitions,
+  content,
+  content_interpretation
+}
 
-Each normalized message contains only deterministic public evidence:
-
-```text
 OracleMessage {
   level,
   location,
@@ -109,37 +119,55 @@ OracleMessage {
 }
 ```
 
-Message output is sorted deterministically by `(level, location, message)` after collection and exact duplicates are removed.
+`oracle` carries exact project/release/source provenance.
 
-The adapter MUST NOT emit HL7-generated comparison ids, UUIDs, dates from generated union/intersection resources, absolute host paths, timestamps, renderer HTML, or environment-dependent values.
+Allowed normalized states:
 
-## Context / snapshot boundary
+```text
+unknown
+not_changed
+changed
+cannot_evaluate
+```
 
-The official comparer requires populated `StructureDefinition.snapshot` content and worker contexts for referenced FHIR definitions.
+Allowed message levels:
 
-CF-06 must therefore use a deterministic context setup pinned to FHIR R4 core for R4 profile comparisons. Context acquisition/building belongs to the adapter/CI setup, not to CF-03.
+```text
+fatal
+error
+warning
+information
+```
 
-For fixture-level tests, the adapter may operate on self-contained StructureDefinitions whose required core definitions are supplied from a pinned local package/context.
+Messages are sorted deterministically by `(level, location, message)` and exact duplicates removed. Rust repeats canonical sorting/de-duplication before embedding oracle evidence.
 
-A missing required context, empty snapshot, unsupported derivation, or comparison exception is an **oracle operational failure**, not a commandF structural divergence.
+The adapter MUST NOT emit HL7-generated comparison ids, session UUIDs, generated union/intersection dates, absolute host paths, timestamps, renderer HTML, or environment-dependent values.
+
+## Matching authority
+
+CF-06 MUST reuse CF-03 deterministic resource matching. It MUST NOT invent a second package-resource matcher.
+
+The HL7 two-sided comparer is invoked only for **matched canonical StructureDefinition pairs**.
+
+- unique canonical matching follows CF-03;
+- canonical multiplicity/version identity follows CF-03;
+- unmatched add/remove resources are `uncomparable`;
+- matched non-canonical StructureDefinitions are `uncomparable` in v1;
+- non-StructureDefinition resources are `uncomparable` in v1.
 
 ## commandF oracle report
 
-Add a Rust CF-06 model that combines:
+The Rust report contains:
 
 1. the complete unmodified CF-03 `StructuralDiffReport`;
-2. normalized HL7 oracle observations for comparable StructureDefinition pairs;
-3. a deterministic reconciliation layer.
-
-Suggested public model:
+2. normalized HL7 observations for comparable matched canonical StructureDefinitions;
+3. deterministic evidence-relationship statuses.
 
 ```text
 OracleDivergenceReport {
   schema,
   oracle,
   package_name,
-  before,
-  after,
   structural_diff,
   resources
 }
@@ -147,13 +175,12 @@ OracleDivergenceReport {
 OracleResourceResult {
   resource,
   status,
-  oracle_states,
-  oracle_messages,
+  oracle,
   commandf_change_kinds
 }
 ```
 
-Allowed resource statuses:
+Allowed statuses:
 
 ```text
 agreement
@@ -161,66 +188,59 @@ commandf_only
 authority_only
 both_changed
 uncomparable
-oracle_error
 ```
 
-These statuses are evidence relationships, **not compatibility judgments**.
+These are evidence relationships, **not compatibility judgments**.
 
-`both_changed` means both systems report some comparable change signal; it does not assert field-level semantic equivalence unless a later explicit mapping proves that equivalence.
+- `agreement`: neither CF-03 nor HL7 reports a relevant change signal;
+- `commandf_only`: CF-03 reports structural facts and HL7 reports none;
+- `authority_only`: HL7 reports a change signal and CF-03 reports none;
+- `both_changed`: both report some change signal; field-level equivalence is NOT implied;
+- `uncomparable`: resource is outside the v1 two-sided canonical StructureDefinition comparison boundary.
 
-`agreement` is reserved for self-equivalent/no-change cases where both CF-03 and the HL7 oracle report no relevant change evidence.
-
-## Matching boundary
-
-CF-06 only invokes the HL7 StructureDefinition comparer for resource pairs that CF-03 has already matched deterministically.
-
-- unique canonical matching follows CF-03 authority;
-- canonical multiplicity behavior follows CF-03 authority;
-- unmatched additions/removals remain CF-03 facts and are recorded as `uncomparable` for the two-sided HL7 comparer unless an explicit one-sided oracle contract is later added;
-- non-StructureDefinition resources are `uncomparable` in CF-06 v1.
-
-CF-06 MUST NOT invent a second package-resource matching algorithm.
+Oracle operational failure fails the command; it is not silently turned into `uncomparable` or `agreement`.
 
 ## User-visible command
-
-Add an explicit command:
 
 ```text
 commandf oracle <package-name> \
   --before-lock <path> --before-cache <path> \
   --after-lock <path> --after-cache <path> \
-  --oracle-adapter <path> \
+  --oracle-core-lock <path> --oracle-core-cache <path> \
+  --oracle-java <absolute-or-explicit-path> \
+  --oracle-adapter <commandf-hl7-oracle.jar> \
   --format json
 ```
 
-The command performs no package acquisition. Both package states must already be present in verified CF-01 caches.
+The command performs no package acquisition. Before/after package states and the exact R4 core package must already exist in verified CF-01 lock/cache state.
 
-The Rust process invokes the explicitly supplied adapter executable/jar through a bounded child-process boundary and validates its output before accepting it.
-
-No implicit PATH lookup is permitted for the oracle adapter in v1.
+No implicit PATH lookup is permitted for Java or the adapter in v1.
 
 ## Process / security boundary
 
-The oracle is an external process and is treated as untrusted evidence input.
+The external oracle process is untrusted evidence input.
 
 CF-06 MUST:
 
-- pass explicit temporary input paths only;
-- use a bounded per-resource execution timeout;
-- bound stdout/stderr capture sizes;
-- reject non-zero adapter exit status;
-- reject malformed/non-UTF-8/oversized JSON output;
-- validate adapter report schema and exact oracle identity;
-- clean temporary files;
-- never execute shell command strings;
-- never pass package-controlled values as shell syntax;
-- never grant oracle output authority to modify repository state.
+- use explicit Java executable and adapter jar paths;
+- invoke `java` directly, never through `sh`, `cmd`, or PowerShell;
+- pass package-controlled data only as argv values;
+- use private temporary state only where necessary;
+- enforce a bounded per-resource timeout;
+- drain stdout/stderr concurrently while retaining bounded bytes;
+- bound accepted stdout to 8 MiB and retained stderr to 1 MiB per invocation;
+- reject non-zero adapter exit;
+- reject malformed/non-UTF-8/oversized JSON;
+- validate schema and exact oracle identity;
+- bound message count to 100,000 and each normalized string to 64 KiB;
+- ensure external failure cannot become false agreement;
+- never grant oracle output authority to mutate repository or package state.
 
 ## Determinism
 
-For the same verified CF-03 inputs and byte-identical normalized adapter outputs, the CF-06 JSON report must be byte-identical.
+For the same verified CF-03 inputs and equivalent normalized oracle evidence, CF-06 JSON must be byte-identical.
 
-No clock, random id, host path, temporary path, process id, network address, or environment field may enter the commandF report.
+No clock, random id, host/temp path, process id, network address, or environment field may enter the public report.
 
 ## Fail-closed behavior
 
@@ -228,50 +248,41 @@ CF-06 fails operationally on:
 
 - unsupported CF-03 schema;
 - wrong/missing oracle schema;
-- wrong oracle release/source identity;
-- adapter spawn failure;
-- adapter timeout;
+- wrong oracle project/release/source identity;
+- invalid/missing explicit core package identity;
+- adapter or Java executable spawn failure;
+- timeout;
 - non-zero adapter exit;
-- malformed/oversized adapter stdout;
-- missing matched StructureDefinition input;
-- corrupted before/after cache objects;
+- malformed/non-UTF-8/oversized adapter output;
+- oracle observation identity inconsistent with the CF-03 canonical match;
+- corrupted before/after/core cache objects;
 - any existing CF-03 diff failure.
-
-Operational failure MUST NOT be silently converted into `agreement` or `uncomparable`.
 
 ## Acceptance
 
 CF-06 is complete only when the exact final head proves:
 
-1. CF-06 is based exactly on converged CF-03 and contains no CF-04/05 behavior.
-2. Oracle provenance is pinned to official HL7 core `6.10.2` / source commit `d06577dbc5c62c74a2a8823fbc4830a3024d5b0b`.
-3. The adapter uses `ComparisonSession` / `StructureDefinitionComparer` structured objects and never parses `ComparisonRenderer` HTML.
-4. No reflection/private-node dependency is used.
-5. Adapter self-equivalent StructureDefinitions emit no change messages and stable no-change states.
-6. Synthetic cardinality/type/binding/mustSupport changes produce deterministic public HL7 messages/states where the official comparer exposes them.
-7. Rust reconciliation preserves the complete CF-03 report unchanged.
-8. Self-equivalent CF-03 + HL7 comparison reports `agreement`.
-9. One-sided resource changes are explicit `uncomparable` rather than guessed.
-10. Malformed adapter JSON fails closed.
-11. Wrong oracle release/source identity fails closed.
-12. Non-zero adapter exit and timeout fail closed.
-13. Oracle stdout/stderr and input/output sizes are bounded.
-14. Repeated reconciliation is byte-deterministic.
-15. Existing CF-01 through CF-03 Rust commands/tests remain green.
-16. Java adapter build/tests are locked to exact dependency version `6.10.2`.
-17. A real R4 smoke compares identical `hl7.fhir.r4.core@4.0.1` StructureDefinition input through the pinned oracle and proves no false divergence.
-18. Reviewer findings are dispositioned and convergence is recorded.
-19. PR remains Draft and CF-07 does not start before convergence.
+1. CF-06 is based exactly on converged CF-03 with no CF-04/05 behavior.
+2. Oracle provenance is exact `6.10.2` / `d06577dbc5c62c74a2a8823fbc4830a3024d5b0b` and the recorded release-jar digest matches official release metadata.
+3. Adapter uses structured `ComparisonSession` / `StructureDefinitionComparer` objects; no renderer HTML.
+4. No reflection/private-node dependency.
+5. Core context is explicit local `hl7.fhir.r4.core@4.0.1`; no hidden package acquisition during `oracle`.
+6. Adapter self-equivalent StructureDefinitions produce stable no-change evidence.
+7. Synthetic cardinality/type/binding/mustSupport changes expose deterministic public HL7 evidence where supported.
+8. Rust parsing and Java output schemas are byte/field compatible.
+9. Rust reconciliation preserves the complete CF-03 report unchanged.
+10. Self-equivalent CF-03 + HL7 evidence reports `agreement`.
+11. One-sided/non-supported resources are explicit `uncomparable`.
+12. Malformed JSON and wrong oracle provenance fail closed.
+13. Non-zero adapter exit and timeout fail closed.
+14. stdout/stderr/evidence sizes are bounded.
+15. Repeated reconciliation is byte-deterministic.
+16. Existing CF-01 through CF-03 Rust gates remain green.
+17. Java adapter builds/tests at exact dependency version `6.10.2` on Java 17.
+18. Real R4 self-equivalence smoke proves no false divergence.
+19. Review findings are dispositioned and convergence recorded.
+20. PR remains Draft and CF-07 does not start before convergence.
 
 ## Explicit deferrals
 
-CF-06 does not add:
-
-- CF-04 compatibility severity or producer/consumer rules;
-- CF-05 SARIF/policy exit behavior;
-- terminology set inclusion — CF-07;
-- GitHub annotations/upload — CF-08/09;
-- FSH source mapping — CF-09;
-- dependency graph / blast radius — CF-11/12;
-- mapping execution;
-- AI/agent semantic authority.
+CF-06 does not add CF-04 compatibility severity, CF-05 SARIF/policy behavior, CF-07 terminology set inclusion, GitHub annotations/upload, FSH source mapping, ecosystem graph/blast radius, mapping execution, or AI/agent semantic authority.

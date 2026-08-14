@@ -7,6 +7,7 @@ on:
       - feat/cf-01-package-resolution
       - feat/cf-02-canonical-inspect
       - feat/cf-03-structural-diff
+      - feat/cf-06-hl7-oracle-divergence
 
 permissions:
   contents: read
@@ -57,3 +58,14 @@ jobs:
           assert diff["after"]["version"] == "4.0.1"
           assert diff["changes"] == []
           PY
+
+  oracle-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build pinned HL7 oracle adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package

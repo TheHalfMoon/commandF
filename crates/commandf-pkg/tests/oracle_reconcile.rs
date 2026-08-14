@@ -1,8 +1,8 @@
 use commandf_pkg::{
     parse_hl7_oracle_report, reconcile_hl7_oracle, Hl7OracleReport, OracleChangeState,
-    OracleIdentity, OracleMessage, OracleMessageLevel, OracleResourceStatus, OracleStates,
-    PackageEvidence, ResourceKey, ResourceKeyKind, StructuralChange, StructuralChangeKind,
-    StructuralDiffReport,
+    OracleIdentity, OracleMessage, OracleMessageLevel, OracleResourceIdentity, OracleResourceStatus,
+    OracleStates, PackageEvidence, ResourceKey, ResourceKeyKind, StructuralChange,
+    StructuralChangeKind, StructuralDiffReport,
 };
 
 fn key(value: &str) -> ResourceKey {
@@ -42,12 +42,21 @@ fn change(resource: &ResourceKey, kind: StructuralChangeKind) -> StructuralChang
     }
 }
 
+fn identity(url: &str, version: Option<&str>) -> OracleResourceIdentity {
+    OracleResourceIdentity {
+        url: Some(url.to_owned()),
+        version: version.map(str::to_owned),
+        id: Some("example".to_owned()),
+        resource_type: Some("Patient".to_owned()),
+    }
+}
+
 fn oracle(resource: &str, changed: bool) -> Hl7OracleReport {
     Hl7OracleReport {
         schema: Hl7OracleReport::SCHEMA_V1,
         oracle: OracleIdentity::pinned_hl7(),
-        left_identity: resource.to_owned(),
-        right_identity: resource.to_owned(),
+        left: identity(resource, Some("1.0.0")),
+        right: identity(resource, Some("1.1.0")),
         states: OracleStates {
             metadata: OracleChangeState::NotChanged,
             definitions: if changed {
@@ -85,6 +94,55 @@ fn exact_identity_and_schema_are_required() {
         .unwrap_err()
         .to_string()
         .contains("unsupported oracle report schema"));
+}
+
+#[test]
+fn parser_accepts_java_structured_identity_shape_and_canonicalizes_messages() {
+    let mut report = oracle("http://example.org/StructureDefinition/example", true);
+    report.messages.push(OracleMessage {
+        level: OracleMessageLevel::Error,
+        location: "Patient".to_owned(),
+        message: "Earlier sort key".to_owned(),
+    });
+    report.messages.push(report.messages[0].clone());
+    let parsed = parse_hl7_oracle_report(&serde_json::to_vec(&report).unwrap()).unwrap();
+    assert_eq!(parsed.messages.len(), 2);
+    assert!(parsed.messages.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(
+        parsed.left.url.as_deref(),
+        Some("http://example.org/StructureDefinition/example")
+    );
+}
+
+#[test]
+fn unique_canonical_key_allows_version_drift_between_sides() {
+    let resource = key("http://example.org/StructureDefinition/example");
+    let report = reconcile_hl7_oracle(
+        diff(vec![change(
+            &resource,
+            StructuralChangeKind::ResourceVersionChanged,
+        )]),
+        vec![(resource.clone(), oracle(&resource.value, false))],
+    )
+    .unwrap();
+    assert_eq!(report.resources[0].status, OracleResourceStatus::CommandfOnly);
+}
+
+#[test]
+fn version_qualified_canonical_key_requires_matching_versions() {
+    let resource = key("http://example.org/StructureDefinition/example|1.0.0");
+    let mut observation = oracle("http://example.org/StructureDefinition/example", false);
+    observation.left.version = Some("1.0.0".to_owned());
+    observation.right.version = Some("1.0.0".to_owned());
+    reconcile_hl7_oracle(diff(vec![]), vec![(resource.clone(), observation)]).unwrap();
+
+    let mut mismatch = oracle("http://example.org/StructureDefinition/example", false);
+    mismatch.left.version = Some("1.0.0".to_owned());
+    mismatch.right.version = Some("2.0.0".to_owned());
+    assert!(reconcile_hl7_oracle(diff(vec![]), vec![(resource, mismatch)])
+        .unwrap_err()
+        .to_string()
+        .contains("observation identity mismatch"));
 }
 
 #[test]

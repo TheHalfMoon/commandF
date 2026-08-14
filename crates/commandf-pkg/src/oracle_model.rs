@@ -26,6 +26,29 @@ impl OracleIdentity {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OracleResourceIdentity {
+    pub url: Option<String>,
+    pub version: Option<String>,
+    pub id: Option<String>,
+    #[serde(rename = "type")]
+    pub resource_type: Option<String>,
+}
+
+impl OracleResourceIdentity {
+    pub fn canonical_identity(&self) -> Option<String> {
+        let url = self.url.as_deref()?.trim();
+        if url.is_empty() {
+            return None;
+        }
+        match self.version.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            Some(version) => Some(format!("{url}|{version}")),
+            None => Some(url.to_owned()),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OracleChangeState {
@@ -53,12 +76,7 @@ impl OracleStates {
             self.content_interpretation,
         ]
         .into_iter()
-        .any(|state| {
-            matches!(
-                state,
-                OracleChangeState::Changed | OracleChangeState::CannotEvaluate
-            )
-        })
+        .any(|state| matches!(state, OracleChangeState::Changed | OracleChangeState::CannotEvaluate))
     }
 }
 
@@ -84,8 +102,8 @@ pub struct OracleMessage {
 pub struct Hl7OracleReport {
     pub schema: u32,
     pub oracle: OracleIdentity,
-    pub left_identity: String,
-    pub right_identity: String,
+    pub left: OracleResourceIdentity,
+    pub right: OracleResourceIdentity,
     pub states: OracleStates,
     pub messages: Vec<OracleMessage>,
 }
