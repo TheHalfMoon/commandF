@@ -1,6 +1,6 @@
 # CF-08 Implementation Plan
 
-Status: Implementation authorized
+Status: Implemented — exact final documentation-head CI pending
 
 ## Architecture
 
@@ -11,197 +11,112 @@ base branch: feat/cf-05-sarif-ci-gate
 base SHA: 9f158f1dcb7d04bc5ee582eabd1ee8dd93bd5019
 ```
 
-No compatibility rule, policy threshold, or source-location authority moves into CF-08.
+No CF-06 oracle or CF-07 terminology behavior is a dependency. CF-09 owns source mapping.
 
-Implementation layers:
+The delivered layers are:
 
-1. `commandf-pkg` — deterministic GitHub annotation projection from a validated CF-05 `CheckReport`;
-2. `commandf-cli` — `github-annotations --input` adapter;
-3. repository-root `action.yml` + a narrowly scoped shell runner — packaged Action execution;
-4. CI — unit/CLI/action integration gates.
+1. `commandf-pkg` — validated deterministic GitHub annotation projection from CF-05 `CheckReport`;
+2. `commandf-cli` — bounded `github-annotations --input` adapter;
+3. repository root `action.yml` — composite Action public surface;
+4. `scripts/github-action.sh` — source/toolchain/build wrapper;
+5. `scripts/github-action-run.sh` — pure quoted-argv gate/annotation/exit wrapper;
+6. `.github/scripts/test-cf08-action-runner.sh` — network-independent security/exit regression harness;
+7. CI — exact Rust, real R4, and local `uses: ./` integration gates.
 
-## Package module
+## Shared CF-05 authority
 
-Add:
+The existing CF-05 direction predicate is crate-private shared code used by both policy evaluation and annotation projection. No second producer/consumer selection algorithm exists.
+
+Before rendering a persisted report, CF-08:
+
+1. validates CF-05 report schema;
+2. validates embedded CF-04 schema/ruleset;
+3. recomputes CF-05 policy evaluation;
+4. requires the persisted `decision` to equal the recomputed decision exactly.
+
+This prevents a structurally valid but tampered/stale report from producing misleading GitHub UI evidence.
+
+## Projection module
+
+Module:
 
 ```text
 crates/commandf-pkg/src/check_github.rs
 ```
 
-Public entrypoint:
+Public API:
 
 ```text
 check_report_to_github_annotations_bytes(&CheckReport) -> Result<Vec<u8>, CheckError>
 ```
 
-The function validates the report using the same CF-05 compatibility validation authority before projecting findings.
-
-## Finding selection
-
-Refactor the existing CF-05 direction predicate so the same crate-private helper is reused by policy evaluation and GitHub projection.
-
-No second producer/consumer selection algorithm is permitted.
-
-`fail_on` is deliberately not part of annotation selection. It remains only a decision threshold.
-
-## Annotation ordering and caps
-
-Use the deterministic finding order already guaranteed by CF-04.
-
-Maintain independent counters:
+Mapping:
 
 ```text
-error   <= 10
-warning <= 10
-notice  <= 10
+BREAKING -> error
+RISKY    -> warning
+ADDITIVE -> notice
 ```
 
-Findings beyond a cap are counted, not emitted. After finding traversal, emit one deterministic notice if any level overflowed, with stable counts in error/warning/notice order.
+Projection is deterministic and follows the finding ordering already established by CF-04.
 
-The overflow notice does not count as a semantic finding and never changes the gate decision.
-
-## Workflow command encoding
-
-Renderer helpers:
+### Bounds
 
 ```text
-escape_data
-escape_property
-annotation_level
-annotation_title
-annotation_message
+semantic error annotations   <= 10
+semantic warning annotations <= 10
+all notice commands          <= 10
+annotation title             <= 256 chars
+annotation message           <= 4000 chars
 ```
 
-`escape_data`:
+When any semantic level overflows, one notice slot is reserved for the deterministic incompleteness summary. Omitted counts are recorded in error/warning/notice order. The complete CF-05 JSON report remains authority.
+
+### Escaping
+
+Data:
 
 ```text
-%  -> %25
+% -> %25
 CR -> %0D
 LF -> %0A
 ```
 
-`escape_property` additionally encodes:
+Properties additionally:
 
 ```text
-:  -> %3A
-,  -> %2C
+: -> %3A
+, -> %2C
 ```
 
-Replacement order must encode `%` first so introduced escape sequences are not re-escaped.
-
-V1 output shape:
-
-```text
-::error title=commandF CF04-...::artifact-level message
-::warning title=commandF CF04-...::artifact-level message
-::notice title=commandF CF04-...::artifact-level message
-```
+Percent is encoded first.
 
 No `file`, `line`, `col`, `endLine`, or `endColumn` property is emitted.
 
-## Message evidence
-
-Message construction is deterministic and bounded to CF-04 finding fields. Include when present:
-
-- severity/direction;
-- source change kind;
-- resource identity;
-- package filename(s);
-- view;
-- element id;
-- field;
-- CF-04 message.
-
-The phrase `artifact-level finding; source mapping deferred to CF-09` is included so GitHub UI defaults cannot be mistaken for commandF source mapping.
-
 ## CLI
 
-Add subcommand:
+Command:
 
 ```text
 commandf github-annotations --input <path>
 ```
 
-Execution:
+The CLI uses a 64 MiB hard input limit, deserializes `CheckReport`, calls the package projection API, and writes bytes to stdout.
 
-1. bounded `fs::read` of report path using a hard maximum report byte size;
-2. deserialize `CheckReport`;
-3. validate schema/ruleset through the projection function;
-4. write escaped annotation bytes to stdout;
-5. return `0` on valid report, including policy-failed reports;
-6. return `1` on invalid/unsupported input.
+A valid policy-failed report renders successfully with renderer exit `0`; this command does not create a second policy gate.
 
-Use a CF-08 hard report-input limit of 64 MiB. This is a presentation adapter, not a generic unbounded JSON reader.
+Malformed, oversized, unsupported, or inconsistent reports return operational `1` through normal commandF runtime error handling. Missing required CLI arguments remain normal Clap usage behavior.
 
 ## Composite Action
 
-Create repository-root:
+Public metadata:
 
 ```text
 action.yml
-scripts/github-action.sh
-```
-
-The composite action invokes one script with inputs supplied as environment variables, never interpolated into a shell command string.
-
-### Toolchain/build
-
-The script:
-
-1. requires Linux V1 (`RUNNER_OS=Linux`);
-2. ensures `rustup` and `cargo` exist;
-3. installs Rust `1.97.1` with minimal profile if `cargo +1.97.1 --version` fails;
-4. builds exact action source with:
-
-```text
-cargo +1.97.1 build --locked --manifest-path "$GITHUB_ACTION_PATH/Cargo.toml" -p commandf
-```
-
-5. uses a target directory under `RUNNER_TEMP` so action-source directories are not treated as mutable build state.
-
-### Check execution
-
-The script allocates the report path:
-
-- user-provided `report-path` when non-empty;
-- otherwise `$RUNNER_TEMP/commandf/check-report.json`.
-
-It creates the report parent directory only for the internally selected default path. A caller-provided path retains CF-05 fail-closed parent semantics rather than being silently created.
-
-Then it runs `commandf check --format json --output` with fully quoted argv.
-
-Capture exit code without aborting the script.
-
-### Annotation execution
-
-- exit `0` or `2`: complete report must exist; run `github-annotations` against it;
-- exit `1`: do not pretend a report exists; emit one static operational error workflow command and preserve exit `1`;
-- annotation renderer failure overrides a prior `0` or `2` to operational exit `1` because UI projection cannot be trusted.
-
-### Action outputs
-
-Write to `GITHUB_OUTPUT`:
-
-```text
-report-path=<resolved path>
-exit-code=<0|1|2>
-passed=<true|false>
-```
-
-`passed=true` only for exit `0`.
-
-The final script exit is the resolved commandF status.
-
-## Action metadata
-
-`action.yml` defines:
-
-```text
-name: commandF compatibility gate
 runs.using: composite
 ```
 
-Required inputs:
+Inputs:
 
 ```text
 package
@@ -209,99 +124,168 @@ before-lock
 before-cache
 after-lock
 after-cache
+direction = both
+fail-on = breaking
+report-path = ""
 ```
 
-Defaults:
+Outputs:
 
 ```text
-direction: both
-fail-on: breaking
-report-path: ""
+report-path
+exit-code
+passed
 ```
 
-The composite action does not request a GitHub token, write repository contents, create checks through the REST API, upload SARIF, or upload artifacts.
+No token input or repository-write permission is requested.
 
-## Tests
+## Build wrapper
 
-### Projection unit matrix
+`scripts/github-action.sh`:
 
-- BREAKING -> error;
-- RISKY -> warning;
-- ADDITIVE -> notice;
-- producer/consumer/both filtering exactly matches CF-05;
-- fail-on does not alter selected annotation set;
-- title/message stable ordering;
-- percent/CR/LF/colon/comma escaping;
-- injected `::error` text remains data;
-- no location properties;
-- 10/10/10 caps;
-- overflow summary counts;
-- valid policy-failed report still renders;
-- unsupported schema/ruleset fails closed;
-- repeated bytes identical.
+- Linux V1 only;
+- validates required inputs and runner channels;
+- rejects CR/LF in user report path;
+- uses caller report path verbatim when supplied;
+- otherwise creates `$RUNNER_TEMP/commandf/check-report.json` parent;
+- never creates a caller-specified missing parent;
+- requires rustup/cargo;
+- installs pinned Rust 1.97.1 only when unavailable;
+- builds exact checked-out source using `cargo +1.97.1 build --locked -p commandf`;
+- uses `$RUNNER_TEMP/commandf-target` as target dir;
+- transfers control to the pure run wrapper with the exact executable path.
 
-### CLI matrix
+Build-wrapper operational failure writes:
+
+```text
+report-path=
+exit-code=1
+passed=false
+```
+
+and emits a static trusted operational annotation.
+
+## Pure Action runner
+
+`scripts/github-action-run.sh` receives the executable path as argv and uses only quoted argv to run:
+
+```text
+commandf check ... --format json --output <report>
+```
+
+The check exit is captured without shell-aborting.
+
+Behavior:
+
+```text
+check 0 -> require report -> render annotations -> outputs -> exit 0
+check 2 -> require report -> render annotations -> outputs -> exit 2
+check 1 -> static operational error -> empty report output -> exit 1
+other   -> static operational error -> empty report output -> exit 1
+renderer failure after 0/2 -> operational exit 1
+```
+
+Thus policy failure retains the complete report and renders before the failing Action exit.
+
+## Security regression harness
+
+`.github/scripts/test-cf08-action-runner.sh` injects a fake executable and proves the run wrapper independently of Rust compilation or network state.
+
+Cases:
+
+- pass `0`;
+- policy failure `2` with renderer invoked first;
+- operational `1`;
+- renderer failure -> `1`;
+- package input containing shell metacharacters remains literal argv;
+- paths containing spaces remain literal argv;
+- caller report parent is not silently created.
+
+The harness is intentionally testing a real production wrapper, not a hidden production test hook.
+
+## Rust regression matrix
+
+Package tests cover:
+
+- severity mapping;
+- exact shared direction selection;
+- fail-on independence;
+- command/property escaping;
+- workflow-command injection attempts;
+- no explicit source location;
+- 10/10/10 presentation bounds and overflow counts;
+- title/message bounds;
+- deterministic bytes;
+- valid policy-failed report rendering;
+- inconsistent persisted decision rejection;
+- unsupported CF-05/CF-04 authority rejection.
+
+CLI tests cover:
 
 - help;
-- required `--input`;
-- valid empty report -> empty output;
-- synthetic findings -> exact workflow-command bytes;
-- policy-failed report -> exit 0 from renderer;
-- malformed JSON -> exit 1;
-- oversized input -> exit 1.
+- missing input usage;
+- valid empty report;
+- valid policy-failed report;
+- malformed JSON operational failure;
+- oversized file operational failure.
 
-### Action script matrix
+## Real integration gate
 
-Use a shell-level test harness with a fake commandF binary to prove without network/toolchain installation:
+CI preserves the CF-01..05 real R4 chain, using two independently resolved/verified `hl7.fhir.r4.core@4.0.1` states.
 
-- policy pass -> renderer runs, outputs written, exit 0;
-- policy fail -> renderer runs before final exit 2;
-- operational check failure -> renderer not run, final exit 1;
-- renderer failure -> final exit 1;
-- arguments containing spaces/shell metacharacters are passed as literal argv;
-- caller report parent is not silently created;
-- default report parent is created under runner temp.
-
-The real Action integration gate separately validates the actual compiled commandF binary.
-
-## Real GitHub Action integration gate
-
-Preserve all existing CF-01..05 gates.
-
-After the existing independent real R4 before/after states are produced, invoke the local root action:
+After the ordinary CF-05 real self-check succeeds, CI invokes:
 
 ```yaml
 - uses: ./
-  with:
-    package: hl7.fhir.r4.core
-    before-lock: /tmp/commandf-smoke/before.lock
-    before-cache: /tmp/commandf-smoke/before-cache
-    after-lock: /tmp/commandf-smoke/after.lock
-    after-cache: /tmp/commandf-smoke/after-cache
 ```
 
-Acceptance:
+with those explicit states.
 
-- Action step succeeds;
-- outputs report path, `exit-code=0`, `passed=true`;
-- report exists and contains schema 1, passing decision, and empty findings;
-- annotation renderer emits no false finding annotation on self-equivalence.
+It then asserts:
 
-A synthetic CLI/script regression supplies the policy-failure annotation case so CI does not intentionally fail its own required Action smoke.
+```text
+exit-code = 0
+passed = true
+report-path exists
+schema = 1
+policy = both/breaking
+decision.passed = true
+blocking_findings = 0
+compatibility.findings = []
+```
 
-## Security review priorities
+The synthetic runner regression proves exit `2` behavior without intentionally failing the required real Action smoke.
 
-1. workflow-command injection escaping;
-2. shell/argv injection through Action inputs;
-3. source-location fabrication before CF-09;
-4. annotation truncation changing policy truth;
-5. policy exit `2` accidentally converted to operational `1` or success;
-6. complete report loss on policy failure;
-7. unbounded report parsing;
-8. hidden network/package acquisition in check path;
-9. action source/toolchain mismatch;
-10. third-party Action dependency creep.
+## Implementation evidence
 
-## Convergence
+Exact green implementation candidate:
 
-CF-08 converges only after exact-final-head format/clippy/tests, real CF-01..05 smoke, local composite Action smoke, reviewer truth disposition, and Spec Kit reconciliation. PR remains Draft/open/unmerged with auto-merge disabled. CF-09 remains unstarted.
+```text
+head: a5c24bc5fa9ee0360a3f6822eb7d8a97f8fe06a7
+run: 31830175341
+Format: PASS
+Clippy: PASS
+Full tests: PASS
+CF-08 runner security regression: PASS
+Real CF-01..05 R4 smoke: PASS
+Local composite Action self-check: PASS
+Action output verification: PASS
+```
+
+## Reviewer disposition
+
+CodeRabbit substantive review completed on this exact implementation head and reported no blocking issues in the requested CF-08 boundaries. It specifically verified escaping, bounds, persisted decision validation, no fabricated locations, quoted argv, exit preservation, report-path safety, exact source build, stack identity, Draft state, and green check evidence.
+
+No actionable inline review thread was produced.
+
+Qodo `/review` was requested; no substantive result was observed and no Qodo PASS is claimed.
+
+## Final convergence procedure
+
+1. reconcile spec, plan, tasks, and convergence against implementation candidate;
+2. commit docs only;
+3. run exact-final-documentation-head Format/Clippy/tests/runner-security/real-R4/local-Action gates;
+4. record final run in PR metadata rather than creating a self-referential documentation commit;
+5. verify PR open/Draft/unmerged, auto-merge null, clean mergeability, zero unresolved threads;
+6. verify no CF-09 branch/PR;
+7. update PR body with exact head/tree/run and reviewer truth.
