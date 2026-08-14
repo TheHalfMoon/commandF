@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{ArtifactError, PackageError};
+use crate::{ArtifactError, PackageError, StructuralDiffError};
 
 #[derive(Debug, Error)]
 pub enum TerminologyError {
@@ -46,6 +46,9 @@ pub enum TerminologyError {
         #[source]
         source: serde_json::Error,
     },
+
+    #[error(transparent)]
+    Structural(#[from] StructuralDiffError),
 
     #[error(transparent)]
     Artifact(#[from] ArtifactError),

@@ -76,9 +76,12 @@ pub struct BindingRefinement {
     pub view: Option<ElementView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_id: Option<String>,
-    pub before_value_set: String,
-    pub after_value_set: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_value_set: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_value_set: Option<String>,
     pub relation: TerminologyRelation,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub proof_mode: Option<TerminologyProofMode>,
     pub binding_proof_eligible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
