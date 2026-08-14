@@ -1,13 +1,15 @@
-use std::fs;
+use std::ffi::OsStr;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::path::{Path, PathBuf};
+use std::process::{self, ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    classify_structural_diff, diff_package_archives, inspect_package, FhirRegistrySource,
-    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest,
-    Resolver, StructuralDiffReport, VersionConstraint,
+    check_report_to_sarif_bytes, classify_structural_diff, diff_package_archives,
+    evaluate_compatibility_policy, inspect_package, CheckDirection, CheckFailOn, CheckPolicy,
+    FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName,
+    PackageRequest, Resolver, StructuralDiffReport, VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -62,11 +64,70 @@ enum Command {
         #[arg(long, value_enum, default_value = "json")]
         format: OutputFormat,
     },
+    Check {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "both")]
+        direction: CheckDirectionArg,
+        #[arg(long, value_enum, default_value = "breaking")]
+        fail_on: CheckFailOnArg,
+        #[arg(long, value_enum, default_value = "json")]
+        format: CheckOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
 enum OutputFormat {
     Json,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum CheckOutputFormat {
+    Json,
+    Sarif,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum CheckDirectionArg {
+    Both,
+    Producer,
+    Consumer,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum CheckFailOnArg {
+    Breaking,
+    Risky,
+    None,
+}
+
+impl From<CheckDirectionArg> for CheckDirection {
+    fn from(value: CheckDirectionArg) -> Self {
+        match value {
+            CheckDirectionArg::Both => Self::Both,
+            CheckDirectionArg::Producer => Self::Producer,
+            CheckDirectionArg::Consumer => Self::Consumer,
+        }
+    }
+}
+
+impl From<CheckFailOnArg> for CheckFailOn {
+    fn from(value: CheckFailOnArg) -> Self {
+        match value {
+            CheckFailOnArg::Breaking => Self::Breaking,
+            CheckFailOnArg::Risky => Self::Risky,
+            CheckFailOnArg::None => Self::None,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -90,8 +151,24 @@ enum PkgCommand {
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
-        Ok(()) => ExitCode::SUCCESS,
+    let is_check = std::env::args_os().nth(1).as_deref() == Some(OsStr::new("check"));
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let clap_exit = error.exit_code();
+            let _ = error.print();
+            if clap_exit == 0 {
+                return ExitCode::SUCCESS;
+            }
+            if is_check {
+                return ExitCode::from(1);
+            }
+            return ExitCode::from(clap_exit as u8);
+        }
+    };
+
+    match run(cli) {
+        Ok(exit_code) => exit_code,
         Err(error) => {
             eprintln!("commandf: {error}");
             ExitCode::from(1)
@@ -99,7 +176,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
     match cli.command {
         Command::Pkg { command } => match command {
             PkgCommand::Resolve {
@@ -207,8 +284,97 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
         }
+        Command::Check {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            direction,
+            fail_on,
+            format,
+            output,
+        } => {
+            let diff =
+                build_diff_report(package, before_lock, before_cache, after_lock, after_cache)?;
+            let compatibility = classify_structural_diff(&diff)?;
+            let report = evaluate_compatibility_policy(
+                &compatibility,
+                CheckPolicy {
+                    direction: direction.into(),
+                    fail_on: fail_on.into(),
+                },
+            )?;
+            let bytes = match format {
+                CheckOutputFormat::Json => report.to_json_bytes()?,
+                CheckOutputFormat::Sarif => check_report_to_sarif_bytes(&report)?,
+            };
+            write_check_output(&bytes, output.as_deref())?;
+            if report.decision.passed {
+                return Ok(ExitCode::SUCCESS);
+            }
+            return Ok(ExitCode::from(2));
+        }
     }
-    Ok(())
+    Ok(ExitCode::SUCCESS)
+}
+
+fn write_check_output(bytes: &[u8], output: Option<&Path>) -> io::Result<()> {
+    let Some(path) = output else {
+        return io::stdout().write_all(bytes);
+    };
+    write_atomic_replace(path, bytes)
+}
+
+fn write_atomic_replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if !parent.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "output parent directory does not exist: {}",
+                parent.display()
+            ),
+        ));
+    }
+    let file_name = path.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "output path has no file name")
+    })?;
+
+    for attempt in 0..1000_u32 {
+        let temporary = parent.join(format!(
+            ".{}.commandf-tmp-{}-{attempt}",
+            file_name.to_string_lossy(),
+            process::id()
+        ));
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        };
+
+        let result = (|| -> io::Result<()> {
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            drop(file);
+            fs::rename(&temporary, path)?;
+            Ok(())
+        })();
+        let _ = fs::remove_file(&temporary);
+        return result;
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "unable to allocate a temporary output path",
+    ))
 }
 
 fn build_diff_report(

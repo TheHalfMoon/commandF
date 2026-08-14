@@ -10,6 +10,10 @@ mod artifact_inspect;
 mod artifact_model;
 mod artifact_scan;
 mod cache;
+mod check;
+mod check_error;
+mod check_model;
+mod check_sarif;
 mod compatibility;
 mod compatibility_error;
 mod compatibility_model;
@@ -31,6 +35,10 @@ pub use artifact_error::ArtifactError;
 pub use artifact_inspect::inspect_package;
 pub use artifact_model::{ElementAddress, ElementView, PackageInspection, ResourceArtifact};
 pub use cache::PackageCache;
+pub use check::evaluate_compatibility_policy;
+pub use check_error::CheckError;
+pub use check_model::{CheckDecision, CheckDirection, CheckFailOn, CheckPolicy, CheckReport};
+pub use check_sarif::check_report_to_sarif_bytes;
 pub use compatibility_error::CompatibilityError;
 pub use compatibility_model::{
     CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
