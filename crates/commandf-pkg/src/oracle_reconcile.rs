@@ -63,14 +63,19 @@ pub fn reconcile_hl7_oracle(
     let mut observation_map = BTreeMap::<ResourceKey, Hl7OracleReport>::new();
     for (resource, observation) in observations {
         validate_hl7_oracle_report(&observation)?;
-        if observation.left_identity != resource.value || observation.right_identity != resource.value {
+        if observation.left_identity != resource.value
+            || observation.right_identity != resource.value
+        {
             return Err(OracleError::ObservationIdentityMismatch {
                 resource: resource.value.clone(),
                 left: observation.left_identity,
                 right: observation.right_identity,
             });
         }
-        if observation_map.insert(resource.clone(), observation).is_some() {
+        if observation_map
+            .insert(resource.clone(), observation)
+            .is_some()
+        {
             return Err(OracleError::DuplicateObservation {
                 resource: resource.value,
             });
