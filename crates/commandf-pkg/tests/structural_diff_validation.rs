@@ -140,10 +140,8 @@ fn valid_primitive_metadata_type_code_is_preserved() {
         "{{\"resourceType\":\"StructureDefinition\",\"id\":\"example\",\"url\":\"https://example.org/StructureDefinition/example\",\"snapshot\":{{\"element\":[{{\"id\":\"Extension.id\",\"path\":\"Extension.id\",\"type\":[{}]}}]}}}}",
         std::str::from_utf8(primitive_type).unwrap()
     );
-    let archive = archive_with_entries(&[(
-        "package/StructureDefinition-example.json",
-        body.as_bytes(),
-    )]);
+    let archive =
+        archive_with_entries(&[("package/StructureDefinition-example.json", body.as_bytes())]);
 
     let report = diff(&archive, &archive).unwrap();
     assert!(report.changes.is_empty());
