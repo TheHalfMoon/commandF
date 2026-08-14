@@ -1,6 +1,6 @@
 # CF-09 Convergence — FSH Source Mapping
 
-Status: convergence candidate; exact final docs-head CI pending
+Status: converged; final task-state exact-head revalidation required before founder-review verdict
 
 ## Stack identity
 
@@ -14,6 +14,9 @@ exact green implementation head: 3819f35116a5bf18070cc00453f34176b549688a
 exact green implementation tree: 3d80d4a76d29611a6cde771fc4d343d58e44435b
 exact green implementation CI: 31840014291
 implementation CI result: SUCCESS
+first converged docs head: 79847a2bcb97566dff10f0de1186953998dcb68d
+first converged docs CI: 31840724719
+first converged docs CI result: SUCCESS
 ```
 
 The PR remains intentionally Draft/open/unmerged. No merge or auto-merge is authorized by this convergence record.
@@ -126,51 +129,13 @@ A serialized mapped report is deterministic derived evidence, not a cryptographi
 
 A manual security-diff audit following the installed Codex Security diff-scan threat-model/source-to-sink method found three valid issues. All were fixed before the reviewer candidate and regression-tested:
 
-### S-1 — persisted mapped path could escape the declared FSH root
-
-A tampered mapped report could previously change `location.file` to another repository-relative path outside the declared `source_index.fsh_root` and still reach the renderer.
-
-Disposition:
-
-```text
-VALID
-FIXED
-REGRESSION-TESTED
-```
-
-The persisted validator now requires mapped paths to remain component-wise beneath the serialized FSH root unless that root is `.`.
-
-### S-2 — SUSHI-index byte bound could be bypassed through the public library API
-
-The 16 MiB bound initially existed only in CLI bounded reads. A direct Rust caller could pass a larger byte slice to the parser.
-
-Disposition:
-
-```text
-VALID
-FIXED
-REGRESSION-TESTED
-```
-
-The public core builder now rejects `index_bytes.len() > 16 MiB` before JSON parse.
-
-### S-3 — stale index range could extend beyond current source EOF
-
-A syntactically valid index could claim `endLine` beyond the current mapped FSH source.
-
-Disposition:
-
-```text
-VALID
-FIXED
-REGRESSION-TESTED
-```
-
-The builder now counts current source lines in bounded memory and rejects an exported range whose `endLine` exceeds current EOF.
+1. **Persisted mapped path outside declared FSH root** — VALID / FIXED / REGRESSION-TESTED. Persisted mapped paths must remain component-wise beneath serialized `source_index.fsh_root` unless that root is `.`.
+2. **16 MiB index limit bypass through public library API** — VALID / FIXED / REGRESSION-TESTED. The public core builder rejects oversized bytes before JSON parse.
+3. **Stale index `endLine` beyond current source EOF** — VALID / FIXED / REGRESSION-TESTED. Current source lines are counted in bounded memory and invalid ranges fail closed.
 
 No fourth security finding was identified in the manual CF-09 source/script/workflow audit.
 
-This manual methodology is not represented as a completed Codex Security product scan. The Codex Security scan executor is not exposed in this ChatGPT host, so:
+This manual methodology is not represented as a completed Codex Security product scan:
 
 ```text
 Codex Security product scan: NOT RUN IN THIS HOST
@@ -182,37 +147,30 @@ manual valid findings fixed: 3
 
 ## Test and CI evidence
 
-Exact implementation candidate:
-
-```text
-head: 3819f35116a5bf18070cc00453f34176b549688a
-run: 31840014291
-result: SUCCESS
-```
-
-The exact candidate passed:
+Exact implementation candidate `3819f35116a5bf18070cc00453f34176b549688a`, run `31840014291`, passed:
 
 - `cargo fmt --all -- --check`;
 - locked workspace Clippy with `-D warnings`;
 - full workspace tests;
 - inherited CF-08 Action runner security regression;
 - CF-09 source-map Action security regression;
-- independent real `hl7.fhir.r4.core@4.0.1` resolve/verify and existing inspect/diff/classify/check smoke;
-- preparation of a valid real Action source-map fixture;
+- independent real `hl7.fhir.r4.core@4.0.1` resolve/verify and inspect/diff/classify/check smoke;
 - local repository-root composite Action `uses: ./` with source mapping enabled;
 - Action output verification.
 
-Regression coverage additionally includes a committed synthetic FSH fixture and SUSHI-shaped machine index, exact map→render CLI integration, mapped/unmapped states, duplicate identity, malformed shapes, traversal, symlink escape, missing/non-file source, current EOF validation, deterministic bytes, persisted-map tampering, property escaping, and bounds.
+First converged docs head `79847a2bcb97566dff10f0de1186953998dcb68d`, run `31840724719`, repeated the same gate set and also completed SUCCESS.
+
+Regression coverage includes a committed synthetic FSH fixture and SUSHI-shaped machine index, exact map→render CLI integration, mapped/unmapped states, duplicate identity, malformed shapes, traversal, symlink escape, missing/non-file source, current EOF validation, deterministic bytes, persisted-map tampering, property escaping, and bounds.
 
 ## Reviewer truth
 
 ### CodeRabbit
 
-A focused substantive review was requested on exact implementation candidate `3819f35116a5bf18070cc00453f34176b549688a`. CodeRabbit selected all 22 changed paths but reported the PR review limit and did not start a substantive review. A retry was posted after the reported window, but no substantive review result or actionable thread was returned before convergence documentation.
+A focused substantive review was requested on exact implementation candidate `3819f35116a5bf18070cc00453f34176b549688a`. CodeRabbit selected all 22 changed paths but reported the PR review limit and did not start a substantive review. A retry was posted after the reported window, but no substantive review result or actionable thread returned before convergence closure.
 
 ```text
 CodeRabbit substantive result: NOT RETURNED / RATE LIMITED
-CodeRabbit actionable finding PASS claimed: NO
+CodeRabbit PASS claimed: NO
 ```
 
 ### Qodo
@@ -255,27 +213,8 @@ Reviewer unavailability is recorded rather than substituted with invented certif
 
 ## Explicit deferrals
 
-CF-09 does not implement:
+CF-09 does not implement a custom FSH parser, exact rule-line mapping without upstream evidence, live SUSHI execution/download, non-FSH source mapping, CF-05 SARIF physical-location rewriting in V1, CF-10 corpus work, graph/blast radius, baselines/suppression, AutoFix, mapping execution, or AI semantic authority.
 
-- a custom FSH parser;
-- exact FSH rule-line mapping without upstream evidence;
-- live SUSHI execution or download;
-- non-FSH authoring mapping;
-- CF-05 SARIF physical-location rewriting in V1;
-- public real-IG delta corpus — CF-10;
-- ecosystem graph/blast radius — CF-11/12;
-- baselines/suppression — CF-13;
-- AutoFix — CF-15;
-- mapping execution;
-- AI semantic authority.
+## Final evidence rule
 
-## Remaining convergence gate
-
-Before founder-review certification:
-
-1. run exact docs-head CI;
-2. verify final branch/PR identity and tree;
-3. verify Draft/open/unmerged and `auto_merge: null`;
-4. verify zero unresolved review threads or disposition any new ones;
-5. verify CF-10 still has not started;
-6. replace PR #10 body with exact final truth.
+The successful converged-docs run above authorizes task-state closure. After T023 is marked complete, the resulting final repository head must receive one final exact-head CI revalidation. That final run and final tree are recorded in PR #10 metadata/body without requiring another repository-content mutation.
