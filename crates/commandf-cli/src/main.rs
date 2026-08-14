@@ -9,8 +9,8 @@ use commandf_pkg::{
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
     classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
     inspect_package, CheckDirection, CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource,
-    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest, Resolver,
-    StructuralDiffReport, VersionConstraint,
+    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest,
+    Resolver, StructuralDiffReport, VersionConstraint,
 };
 
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
