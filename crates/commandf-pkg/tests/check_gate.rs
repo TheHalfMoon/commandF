@@ -6,6 +6,9 @@ use commandf_pkg::{
 };
 use serde_json::json;
 
+const SARIF_SCHEMA: &str =
+    "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
+
 fn finding(
     rule_id: &str,
     severity: CompatibilitySeverity,
@@ -152,24 +155,29 @@ fn unsupported_cf04_authority_fails_closed() {
 }
 
 #[test]
-fn json_and_sarif_are_byte_deterministic() {
-    let check = evaluate_compatibility_policy(&mixed_report(), CheckPolicy::default()).unwrap();
+fn repeated_evaluation_and_serialization_are_byte_deterministic() {
+    let input = mixed_report();
+    let first = evaluate_compatibility_policy(&input, CheckPolicy::default()).unwrap();
+    let second = evaluate_compatibility_policy(&input, CheckPolicy::default()).unwrap();
+
+    assert_eq!(first, second);
     assert_eq!(
-        check.to_json_bytes().unwrap(),
-        check.to_json_bytes().unwrap()
+        first.to_json_bytes().unwrap(),
+        second.to_json_bytes().unwrap()
     );
     assert_eq!(
-        check_report_to_sarif_bytes(&check).unwrap(),
-        check_report_to_sarif_bytes(&check).unwrap()
+        check_report_to_sarif_bytes(&first).unwrap(),
+        check_report_to_sarif_bytes(&second).unwrap()
     );
 }
 
 #[test]
-fn sarif_uses_stable_rules_levels_properties_and_no_fake_locations() {
+fn sarif_uses_stable_rules_levels_messages_properties_and_no_fake_locations() {
     let check = evaluate_compatibility_policy(&mixed_report(), CheckPolicy::default()).unwrap();
     let bytes = check_report_to_sarif_bytes(&check).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
+    assert_eq!(value["$schema"], SARIF_SCHEMA);
     assert_eq!(value["version"], "2.1.0");
     assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "commandF");
     let rules = value["runs"][0]["tool"]["driver"]["rules"]
@@ -186,16 +194,40 @@ fn sarif_uses_stable_rules_levels_properties_and_no_fake_locations() {
 
     let results = value["runs"][0]["results"].as_array().unwrap();
     assert_eq!(results.len(), 3);
+    assert_eq!(results[0]["ruleId"], "CF04-ZZZ-001");
     assert_eq!(results[0]["level"], "error");
+    assert_eq!(
+        results[0]["message"]["text"],
+        "CF04-ZZZ-001 synthetic finding."
+    );
     assert_eq!(results[1]["level"], "warning");
     assert_eq!(results[2]["level"], "note");
+
+    let properties = &results[0]["properties"];
+    assert_eq!(properties["commandf.compatibilitySeverity"], "breaking");
+    assert_eq!(properties["commandf.direction"], "producer");
+    assert_eq!(properties["commandf.sourceKind"], "element_field_changed");
+    assert_eq!(properties["commandf.resourceKind"], "canonical");
+    assert_eq!(
+        properties["commandf.resource"],
+        "http://example.org/StructureDefinition/example"
+    );
+    assert_eq!(
+        properties["commandf.beforeFilename"],
+        "StructureDefinition-example.json"
+    );
+    assert_eq!(
+        properties["commandf.afterFilename"],
+        "StructureDefinition-example.json"
+    );
+    assert_eq!(properties["commandf.view"], "snapshot");
+    assert_eq!(properties["commandf.elementId"], "Observation.status");
+    assert_eq!(properties["commandf.field"], "min");
+    assert_eq!(properties["commandf.before"], 0);
+    assert_eq!(properties["commandf.after"], 1);
+
     for result in results {
         assert!(result.get("locations").is_none());
-        assert!(result["properties"].get("commandf.resource").is_some());
-        assert!(result["properties"]
-            .get("commandf.compatibilitySeverity")
-            .is_some());
-        assert!(result["properties"].get("commandf.direction").is_some());
     }
     assert_eq!(
         value["runs"][0]["properties"]["commandf.sourceMapping"],
