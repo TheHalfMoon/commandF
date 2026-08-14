@@ -11,11 +11,15 @@ pub(crate) fn normalize_structural_field(field: &str, value: &Value) -> Value {
 
 pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
-        "contextInvariant" => validate_array(value, "expected an array"),
+        "kind" | "type" | "baseDefinition" | "derivation" | "fhirVersion" => {
+            validate_non_empty_string(value, &format!("{field} must be a non-empty string"))
+        }
+        "abstract" => validate_bool(value, "abstract must be a boolean"),
+        "contextInvariant" => validate_array(value, "contextInvariant must be an array"),
         "context" => {
             let entries = value
                 .as_array()
-                .ok_or_else(|| "expected an array of context objects".to_owned())?;
+                .ok_or_else(|| "context must be an array of objects".to_owned())?;
             for (index, entry) in entries.iter().enumerate() {
                 let object = entry
                     .as_object()
@@ -35,11 +39,24 @@ pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> 
 
 pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> Result<(), String> {
     match field {
-        "representation" | "condition" => validate_array(value, "expected an array"),
+        "path" | "sliceName" | "contentReference" | "meaningWhenMissing" | "orderMeaning"
+        | "isModifierReason" => {
+            validate_non_empty_string(value, &format!("{field} must be a non-empty string"))
+        }
+        "sliceIsConstraining" | "mustSupport" | "isModifier" | "isSummary" => {
+            validate_bool(value, &format!("{field} must be a boolean"))
+        }
+        "representation" | "condition" => {
+            validate_array(value, &format!("{field} must be an array"))
+        }
+        "slicing" | "binding" => validate_object(value, &format!("{field} must be an object")),
+        "min" => validate_unsigned_integer(value, "min must be a non-negative integer"),
+        "max" => validate_non_empty_string(value, "max must be a non-empty string"),
+        "maxLength" => validate_integer(value, "maxLength must be an integer"),
         "type" => {
             let types = value
                 .as_array()
-                .ok_or_else(|| "expected an array of type objects".to_owned())?;
+                .ok_or_else(|| "type must be an array of objects".to_owned())?;
             for (index, entry) in types.iter().enumerate() {
                 let object = entry
                     .as_object()
@@ -56,7 +73,7 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
         "constraint" => {
             let constraints = value
                 .as_array()
-                .ok_or_else(|| "expected an array of constraint objects".to_owned())?;
+                .ok_or_else(|| "constraint must be an array of objects".to_owned())?;
             for (index, entry) in constraints.iter().enumerate() {
                 let object = entry
                     .as_object()
@@ -65,6 +82,7 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
             }
             Ok(())
         }
+        "extension" => validate_object_array(value, "extension must be an array of objects"),
         _ => Ok(()),
     }
 }
@@ -142,6 +160,54 @@ fn constraint_key(value: &Value) -> &str {
 
 fn validate_array(value: &Value, message: &str) -> Result<(), String> {
     if value.is_array() {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn validate_object(value: &Value, message: &str) -> Result<(), String> {
+    if value.is_object() {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn validate_object_array(value: &Value, message: &str) -> Result<(), String> {
+    let values = value.as_array().ok_or_else(|| message.to_owned())?;
+    if values.iter().all(Value::is_object) {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn validate_non_empty_string(value: &Value, message: &str) -> Result<(), String> {
+    match value {
+        Value::String(value) if !value.is_empty() => Ok(()),
+        _ => Err(message.to_owned()),
+    }
+}
+
+fn validate_bool(value: &Value, message: &str) -> Result<(), String> {
+    if value.is_boolean() {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn validate_unsigned_integer(value: &Value, message: &str) -> Result<(), String> {
+    if value.as_u64().is_some() {
+        Ok(())
+    } else {
+        Err(message.to_owned())
+    }
+}
+
+fn validate_integer(value: &Value, message: &str) -> Result<(), String> {
+    if value.as_i64().is_some() || value.as_u64().is_some() {
         Ok(())
     } else {
         Err(message.to_owned())
