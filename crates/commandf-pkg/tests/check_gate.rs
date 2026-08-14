@@ -204,7 +204,7 @@ fn sarif_uses_stable_rules_levels_messages_properties_and_no_fake_locations() {
     assert_eq!(results[2]["level"], "note");
 
     let properties = &results[0]["properties"];
-    assert_eq!(properties["commandf.compatibilitySeverity"], "breaking");
+    assert_eq!(properties["commandf.compatibilitySeverity"], "BREAKING");
     assert_eq!(properties["commandf.direction"], "producer");
     assert_eq!(properties["commandf.sourceKind"], "element_field_changed");
     assert_eq!(properties["commandf.resourceKind"], "canonical");
