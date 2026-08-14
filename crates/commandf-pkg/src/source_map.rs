@@ -291,10 +291,7 @@ fn source_line_count(path: &Path) -> Result<u64, SourceMapError> {
             break;
         }
         saw_byte = true;
-        newline_count += buffer[..read]
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count() as u64;
+        newline_count += buffer[..read].iter().filter(|byte| **byte == b'\n').count() as u64;
         last_byte = Some(buffer[read - 1]);
     }
 
