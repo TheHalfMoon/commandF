@@ -183,18 +183,16 @@ pub fn matched_structure_definition_pairs(
         {
             continue;
         }
-        let before_json = serde_json::to_vec(&pair.before_value).map_err(|source| {
-            StructuralDiffError::Json {
+        let before_json =
+            serde_json::to_vec(&pair.before_value).map_err(|source| StructuralDiffError::Json {
                 file: pair.before.filename.clone(),
                 source,
-            }
-        })?;
-        let after_json = serde_json::to_vec(&pair.after_value).map_err(|source| {
-            StructuralDiffError::Json {
+            })?;
+        let after_json =
+            serde_json::to_vec(&pair.after_value).map_err(|source| StructuralDiffError::Json {
                 file: pair.after.filename.clone(),
                 source,
-            }
-        })?;
+            })?;
         output.push(MatchedStructureDefinitionPair {
             resource: pair.key,
             before_filename: pair.before.filename,
