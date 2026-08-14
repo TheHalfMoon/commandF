@@ -74,7 +74,12 @@ case "$check_code" in
         write_outputs 1
         exit 1
       fi
-      renderer_args+=(--source-map "$source_map_path")
+      renderer_args+=(
+        --source-map "$source_map_path"
+        --fsh-index "$COMMANDF_FSH_INDEX"
+        --repo-root "$GITHUB_WORKSPACE"
+        --fsh-root "$COMMANDF_FSH_ROOT"
+      )
     fi
 
     set +e
