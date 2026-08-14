@@ -224,9 +224,7 @@ fn build_binding_refinements(
             let after_resource = after_closure.resolve_value_set(after_reference)?;
             let (before_resource, after_resource) = match (before_resource, after_resource) {
                 (None, None) if !references_changed => continue,
-                (Some(before_resource), Some(after_resource)) => {
-                    (before_resource, after_resource)
-                }
+                (Some(before_resource), Some(after_resource)) => (before_resource, after_resource),
                 _ => {
                     output.push(indeterminate_refinement(
                         &pair.key,
