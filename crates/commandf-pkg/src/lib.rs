@@ -12,6 +12,7 @@ mod artifact_scan;
 mod cache;
 mod check;
 mod check_error;
+mod check_github;
 mod check_model;
 mod check_sarif;
 mod compatibility;
@@ -37,6 +38,7 @@ pub use artifact_model::{ElementAddress, ElementView, PackageInspection, Resourc
 pub use cache::PackageCache;
 pub use check::evaluate_compatibility_policy;
 pub use check_error::CheckError;
+pub use check_github::check_report_to_github_annotations_bytes;
 pub use check_model::{CheckDecision, CheckDirection, CheckFailOn, CheckPolicy, CheckReport};
 pub use check_sarif::check_report_to_sarif_bytes;
 pub use compatibility_error::CompatibilityError;

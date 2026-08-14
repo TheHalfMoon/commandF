@@ -1,0 +1,55 @@
+name: commandF compatibility gate
+description: Run deterministic FHIR compatibility checks and emit bounded GitHub annotations.
+inputs:
+  package:
+    description: FHIR package name present in both explicit lock states.
+    required: true
+  before-lock:
+    description: Path to the before commandf.lock file.
+    required: true
+  before-cache:
+    description: Path to the before content-addressed package cache.
+    required: true
+  after-lock:
+    description: Path to the after commandf.lock file.
+    required: true
+  after-cache:
+    description: Path to the after content-addressed package cache.
+    required: true
+  direction:
+    description: Compatibility direction to evaluate (both, producer, consumer).
+    required: false
+    default: both
+  fail-on:
+    description: Blocking threshold (breaking, risky, none).
+    required: false
+    default: breaking
+  report-path:
+    description: Optional JSON report path. Parent directory must already exist when supplied.
+    required: false
+    default: ""
+outputs:
+  report-path:
+    description: Resolved path to the complete CF-05 JSON report when evaluation produced one.
+    value: ${{ steps.commandf.outputs.report-path }}
+  exit-code:
+    description: commandF gate exit code (0 pass, 1 operational failure, 2 policy failure).
+    value: ${{ steps.commandf.outputs.exit-code }}
+  passed:
+    description: true only when the CF-05 gate exit code is 0.
+    value: ${{ steps.commandf.outputs.passed }}
+runs:
+  using: composite
+  steps:
+    - id: commandf
+      shell: bash
+      env:
+        COMMANDF_PACKAGE: ${{ inputs.package }}
+        COMMANDF_BEFORE_LOCK: ${{ inputs.before-lock }}
+        COMMANDF_BEFORE_CACHE: ${{ inputs.before-cache }}
+        COMMANDF_AFTER_LOCK: ${{ inputs.after-lock }}
+        COMMANDF_AFTER_CACHE: ${{ inputs.after-cache }}
+        COMMANDF_DIRECTION: ${{ inputs.direction }}
+        COMMANDF_FAIL_ON: ${{ inputs.fail-on }}
+        COMMANDF_REPORT_PATH: ${{ inputs.report-path }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/github-action.sh"

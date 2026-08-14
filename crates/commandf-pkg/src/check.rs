@@ -67,7 +67,7 @@ pub(crate) fn validate_compatibility_report(
     Ok(())
 }
 
-fn direction_selected(policy: CheckDirection, finding: CompatibilityDirection) -> bool {
+pub(crate) fn direction_selected(policy: CheckDirection, finding: CompatibilityDirection) -> bool {
     match policy {
         CheckDirection::Both => true,
         CheckDirection::Producer => finding == CompatibilityDirection::Producer,
