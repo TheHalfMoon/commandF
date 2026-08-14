@@ -9,13 +9,22 @@ pub(crate) fn normalize_structural_field(field: &str, value: &Value) -> Value {
     }
 }
 
-pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> Result<(), String> {
+pub(crate) fn validate_resource_structural_field(
+    object: &Map<String, Value>,
+    field: &str,
+    value: &Value,
+) -> Result<(), String> {
     match field {
         "kind" | "type" | "baseDefinition" | "derivation" | "fhirVersion" => {
             validate_non_empty_string(value, &format!("{field} must be a non-empty string"))
         }
         "abstract" => validate_bool(value, "abstract must be a boolean"),
-        "contextInvariant" => validate_array(value, "contextInvariant must be an array"),
+        "contextInvariant" => validate_repeating_string_primitive(
+            object,
+            field,
+            value,
+            "contextInvariant must be an array of primitive strings",
+        ),
         "context" => {
             let entries = value
                 .as_array()
@@ -37,7 +46,11 @@ pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> 
     }
 }
 
-pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> Result<(), String> {
+pub(crate) fn validate_element_structural_field(
+    object: &Map<String, Value>,
+    field: &str,
+    value: &Value,
+) -> Result<(), String> {
     match field {
         "path" | "sliceName" | "contentReference" | "meaningWhenMissing" | "orderMeaning"
         | "isModifierReason" => {
@@ -46,9 +59,12 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
         "sliceIsConstraining" | "mustSupport" | "isModifier" | "isSummary" => {
             validate_bool(value, &format!("{field} must be a boolean"))
         }
-        "representation" | "condition" => {
-            validate_array(value, &format!("{field} must be an array"))
-        }
+        "representation" | "condition" => validate_repeating_string_primitive(
+            object,
+            field,
+            value,
+            &format!("{field} must be an array of primitive strings"),
+        ),
         "slicing" | "binding" => validate_object(value, &format!("{field} must be an object")),
         "min" => validate_unsigned_integer(value, "min must be a non-negative integer"),
         "max" => validate_non_empty_string(value, "max must be a non-empty string"),
@@ -64,7 +80,14 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
                 validate_required_string_primitive(object, "code", &format!("type[{index}]"))?;
                 for nested in ["profile", "targetProfile", "aggregation"] {
                     if let Some(value) = object.get(nested) {
-                        validate_array(value, &format!("type[{index}].{nested} must be an array"))?;
+                        validate_repeating_string_primitive(
+                            object,
+                            nested,
+                            value,
+                            &format!(
+                                "type[{index}].{nested} must be an array of primitive strings"
+                            ),
+                        )?;
                     }
                 }
             }
@@ -158,14 +181,6 @@ fn constraint_key(value: &Value) -> &str {
         .unwrap_or("")
 }
 
-fn validate_array(value: &Value, message: &str) -> Result<(), String> {
-    if value.is_array() {
-        Ok(())
-    } else {
-        Err(message.to_owned())
-    }
-}
-
 fn validate_object(value: &Value, message: &str) -> Result<(), String> {
     if value.is_object() {
         Ok(())
@@ -240,6 +255,62 @@ fn validate_required_string_primitive(
             validate_primitive_metadata(metadata, &format!("{path}.{metadata_field}"))
         }
     }
+}
+
+fn validate_repeating_string_primitive(
+    object: &Map<String, Value>,
+    field: &str,
+    value: &Value,
+    message: &str,
+) -> Result<(), String> {
+    let values = value.as_array().ok_or_else(|| message.to_owned())?;
+    let metadata_field = format!("_{field}");
+    let metadata = match object.get(&metadata_field) {
+        None => None,
+        Some(Value::Array(metadata)) => {
+            if metadata.len() != values.len() {
+                return Err(format!(
+                    "{metadata_field} must have the same length as {field}"
+                ));
+            }
+            Some(metadata.as_slice())
+        }
+        Some(_) => {
+            return Err(format!("{metadata_field} must be an array when present"));
+        }
+    };
+
+    for (index, value) in values.iter().enumerate() {
+        let metadata_value = metadata.and_then(|entries| entries.get(index));
+        match value {
+            Value::String(value) if !value.is_empty() => {}
+            Value::String(_) => {
+                return Err(format!("{field}[{index}] must not be an empty string"));
+            }
+            Value::Null => {
+                let metadata_value = metadata_value
+                    .filter(|value| !value.is_null())
+                    .ok_or_else(|| {
+                        format!(
+                            "{field}[{index}] may be null only with matching {metadata_field}[{index}] primitive metadata"
+                        )
+                    })?;
+                validate_primitive_metadata(metadata_value, &format!("{metadata_field}[{index}]"))?;
+                continue;
+            }
+            _ => {
+                return Err(format!(
+                    "{field}[{index}] must be a primitive string or null"
+                ));
+            }
+        }
+
+        if let Some(metadata_value) = metadata_value.filter(|value| !value.is_null()) {
+            validate_primitive_metadata(metadata_value, &format!("{metadata_field}[{index}]"))?;
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_primitive_metadata(value: &Value, path: &str) -> Result<(), String> {
