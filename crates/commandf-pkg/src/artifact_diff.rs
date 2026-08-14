@@ -111,7 +111,11 @@ fn load_side(
                 source,
             }
         })?;
-        raw.insert(resource.filename, value);
+        if raw.insert(resource.filename.clone(), value).is_some() {
+            return Err(StructuralDiffError::DuplicateResourceFilename {
+                file: resource.filename,
+            });
+        }
     }
     Ok(Side { inspection, raw })
 }
@@ -244,12 +248,16 @@ fn compare_matched_resource(
 
     if before.resource_type == "StructureDefinition" && after.resource_type == "StructureDefinition"
     {
-        let before_value = before_raw
-            .get(&before.filename)
-            .expect("scanner and inspection inventory must agree");
-        let after_value = after_raw
-            .get(&after.filename)
-            .expect("scanner and inspection inventory must agree");
+        let before_value = before_raw.get(&before.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: before.filename.clone(),
+            }
+        })?;
+        let after_value = after_raw.get(&after.filename).ok_or_else(|| {
+            StructuralDiffError::MissingScannedResource {
+                file: after.filename.clone(),
+            }
+        })?;
         compare_structure_definition(key, before, after, before_value, after_value, changes)?;
     }
     Ok(())
