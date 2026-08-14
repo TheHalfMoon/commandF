@@ -8,6 +8,3 @@ publish.workspace = true
 [dependencies]
 clap.workspace = true
 commandf-pkg = { path = "../commandf-pkg" }
-
-[dev-dependencies]
-serde_json.workspace = true

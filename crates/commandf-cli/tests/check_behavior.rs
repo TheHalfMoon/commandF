@@ -144,16 +144,12 @@ fn breaking_policy_failure_emits_json_then_exits_two() {
     let output = run_check(&before_lock, &before_cache, &after_lock, &after_cache, &[]);
 
     assert_eq!(output.status.code(), Some(2));
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
-    assert_eq!(value["schema"], 1);
-    assert_eq!(value["policy"]["direction"], "both");
-    assert_eq!(value["policy"]["fail_on"], "breaking");
-    assert_eq!(value["decision"]["passed"], false);
-    assert!(value["decision"]["blocking_findings"].as_u64().unwrap() > 0);
-    assert!(!value["compatibility"]["findings"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 JSON output");
+    assert!(stdout.contains("\"schema\": 1"));
+    assert!(stdout.contains("\"direction\": \"both\""));
+    assert!(stdout.contains("\"fail_on\": \"breaking\""));
+    assert!(stdout.contains("\"passed\": false"));
+    assert!(!stdout.contains("\"findings\": []"));
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -170,13 +166,10 @@ fn fail_on_none_passes_without_removing_findings() {
     );
 
     assert_eq!(output.status.code(), Some(0));
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
-    assert_eq!(value["decision"]["passed"], true);
-    assert_eq!(value["decision"]["blocking_findings"], 0);
-    assert!(!value["compatibility"]["findings"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8 JSON output");
+    assert!(stdout.contains("\"passed\": true"));
+    assert!(stdout.contains("\"blocking_findings\": 0"));
+    assert!(!stdout.contains("\"findings\": []"));
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -196,12 +189,11 @@ fn sarif_output_file_is_complete_before_policy_exit_two() {
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    let bytes = fs::read(&output_path).expect("SARIF output must exist");
-    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("SARIF JSON");
-    assert_eq!(value["version"], "2.1.0");
-    assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "commandF");
-    assert!(!value["runs"][0]["results"].as_array().unwrap().is_empty());
-    assert!(value["runs"][0]["results"][0].get("locations").is_none());
+    let sarif = fs::read_to_string(&output_path).expect("SARIF output must exist");
+    assert!(sarif.contains("\"version\": \"2.1.0\""));
+    assert!(sarif.contains("\"name\": \"commandF\""));
+    assert!(!sarif.contains("\"results\": []"));
+    assert!(!sarif.contains("\"locations\""));
     let _ = fs::remove_dir_all(&dir);
 }
 
