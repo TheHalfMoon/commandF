@@ -25,7 +25,9 @@ pub enum OracleError {
     #[error("duplicate oracle observation for resource {resource}")]
     DuplicateObservation { resource: String },
 
-    #[error("oracle observation identity mismatch for resource {resource}: left={left}, right={right}")]
+    #[error(
+        "oracle observation identity mismatch for resource {resource}: left={left}, right={right}"
+    )]
     ObservationIdentityMismatch {
         resource: String,
         left: String,
