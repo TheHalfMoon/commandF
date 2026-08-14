@@ -20,8 +20,12 @@ pub(crate) fn validate_resource_structural_field(field: &str, value: &Value) -> 
                 let object = entry
                     .as_object()
                     .ok_or_else(|| format!("context[{index}] must be an object"))?;
-                validate_optional_string(object, "type", &format!("context[{index}]"))?;
-                validate_optional_string(object, "expression", &format!("context[{index}]"))?;
+                validate_required_string_primitive(object, "type", &format!("context[{index}]"))?;
+                validate_required_string_primitive(
+                    object,
+                    "expression",
+                    &format!("context[{index}]"),
+                )?;
             }
             Ok(())
         }
@@ -40,7 +44,7 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
                 let object = entry
                     .as_object()
                     .ok_or_else(|| format!("type[{index}] must be an object"))?;
-                validate_optional_string(object, "code", &format!("type[{index}]"))?;
+                validate_required_string_primitive(object, "code", &format!("type[{index}]"))?;
                 for nested in ["profile", "targetProfile", "aggregation"] {
                     if let Some(value) = object.get(nested) {
                         validate_array(
@@ -60,7 +64,7 @@ pub(crate) fn validate_element_structural_field(field: &str, value: &Value) -> R
                 let object = entry
                     .as_object()
                     .ok_or_else(|| format!("constraint[{index}] must be an object"))?;
-                require_string(object, "key", &format!("constraint[{index}]"))?;
+                validate_required_string_primitive(object, "key", &format!("constraint[{index}]"))?;
             }
             Ok(())
         }
@@ -147,21 +151,68 @@ fn validate_array(value: &Value, message: &str) -> Result<(), String> {
     }
 }
 
-fn validate_optional_string(
+fn validate_required_string_primitive(
     object: &Map<String, Value>,
     field: &str,
     path: &str,
 ) -> Result<(), String> {
+    let metadata_field = format!("_{field}");
+    let metadata = object.get(&metadata_field);
+
     match object.get(field) {
-        None | Some(Value::String(_)) => Ok(()),
+        Some(Value::String(value)) if !value.is_empty() => {
+            if let Some(metadata) = metadata {
+                validate_primitive_metadata(metadata, &format!("{path}.{metadata_field}"))?;
+            }
+            Ok(())
+        }
+        Some(Value::String(_)) => Err(format!("{path}.{field} must not be an empty string")),
         Some(_) => Err(format!("{path}.{field} must be a string when present")),
+        None => {
+            let metadata = metadata.ok_or_else(|| {
+                format!(
+                    "{path}.{field} requires a non-empty string value or {metadata_field} primitive metadata"
+                )
+            })?;
+            validate_primitive_metadata(metadata, &format!("{path}.{metadata_field}"))
+        }
     }
 }
 
-fn require_string(object: &Map<String, Value>, field: &str, path: &str) -> Result<(), String> {
-    match object.get(field) {
-        Some(Value::String(_)) => Ok(()),
-        _ => Err(format!("{path}.{field} must be a string")),
+fn validate_primitive_metadata(value: &Value, path: &str) -> Result<(), String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| format!("{path} must be an object"))?;
+
+    let has_id = match object.get("id") {
+        None => false,
+        Some(Value::String(value)) if !value.is_empty() => true,
+        Some(Value::String(_)) => return Err(format!("{path}.id must not be an empty string")),
+        Some(_) => return Err(format!("{path}.id must be a string when present")),
+    };
+
+    let has_extensions = match object.get("extension") {
+        None => false,
+        Some(Value::Array(extensions)) if extensions.is_empty() => {
+            return Err(format!("{path}.extension must not be empty"));
+        }
+        Some(Value::Array(extensions)) => {
+            for (index, extension) in extensions.iter().enumerate() {
+                if !extension.is_object() {
+                    return Err(format!("{path}.extension[{index}] must be an object"));
+                }
+            }
+            true
+        }
+        Some(_) => return Err(format!("{path}.extension must be an array when present")),
+    };
+
+    if has_id || has_extensions {
+        Ok(())
+    } else {
+        Err(format!(
+            "{path} must contain a non-empty id or extension array"
+        ))
     }
 }
 
