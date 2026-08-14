@@ -5,7 +5,7 @@ emit_operational_failure() {
   local message="$1"
   printf '::error title=commandF operational failure::%s\n' "$message"
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-    printf 'report-path=%s\n' "${COMMANDF_RESOLVED_REPORT_PATH:-}" >> "$GITHUB_OUTPUT"
+    printf 'report-path=\n' >> "$GITHUB_OUTPUT"
     printf 'exit-code=1\n' >> "$GITHUB_OUTPUT"
     printf 'passed=false\n' >> "$GITHUB_OUTPUT"
   fi
