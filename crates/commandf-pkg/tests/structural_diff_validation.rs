@@ -69,6 +69,9 @@ fn malformed_element_structural_fields_fail_closed() {
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":{"code":"string"}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":["string"]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":42}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"profile":["x"]}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"_code":{}}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"","_code":{"extension":[{"url":"x"}]}}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"string","profile":"x"}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":{"key":"a"}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":[{"severity":"error"}]}"#.as_slice(),
@@ -110,14 +113,40 @@ fn malformed_resource_context_fields_fail_closed() {
         Err(StructuralDiffError::InvalidStructuralField { .. })
     ));
 
-    let before = archive_with_entries(&[(
+    for context in [
+        br#"[{"type":42,"expression":"Observation"}]"#.as_slice(),
+        br#"[{"type":"element"}]"#.as_slice(),
+        br#"[{"type":"element","_expression":{}}]"#.as_slice(),
+    ] {
+        let before_body = format!(
+            "{{\"resourceType\":\"StructureDefinition\",\"id\":\"example\",\"url\":\"https://example.org/StructureDefinition/example\",\"context\":{},\"snapshot\":{{\"element\":[{{\"id\":\"Observation\",\"path\":\"Observation\"}}]}}}}",
+            std::str::from_utf8(context).unwrap()
+        );
+        let before = archive_with_entries(&[(
+            "package/StructureDefinition-example.json",
+            before_body.as_bytes(),
+        )]);
+        assert!(matches!(
+            diff(&before, &after),
+            Err(StructuralDiffError::InvalidStructuralField { .. })
+        ));
+    }
+}
+
+#[test]
+fn valid_primitive_metadata_type_code_is_preserved() {
+    let primitive_type = br#"{"_code":{"extension":[{"url":"http://hl7.org/fhir/StructureDefinition/structuredefinition-json-type","valueString":"string"},{"url":"http://hl7.org/fhir/StructureDefinition/structuredefinition-xml-type","valueString":"xsd:string"}]}}"#;
+    let body = format!(
+        "{{\"resourceType\":\"StructureDefinition\",\"id\":\"example\",\"url\":\"https://example.org/StructureDefinition/example\",\"snapshot\":{{\"element\":[{{\"id\":\"Extension.id\",\"path\":\"Extension.id\",\"type\":[{}]}}]}}}}",
+        std::str::from_utf8(primitive_type).unwrap()
+    );
+    let archive = archive_with_entries(&[(
         "package/StructureDefinition-example.json",
-        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","context":[{"type":42}],"snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
+        body.as_bytes(),
     )]);
-    assert!(matches!(
-        diff(&before, &after),
-        Err(StructuralDiffError::InvalidStructuralField { .. })
-    ));
+
+    let report = diff(&archive, &archive).unwrap();
+    assert!(report.changes.is_empty());
 }
 
 #[test]
