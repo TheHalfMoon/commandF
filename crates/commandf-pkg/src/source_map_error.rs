@@ -13,6 +13,9 @@ pub enum SourceMapError {
     #[error("unsupported source-index format {found}; expected {expected}")]
     UnsupportedSourceIndexFormat { found: String, expected: String },
 
+    #[error("SUSHI source index has {found} bytes; maximum is {maximum}")]
+    IndexTooLarge { found: usize, maximum: usize },
+
     #[error("SUSHI source index has {found} entries; maximum is {maximum}")]
     TooManyEntries { found: usize, maximum: usize },
 
