@@ -67,6 +67,11 @@ fn committed_sushi_shaped_fixture_maps_and_renders() {
         .arg(&report)
         .arg("--source-map")
         .arg(&mapped)
+        .arg("--fsh-index")
+        .arg(&index)
+        .arg("--repo-root")
+        .arg(&fixture_root)
+        .args(["--fsh-root", "input/fsh"])
         .output()
         .unwrap();
     assert!(annotations.status.success());
