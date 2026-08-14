@@ -44,15 +44,15 @@ fn element_field(
     }
 }
 
-fn resource_change(kind: StructuralChangeKind) -> StructuralChange {
+fn resource_change(kind: StructuralChangeKind, value: &str) -> StructuralChange {
     StructuralChange {
         kind,
         resource: ResourceKey {
             kind: ResourceKeyKind::Canonical,
-            value: "http://example.org/StructureDefinition/example".to_owned(),
+            value: format!("http://example.org/StructureDefinition/{value}"),
         },
-        before_filename: Some("before.json".to_owned()),
-        after_filename: Some("after.json".to_owned()),
+        before_filename: Some(format!("{value}-before.json")),
+        after_filename: Some(format!("{value}-after.json")),
         view: None,
         element_id: None,
         field: None,
@@ -67,7 +67,10 @@ fn empty_report_is_deterministic_and_has_no_findings() {
     assert_eq!(classified.schema, 1);
     assert_eq!(classified.ruleset, "cf04-rules-v1");
     assert!(classified.findings.is_empty());
-    assert_eq!(classified.to_json_bytes().unwrap(), classified.to_json_bytes().unwrap());
+    assert_eq!(
+        classified.to_json_bytes().unwrap(),
+        classified.to_json_bytes().unwrap()
+    );
 }
 
 #[test]
@@ -110,21 +113,18 @@ fn cardinality_changes_are_directional() {
             && finding.direction == CompatibilityDirection::Producer
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-CARD-002"
-            && finding.direction == CompatibilityDirection::Consumer
+        finding.rule_id == "CF04-CARD-002" && finding.direction == CompatibilityDirection::Consumer
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-CARD-003"
-            && finding.direction == CompatibilityDirection::Producer
+        finding.rule_id == "CF04-CARD-003" && finding.direction == CompatibilityDirection::Producer
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-CARD-004"
-            && finding.direction == CompatibilityDirection::Consumer
+        finding.rule_id == "CF04-CARD-004" && finding.direction == CompatibilityDirection::Consumer
     }));
 }
 
 #[test]
-fn type_set_narrowing_and_widening_reverse_direction() {
+fn type_code_set_narrowing_and_widening_reverse_direction() {
     let string_type = json!({"code": "string"});
     let code_type = json!({"code": "code"});
     let classified = classify_structural_diff(&report(vec![
@@ -146,12 +146,34 @@ fn type_set_narrowing_and_widening_reverse_direction() {
     .unwrap();
 
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-TYPE-001"
-            && finding.direction == CompatibilityDirection::Producer
+        finding.rule_id == "CF04-TYPE-001" && finding.direction == CompatibilityDirection::Producer
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-TYPE-002"
-            && finding.direction == CompatibilityDirection::Consumer
+        finding.rule_id == "CF04-TYPE-002" && finding.direction == CompatibilityDirection::Consumer
+    }));
+}
+
+#[test]
+fn type_profile_qualifier_change_is_risky_not_false_breaking() {
+    let classified = classify_structural_diff(&report(vec![element_field(
+        ElementView::Snapshot,
+        "Observation.subject",
+        "type",
+        Some(json!([{
+            "code": "Reference",
+            "targetProfile": ["http://example.org/StructureDefinition/old"]
+        }])),
+        Some(json!([{
+            "code": "Reference",
+            "targetProfile": ["http://example.org/StructureDefinition/new"]
+        }])),
+    )]))
+    .unwrap();
+
+    assert_eq!(classified.findings.len(), 2);
+    assert!(classified.findings.iter().all(|finding| {
+        finding.rule_id == "CF04-TYPE-005"
+            && finding.severity == CompatibilitySeverity::Risky
     }));
 }
 
@@ -192,8 +214,7 @@ fn fixed_pattern_and_bounds_do_not_overclaim_equivalence() {
             && finding.severity == CompatibilitySeverity::Risky
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-BOUND-003"
-            && finding.severity == CompatibilitySeverity::Risky
+        finding.rule_id == "CF04-BOUND-003" && finding.severity == CompatibilitySeverity::Risky
     }));
 }
 
@@ -311,11 +332,39 @@ fn constraints_must_support_modifier_and_slicing_are_explicit() {
 }
 
 #[test]
+fn same_key_constraint_expression_change_is_risky_not_false_breaking() {
+    let classified = classify_structural_diff(&report(vec![element_field(
+        ElementView::Snapshot,
+        "Observation",
+        "constraint",
+        Some(json!([{
+            "key": "obs-test",
+            "severity": "error",
+            "human": "old",
+            "expression": "status.exists()"
+        }])),
+        Some(json!([{
+            "key": "obs-test",
+            "severity": "error",
+            "human": "new",
+            "expression": "status.exists() and code.exists()"
+        }])),
+    )]))
+    .unwrap();
+
+    assert_eq!(classified.findings.len(), 2);
+    assert!(classified.findings.iter().all(|finding| {
+        finding.rule_id == "CF04-CONSTRAINT-003"
+            && finding.severity == CompatibilitySeverity::Risky
+    }));
+}
+
+#[test]
 fn resource_rules_cover_add_remove_and_residual_bytes() {
     let classified = classify_structural_diff(&report(vec![
-        resource_change(StructuralChangeKind::ResourceAdded),
-        resource_change(StructuralChangeKind::ResourceRemoved),
-        resource_change(StructuralChangeKind::ResourceBytesChanged),
+        resource_change(StructuralChangeKind::ResourceAdded, "added"),
+        resource_change(StructuralChangeKind::ResourceRemoved, "removed"),
+        resource_change(StructuralChangeKind::ResourceBytesChanged, "bytes"),
     ]))
     .unwrap();
 
@@ -352,6 +401,28 @@ fn resource_rules_cover_add_remove_and_residual_bytes() {
             .count(),
         2
     );
+}
+
+#[test]
+fn byte_hash_fact_is_subsumed_when_precise_structural_fact_exists() {
+    let classified = classify_structural_diff(&report(vec![
+        resource_change(StructuralChangeKind::ResourceVersionChanged, "same"),
+        resource_change(StructuralChangeKind::ResourceBytesChanged, "same"),
+    ]))
+    .unwrap();
+
+    assert_eq!(
+        classified
+            .findings
+            .iter()
+            .filter(|finding| finding.rule_id == "CF04-RESOURCE-004")
+            .count(),
+        2
+    );
+    assert!(!classified
+        .findings
+        .iter()
+        .any(|finding| finding.rule_id == "CF04-RESOURCE-007"));
 }
 
 #[test]
@@ -396,5 +467,33 @@ fn unknown_future_structural_field_fails_closed() {
         error,
         CompatibilityError::UnsupportedStructuralField { ref field }
             if field == "futureField"
+    ));
+}
+
+#[test]
+fn unsupported_cf03_schema_fails_closed() {
+    let mut input = report(vec![]);
+    input.schema = 2;
+    let error = classify_structural_diff(&input).unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::UnsupportedDiffSchema { schema: 2 }
+    ));
+}
+
+#[test]
+fn malformed_boolean_evidence_fails_closed() {
+    let error = classify_structural_diff(&report(vec![element_field(
+        ElementView::Snapshot,
+        "Observation.code",
+        "mustSupport",
+        Some(json!(false)),
+        Some(json!("yes")),
+    )]))
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        CompatibilityError::InvalidChangeValue { ref field, .. }
+            if field == "mustSupport"
     ));
 }

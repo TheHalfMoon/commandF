@@ -1,11 +1,11 @@
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
 use crate::{
     CompatibilityDirection, CompatibilityError, CompatibilityFinding, CompatibilityReport,
-    CompatibilitySeverity, ElementView, StructuralChange, StructuralChangeKind,
+    CompatibilitySeverity, ElementView, ResourceKey, StructuralChange, StructuralChangeKind,
     StructuralDiffReport,
 };
 
@@ -18,8 +18,20 @@ pub fn classify_structural_diff(
         });
     }
 
+    let resources_with_precise_change = report
+        .changes
+        .iter()
+        .filter(|change| change.kind != StructuralChangeKind::ResourceBytesChanged)
+        .map(|change| change.resource.clone())
+        .collect::<BTreeSet<_>>();
+
     let mut findings = Vec::new();
     for change in &report.changes {
+        if change.kind == StructuralChangeKind::ResourceBytesChanged
+            && resources_with_precise_change.contains(&change.resource)
+        {
+            continue;
+        }
         if is_duplicate_differential(change, &report.changes) {
             continue;
         }
@@ -89,7 +101,7 @@ fn classify_change(
             change,
             "CF04-RESOURCE-007",
             CompatibilitySeverity::Risky,
-            "resource bytes changed beyond the compatibility relation proven by this rule corpus",
+            "resource bytes changed without a more precise CF-03 structural fact",
         ),
         StructuralChangeKind::StructureFieldChanged => classify_structure_field(change, findings)?,
         StructuralChangeKind::ViewAdded => emit_both(
@@ -151,7 +163,7 @@ fn classify_structure_field(
             CompatibilitySeverity::Breaking,
             "StructureDefinition identity/target semantics changed",
         ),
-        "abstract" => match (optional_bool(&change.before), optional_bool(&change.after)) {
+        "abstract" => match bool_pair(change, field)? {
             (Some(false), Some(true)) => emit(
                 findings,
                 change,
@@ -185,7 +197,7 @@ fn classify_structure_field(
         _ => {
             return Err(CompatibilityError::UnsupportedStructuralField {
                 field: field.to_owned(),
-            })
+            });
         }
     }
     Ok(())
@@ -201,17 +213,20 @@ fn classify_element_field(
         "max" => classify_max(change, findings)?,
         "maxLength" => classify_max_length(change, findings)?,
         "type" => classify_type(change, findings)?,
-        "binding" => classify_binding(change, findings)?,
+        "binding" => classify_binding(change, findings),
         "constraint" => classify_constraints(change, findings)?,
-        "mustSupport" => emit_both(
-            findings,
-            change,
-            "CF04-SUPPORT-001",
-            CompatibilitySeverity::Risky,
-            "Must Support changed; FHIR defines support obligations as context-dependent and distinct from cardinality",
-        ),
-        "isModifier" => classify_modifier(change, findings),
-        "slicing" => classify_slicing(change, findings),
+        "mustSupport" => {
+            bool_pair(change, field)?;
+            emit_both(
+                findings,
+                change,
+                "CF04-SUPPORT-001",
+                CompatibilitySeverity::Risky,
+                "Must Support changed; FHIR defines support obligations as context-dependent and distinct from cardinality",
+            );
+        }
+        "isModifier" => classify_modifier(change, findings)?,
+        "slicing" => classify_slicing(change, findings)?,
         "path" | "contentReference" => emit_both(
             findings,
             change,
@@ -237,7 +252,7 @@ fn classify_element_field(
         _ if field.starts_with("fixed") => classify_fixed(change, findings),
         _ if field.starts_with("pattern") => classify_pattern(change, findings),
         _ if field.starts_with("minValue") || field.starts_with("maxValue") => {
-            classify_value_bound(change, findings)
+            classify_value_bound(change, findings);
         }
         _ if field.starts_with("defaultValue") => emit_both(
             findings,
@@ -249,7 +264,7 @@ fn classify_element_field(
         _ => {
             return Err(CompatibilityError::UnsupportedStructuralField {
                 field: field.to_owned(),
-            })
+            });
         }
     }
     Ok(())
@@ -273,6 +288,7 @@ fn classify_min(
         );
         return Ok(());
     };
+
     match after.cmp(&before) {
         Ordering::Greater => emit(
             findings,
@@ -313,6 +329,7 @@ fn classify_max(
         );
         return Ok(());
     };
+
     match compare_max(after, before) {
         Ordering::Less => emit(
             findings,
@@ -396,33 +413,57 @@ fn classify_type(
         );
         return Ok(());
     };
-    let before = canonical_set(before, field)?;
-    let after = canonical_set(after, field)?;
-    if after.is_subset(&before) && after != before {
+
+    let before_canonical = canonical_set(before, field)?;
+    let after_canonical = canonical_set(after, field)?;
+    if before_canonical == after_canonical {
+        return Ok(());
+    }
+
+    let (Some(before_codes), Some(after_codes)) = (type_codes(before), type_codes(after)) else {
+        emit_both(
+            findings,
+            change,
+            "CF04-TYPE-005",
+            CompatibilitySeverity::Risky,
+            "type/profile qualifiers changed but direct type-code comparison is unavailable",
+        );
+        return Ok(());
+    };
+
+    if after_codes.is_subset(&before_codes) && after_codes != before_codes {
         emit(
             findings,
             change,
             "CF04-TYPE-001",
             CompatibilitySeverity::Breaking,
             CompatibilityDirection::Producer,
-            "allowed type/profile choices narrowed",
+            "allowed type codes narrowed",
         );
-    } else if before.is_subset(&after) && after != before {
+    } else if before_codes.is_subset(&after_codes) && after_codes != before_codes {
         emit(
             findings,
             change,
             "CF04-TYPE-002",
             CompatibilitySeverity::Breaking,
             CompatibilityDirection::Consumer,
-            "allowed type/profile choices widened",
+            "allowed type codes widened",
         );
-    } else if before != after {
+    } else if before_codes != after_codes {
         emit_both(
             findings,
             change,
             "CF04-TYPE-003",
             CompatibilitySeverity::Breaking,
-            "allowed type/profile choices were replaced with an incomparable set",
+            "allowed type codes were replaced with an incomparable set",
+        );
+    } else {
+        emit_both(
+            findings,
+            change,
+            "CF04-TYPE-005",
+            CompatibilitySeverity::Risky,
+            "type codes are unchanged but profile/targetProfile/aggregation qualifiers changed",
         );
     }
     Ok(())
@@ -515,14 +556,10 @@ fn classify_value_bound(change: &StructuralChange, findings: &mut Vec<Compatibil
     }
 }
 
-fn classify_binding(
-    change: &StructuralChange,
-    findings: &mut Vec<CompatibilityFinding>,
-) -> Result<(), CompatibilityError> {
+fn classify_binding(change: &StructuralChange, findings: &mut Vec<CompatibilityFinding>) {
     match (&change.before, &change.after) {
         (None, Some(after)) => {
-            let strength = binding_strength(after);
-            let severity = if strength.is_some_and(|rank| rank >= 2) {
+            let severity = if binding_strength(after).is_some_and(|rank| rank >= 2) {
                 CompatibilitySeverity::Breaking
             } else {
                 CompatibilitySeverity::Risky
@@ -537,8 +574,7 @@ fn classify_binding(
             );
         }
         (Some(before), None) => {
-            let strength = binding_strength(before);
-            let severity = if strength.is_some_and(|rank| rank >= 2) {
+            let severity = if binding_strength(before).is_some_and(|rank| rank >= 2) {
                 CompatibilitySeverity::Breaking
             } else {
                 CompatibilitySeverity::Risky
@@ -603,51 +639,104 @@ fn classify_binding(
         }
         (None, None) => {}
     }
-    Ok(())
 }
 
 fn classify_constraints(
     change: &StructuralChange,
     findings: &mut Vec<CompatibilityFinding>,
 ) -> Result<(), CompatibilityError> {
-    let before = constraint_entries(change.before.as_ref())?;
-    let after = constraint_entries(change.after.as_ref())?;
-    let added = after.difference(&before).cloned().collect::<Vec<_>>();
-    let removed = before.difference(&after).cloned().collect::<Vec<_>>();
+    let Some(before) = constraint_map(change.before.as_ref())? else {
+        emit_both(
+            findings,
+            change,
+            "CF04-CONSTRAINT-006",
+            CompatibilitySeverity::Risky,
+            "constraint keys are not directly comparable; implication cannot be proven",
+        );
+        return Ok(());
+    };
+    let Some(after) = constraint_map(change.after.as_ref())? else {
+        emit_both(
+            findings,
+            change,
+            "CF04-CONSTRAINT-006",
+            CompatibilitySeverity::Risky,
+            "constraint keys are not directly comparable; implication cannot be proven",
+        );
+        return Ok(());
+    };
 
-    if !added.is_empty() {
-        emit(
-            findings,
-            change,
-            "CF04-CONSTRAINT-001",
-            if added.iter().any(|entry| entry.is_error) {
-                CompatibilitySeverity::Breaking
-            } else {
-                CompatibilitySeverity::Risky
-            },
-            CompatibilityDirection::Producer,
-            "constraint added or changed on the after contract",
-        );
-    }
-    if !removed.is_empty() {
-        emit(
-            findings,
-            change,
-            "CF04-CONSTRAINT-002",
-            if removed.iter().any(|entry| entry.is_error) {
-                CompatibilitySeverity::Breaking
-            } else {
-                CompatibilitySeverity::Risky
-            },
-            CompatibilityDirection::Consumer,
-            "constraint removed or changed from the before contract",
-        );
+    let keys = before
+        .keys()
+        .chain(after.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for key in keys {
+        match (before.get(&key), after.get(&key)) {
+            (None, Some(after_entry)) => emit(
+                findings,
+                change,
+                "CF04-CONSTRAINT-001",
+                if after_entry.is_error {
+                    CompatibilitySeverity::Breaking
+                } else {
+                    CompatibilitySeverity::Risky
+                },
+                CompatibilityDirection::Producer,
+                "constraint added to the after contract",
+            ),
+            (Some(before_entry), None) => emit(
+                findings,
+                change,
+                "CF04-CONSTRAINT-002",
+                if before_entry.is_error {
+                    CompatibilitySeverity::Breaking
+                } else {
+                    CompatibilitySeverity::Risky
+                },
+                CompatibilityDirection::Consumer,
+                "constraint removed from the before contract",
+            ),
+            (Some(before_entry), Some(after_entry))
+                if before_entry.canonical != after_entry.canonical =>
+            {
+                match (before_entry.is_error, after_entry.is_error) {
+                    (false, true) => emit(
+                        findings,
+                        change,
+                        "CF04-CONSTRAINT-004",
+                        CompatibilitySeverity::Breaking,
+                        CompatibilityDirection::Producer,
+                        "constraint severity strengthened from warning to error",
+                    ),
+                    (true, false) => emit(
+                        findings,
+                        change,
+                        "CF04-CONSTRAINT-005",
+                        CompatibilitySeverity::Breaking,
+                        CompatibilityDirection::Consumer,
+                        "constraint severity weakened from error to warning",
+                    ),
+                    _ => emit_both(
+                        findings,
+                        change,
+                        "CF04-CONSTRAINT-003",
+                        CompatibilitySeverity::Risky,
+                        "constraint with the same key changed; FHIRPath implication/equivalence is not proven in CF-04",
+                    ),
+                }
+            }
+            _ => {}
+        }
     }
     Ok(())
 }
 
-fn classify_modifier(change: &StructuralChange, findings: &mut Vec<CompatibilityFinding>) {
-    match (optional_bool(&change.before), optional_bool(&change.after)) {
+fn classify_modifier(
+    change: &StructuralChange,
+    findings: &mut Vec<CompatibilityFinding>,
+) -> Result<(), CompatibilityError> {
+    match bool_pair(change, "isModifier")? {
         (Some(false) | None, Some(true)) => {
             emit(
                 findings,
@@ -674,9 +763,13 @@ fn classify_modifier(change: &StructuralChange, findings: &mut Vec<Compatibility
             "modifier semantics changed",
         ),
     }
+    Ok(())
 }
 
-fn classify_slicing(change: &StructuralChange, findings: &mut Vec<CompatibilityFinding>) {
+fn classify_slicing(
+    change: &StructuralChange,
+    findings: &mut Vec<CompatibilityFinding>,
+) -> Result<(), CompatibilityError> {
     let (Some(before), Some(after)) = (&change.before, &change.after) else {
         emit_both(
             findings,
@@ -685,8 +778,15 @@ fn classify_slicing(change: &StructuralChange, findings: &mut Vec<CompatibilityF
             CompatibilitySeverity::Risky,
             "slicing definition appeared or disappeared and effective compatibility requires profile context",
         );
-        return;
+        return Ok(());
     };
+    if !before.is_object() || !after.is_object() {
+        return Err(CompatibilityError::InvalidChangeValue {
+            field: "slicing".to_owned(),
+            message: "expected objects".to_owned(),
+        });
+    }
+
     let mut specific = false;
     if let (Some(before_rank), Some(after_rank)) = (slicing_rank(before), slicing_rank(after)) {
         if after_rank > before_rank {
@@ -745,6 +845,7 @@ fn classify_slicing(change: &StructuralChange, findings: &mut Vec<CompatibilityF
             "slicing discriminator or other slicing semantics changed without a proven equivalence",
         );
     }
+    Ok(())
 }
 
 fn required_field(change: &StructuralChange) -> Result<&str, CompatibilityError> {
@@ -760,12 +861,15 @@ fn required_field(change: &StructuralChange) -> Result<&str, CompatibilityError>
 fn optional_u64(value: &Option<Value>, field: &str) -> Result<Option<u64>, CompatibilityError> {
     match value {
         None => Ok(None),
-        Some(value) => value.as_u64().map(Some).ok_or_else(|| {
-            CompatibilityError::InvalidChangeValue {
-                field: field.to_owned(),
-                message: "expected a non-negative integer".to_owned(),
-            }
-        }),
+        Some(value) => {
+            value
+                .as_u64()
+                .map(Some)
+                .ok_or_else(|| CompatibilityError::InvalidChangeValue {
+                    field: field.to_owned(),
+                    message: "expected a non-negative integer".to_owned(),
+                })
+        }
     }
 }
 
@@ -791,10 +895,12 @@ fn optional_max(
     if value == "*" {
         return Ok(Some(MaxBound::Unbounded));
     }
-    let parsed = value.parse::<u64>().map_err(|_| CompatibilityError::InvalidChangeValue {
-        field: field.to_owned(),
-        message: format!("invalid finite max {value}"),
-    })?;
+    let parsed = value
+        .parse::<u64>()
+        .map_err(|_| CompatibilityError::InvalidChangeValue {
+            field: field.to_owned(),
+            message: format!("invalid finite max {value}"),
+        })?;
     Ok(Some(MaxBound::Finite(parsed)))
 }
 
@@ -825,6 +931,16 @@ fn canonical_set(value: &Value, field: &str) -> Result<BTreeSet<String>, Compati
         .collect()
 }
 
+fn type_codes(value: &Value) -> Option<BTreeSet<String>> {
+    let entries = value.as_array()?;
+    let mut codes = BTreeSet::new();
+    for entry in entries {
+        let code = entry.as_object()?.get("code")?.as_str()?;
+        codes.insert(code.to_owned());
+    }
+    Some(codes)
+}
+
 fn binding_strength(value: &Value) -> Option<u8> {
     let strength = value.as_object()?.get("strength")?.as_str()?;
     match strength {
@@ -840,17 +956,17 @@ fn binding_value_set(value: &Value) -> Option<&str> {
     value.as_object()?.get("valueSet")?.as_str()
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug)]
 struct ConstraintEntry {
     canonical: String,
     is_error: bool,
 }
 
-fn constraint_entries(
+fn constraint_map(
     value: Option<&Value>,
-) -> Result<BTreeSet<ConstraintEntry>, CompatibilityError> {
+) -> Result<Option<BTreeMap<String, ConstraintEntry>>, CompatibilityError> {
     let Some(value) = value else {
-        return Ok(BTreeSet::new());
+        return Ok(Some(BTreeMap::new()));
     };
     let Some(values) = value.as_array() else {
         return Err(CompatibilityError::InvalidChangeValue {
@@ -858,26 +974,34 @@ fn constraint_entries(
             message: "expected an array".to_owned(),
         });
     };
-    values
-        .iter()
-        .map(|value| {
-            let canonical = serde_json::to_string(value).map_err(|error| {
-                CompatibilityError::InvalidChangeValue {
-                    field: "constraint".to_owned(),
-                    message: error.to_string(),
-                }
-            })?;
-            let is_error = value
-                .as_object()
-                .and_then(|object| object.get("severity"))
-                .and_then(Value::as_str)
-                == Some("error");
-            Ok(ConstraintEntry {
+
+    let mut output = BTreeMap::new();
+    for value in values {
+        let Some(object) = value.as_object() else {
+            return Err(CompatibilityError::InvalidChangeValue {
+                field: "constraint".to_owned(),
+                message: "expected constraint entries to be objects".to_owned(),
+            });
+        };
+        let Some(key) = object.get("key").and_then(Value::as_str) else {
+            return Ok(None);
+        };
+        let canonical = serde_json::to_string(value).map_err(|error| {
+            CompatibilityError::InvalidChangeValue {
+                field: "constraint".to_owned(),
+                message: error.to_string(),
+            }
+        })?;
+        let is_error = object.get("severity").and_then(Value::as_str) == Some("error");
+        output.insert(
+            key.to_owned(),
+            ConstraintEntry {
                 canonical,
                 is_error,
-            })
-        })
-        .collect()
+            },
+        );
+    }
+    Ok(Some(output))
 }
 
 fn slicing_rank(value: &Value) -> Option<u8> {
@@ -901,8 +1025,29 @@ fn slicing_residual(value: &Value) -> Option<Value> {
     Some(Value::Object(object))
 }
 
-fn optional_bool(value: &Option<Value>) -> Option<bool> {
-    value.as_ref().and_then(Value::as_bool)
+fn bool_pair(
+    change: &StructuralChange,
+    field: &str,
+) -> Result<(Option<bool>, Option<bool>), CompatibilityError> {
+    Ok((
+        optional_bool(&change.before, field)?,
+        optional_bool(&change.after, field)?,
+    ))
+}
+
+fn optional_bool(
+    value: &Option<Value>,
+    field: &str,
+) -> Result<Option<bool>, CompatibilityError> {
+    match value {
+        None => Ok(None),
+        Some(value) => value.as_bool().map(Some).ok_or_else(|| {
+            CompatibilityError::InvalidChangeValue {
+                field: field.to_owned(),
+                message: "expected a boolean".to_owned(),
+            }
+        }),
+    }
 }
 
 fn emit_both(
@@ -959,7 +1104,7 @@ fn sort_findings(findings: &mut [CompatibilityFinding]) {
     findings.sort_by(|left, right| {
         left.resource
             .cmp(&right.resource)
-            .then_with(|| left.view.cmp(&right.view))
+            .then_with(|| view_rank(left.view).cmp(&view_rank(right.view)))
             .then_with(|| left.element_id.cmp(&right.element_id))
             .then_with(|| left.field.cmp(&right.field))
             .then_with(|| left.direction.cmp(&right.direction))
@@ -967,6 +1112,14 @@ fn sort_findings(findings: &mut [CompatibilityFinding]) {
             .then_with(|| left.rule_id.cmp(&right.rule_id))
             .then_with(|| left.message.cmp(&right.message))
     });
+}
+
+fn view_rank(view: Option<ElementView>) -> u8 {
+    match view {
+        None => 0,
+        Some(ElementView::Snapshot) => 1,
+        Some(ElementView::Differential) => 2,
+    }
 }
 
 fn is_duplicate_differential(change: &StructuralChange, changes: &[StructuralChange]) -> bool {

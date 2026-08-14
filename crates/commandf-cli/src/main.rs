@@ -6,8 +6,8 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
     classify_structural_diff, diff_package_archives, inspect_package, FhirRegistrySource,
-    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest, Resolver,
-    StructuralDiffReport, VersionConstraint,
+    LocalMirrorSource, LockedPackage, Lockfile, PackageCache, PackageName, PackageRequest,
+    Resolver, StructuralDiffReport, VersionConstraint,
 };
 
 #[derive(Parser)]
@@ -186,13 +186,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             after_cache,
             format,
         } => {
-            let report = build_diff_report(
-                package,
-                before_lock,
-                before_cache,
-                after_lock,
-                after_cache,
-            )?;
+            let report =
+                build_diff_report(package, before_lock, before_cache, after_lock, after_cache)?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
@@ -205,13 +200,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             after_cache,
             format,
         } => {
-            let diff = build_diff_report(
-                package,
-                before_lock,
-                before_cache,
-                after_lock,
-                after_cache,
-            )?;
+            let diff =
+                build_diff_report(package, before_lock, before_cache, after_lock, after_cache)?;
             let report = classify_structural_diff(&diff)?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
