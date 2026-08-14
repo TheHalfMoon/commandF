@@ -6,6 +6,7 @@ use commandf_pkg::{
     source_mapped_check_report_to_github_annotations_bytes, CheckPolicy, CompatibilityDirection,
     CompatibilityFinding, CompatibilityReport, CompatibilitySeverity, PackageEvidence, ResourceKey,
     ResourceKeyKind, SourceMapError, StructuralChangeKind, MAX_SUSHI_INDEX_ENTRIES,
+    MAX_SUSHI_INDEX_INPUT_BYTES,
 };
 use serde_json::json;
 use tempfile::tempdir;
@@ -150,21 +151,38 @@ fn missing_and_non_file_sources_fail_closed() {
 }
 
 #[test]
+fn source_index_byte_overflow_fails_before_json_parse() {
+    let repo = repo_with_source("example.fsh");
+    let oversized = vec![b' '; MAX_SUSHI_INDEX_INPUT_BYTES + 1];
+
+    assert!(matches!(
+        build_source_mapped_check_report(
+            &report(),
+            &oversized,
+            repo.path(),
+            Path::new("input/fsh"),
+        ),
+        Err(SourceMapError::IndexTooLarge { .. })
+    ));
+}
+
+#[test]
 fn source_index_entry_count_overflow_fails_closed() {
     let repo = repo_with_source("example.fsh");
     let entries = (0..=MAX_SUSHI_INDEX_ENTRIES)
         .map(|index| {
             json!({
-                "outputFile": format!("StructureDefinition-{index}.json"),
+                "outputFile": format!("s{index}"),
                 "fshFile": "example.fsh",
-                "fshName": "Example",
-                "fshType": "Profile",
+                "fshName": "E",
+                "fshType": "P",
                 "startLine": 1,
-                "endLine": 4
+                "endLine": 1
             })
         })
         .collect::<Vec<_>>();
     let bytes = serde_json::to_vec(&entries).unwrap();
+    assert!(bytes.len() <= MAX_SUSHI_INDEX_INPUT_BYTES);
 
     assert!(matches!(
         build_source_mapped_check_report(
@@ -190,6 +208,25 @@ fn inconsistent_check_decision_fails_before_mapping() {
         Path::new("input/fsh"),
     )
     .is_err());
+}
+
+#[test]
+fn persisted_source_index_entry_count_overflow_is_rejected() {
+    let repo = repo_with_source("example.fsh");
+    let report = report();
+    let mut mapped = build_source_mapped_check_report(
+        &report,
+        &index_bytes("example.fsh"),
+        repo.path(),
+        Path::new("input/fsh"),
+    )
+    .unwrap();
+    mapped.source_index.entries = MAX_SUSHI_INDEX_ENTRIES + 1;
+
+    assert!(matches!(
+        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped),
+        Err(SourceMapError::TooManyEntries { .. })
+    ));
 }
 
 #[test]
