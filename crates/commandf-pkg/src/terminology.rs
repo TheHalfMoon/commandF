@@ -219,22 +219,27 @@ fn build_binding_refinements(
                 continue;
             };
 
+            let references_changed = before_reference != after_reference;
             let before_resource = before_closure.resolve_value_set(before_reference)?;
             let after_resource = after_closure.resolve_value_set(after_reference)?;
-            let (Some(before_resource), Some(after_resource)) = (before_resource, after_resource)
-            else {
-                output.push(indeterminate_refinement(
-                    &pair.key,
-                    binding.view,
-                    &binding.element_id,
-                    before_value_set,
-                    after_value_set,
-                    TerminologyIndeterminateReason::UnresolvedValueSet,
-                ));
-                continue;
+            let (before_resource, after_resource) = match (before_resource, after_resource) {
+                (None, None) if !references_changed => continue,
+                (Some(before_resource), Some(after_resource)) => {
+                    (before_resource, after_resource)
+                }
+                _ => {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::UnresolvedValueSet,
+                    ));
+                    continue;
+                }
             };
 
-            let references_changed = before_reference != after_reference;
             if !references_changed && before_resource.value == after_resource.value {
                 continue;
             }
