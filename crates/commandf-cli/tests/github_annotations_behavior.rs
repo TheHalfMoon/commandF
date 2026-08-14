@@ -117,7 +117,8 @@ fn github_annotations_malformed_json_fails_operationally() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("JSON"));
+    assert!(stderr.starts_with("commandf: "));
+    assert!(stderr.contains("line 1 column"));
 }
 
 #[test]
