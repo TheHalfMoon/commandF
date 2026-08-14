@@ -156,7 +156,8 @@ pub fn validate_source_mapped_check_report(
             "source-index sha256 must be 64 hexadecimal characters".to_owned(),
         ));
     }
-    portable_relative_path(&report.source_index.fsh_root, "serialized FSH root", true)?;
+    let serialized_fsh_root =
+        portable_relative_path(&report.source_index.fsh_root, "serialized FSH root", true)?;
     validate_check_report(&report.check)?;
 
     let expected = report.check.compatibility.findings.len();
@@ -176,7 +177,15 @@ pub fn validate_source_mapped_check_report(
         }
         match (mapping.status, mapping.location.as_ref()) {
             (SourceMappingStatus::Mapped, Some(location)) => {
-                portable_relative_path(&location.file, "mapped repository path", false)?;
+                let mapped_path =
+                    portable_relative_path(&location.file, "mapped repository path", false)?;
+                if !serialized_fsh_root.as_os_str().is_empty()
+                    && !mapped_path.starts_with(&serialized_fsh_root)
+                {
+                    return Err(SourceMapError::InvalidMappingEntry {
+                        index: expected_index,
+                    });
+                }
                 if location.line == 0 || location.end_line == 0 || location.line > location.end_line
                 {
                     return Err(SourceMapError::InvalidMappingEntry {
