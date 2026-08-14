@@ -8,7 +8,8 @@ use crate::{
     CompatibilitySeverity,
 };
 
-const SARIF_SCHEMA: &str = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
+const SARIF_SCHEMA: &str =
+    "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json";
 const SARIF_VERSION: &str = "2.1.0";
 
 #[derive(Serialize)]
@@ -226,18 +227,11 @@ fn run_properties(report: &CheckReport) -> Result<BTreeMap<String, Value>, Check
         "commandf.decision.blockingFindings".to_owned(),
         json!(report.decision.blocking_findings),
     );
-    properties.insert(
-        "commandf.sourceMapping".to_owned(),
-        json!("deferred_cf09"),
-    );
+    properties.insert("commandf.sourceMapping".to_owned(), json!("deferred_cf09"));
     Ok(properties)
 }
 
-fn insert_string(
-    properties: &mut BTreeMap<String, Value>,
-    key: &str,
-    value: Option<&str>,
-) {
+fn insert_string(properties: &mut BTreeMap<String, Value>, key: &str, value: Option<&str>) {
     if let Some(value) = value {
         properties.insert(key.to_owned(), json!(value));
     }

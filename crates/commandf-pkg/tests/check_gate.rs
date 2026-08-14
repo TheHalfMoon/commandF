@@ -154,7 +154,10 @@ fn unsupported_cf04_authority_fails_closed() {
 #[test]
 fn json_and_sarif_are_byte_deterministic() {
     let check = evaluate_compatibility_policy(&mixed_report(), CheckPolicy::default()).unwrap();
-    assert_eq!(check.to_json_bytes().unwrap(), check.to_json_bytes().unwrap());
+    assert_eq!(
+        check.to_json_bytes().unwrap(),
+        check.to_json_bytes().unwrap()
+    );
     assert_eq!(
         check_report_to_sarif_bytes(&check).unwrap(),
         check_report_to_sarif_bytes(&check).unwrap()
@@ -189,11 +192,9 @@ fn sarif_uses_stable_rules_levels_properties_and_no_fake_locations() {
     for result in results {
         assert!(result.get("locations").is_none());
         assert!(result["properties"].get("commandf.resource").is_some());
-        assert!(
-            result["properties"]
-                .get("commandf.compatibilitySeverity")
-                .is_some()
-        );
+        assert!(result["properties"]
+            .get("commandf.compatibilitySeverity")
+            .is_some());
         assert!(result["properties"].get("commandf.direction").is_some());
     }
     assert_eq!(

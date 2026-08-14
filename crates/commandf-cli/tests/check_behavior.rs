@@ -6,48 +6,48 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use commandf_pkg::{LockedPackage, Lockfile, PackageCache};
 
-const BEFORE_ARCHIVE: &[u8] = &[
-    31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 237, 148, 77, 79, 195, 48, 12, 134, 251, 83, 80, 206, 163, 31,
-    99, 180, 82, 207, 112, 230, 0, 55, 196, 33, 107, 189, 53, 208, 166, 85, 146, 78, 67, 211, 254, 59, 238, 214,
-    109, 108, 171, 196, 1, 52, 9, 120, 159, 30, 220, 56, 141, 243, 54, 177, 221, 200, 236, 77, 206, 41, 104, 182,
-    214, 127, 181, 181, 246, 126, 152, 144, 137, 39, 147, 141, 101, 78, 109, 24, 38, 241, 225, 189, 243, 71, 81, 124,
-    19, 121, 87, 161, 119, 1, 90, 235, 164, 225, 237, 189, 255, 201, 74, 104, 89, 145, 72, 5, 45, 101, 213, 148,
-    228, 247, 137, 32, 70, 98, 65, 198, 170, 90, 243, 92, 228, 135, 126, 200, 158, 156, 26, 210, 57, 233, 76, 145,
-    21, 233, 106, 189, 246, 192, 47, 167, 191, 238, 224, 209, 153, 54, 115, 173, 161, 59, 154, 41, 173, 28, 95, 252,
-    245, 46, 37, 190, 219, 19, 190, 170, 255, 36, 30, 159, 212, 255, 109, 18, 142, 81, 255, 151, 169, 127, 67, 182,
-    110, 77, 70, 79, 239, 77, 215, 7, 6, 18, 129, 43, 95, 229, 135, 22, 193, 195, 214, 148, 60, 46, 156, 107,
-    210, 32, 216, 165, 73, 109, 230, 67, 105, 20, 28, 150, 157, 119, 148, 190, 249, 220, 239, 63, 225, 219, 112, 45,
-    55, 23, 33, 51, 167, 22, 157, 231, 77, 233, 110, 243, 157, 76, 246, 200, 169, 117, 134, 231, 69, 58, 147, 165,
-    165, 145, 112, 91, 233, 15, 83, 75, 102, 33, 123, 201, 83, 105, 63, 255, 195, 94, 110, 81, 38, 27, 169, 179,
-    66, 153, 65, 189, 199, 97, 114, 50, 170, 31, 164, 34, 171, 117, 183, 181, 210, 174, 147, 170, 101, 99, 139, 154,
-    101, 172, 4, 149, 84, 17, 123, 211, 231, 213, 246, 172, 142, 131, 52, 210, 21, 103, 206, 74, 113, 200, 144, 173,
-    92, 118, 39, 34, 214, 163, 243, 181, 126, 127, 30, 67, 33, 14, 115, 167, 145, 118, 39, 194, 98, 178, 58, 167,
-    141, 112, 54, 235, 23, 126, 208, 179, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 128, 63, 199, 7, 94, 196, 156, 99, 0, 40, 0, 0,
-];
+const BEFORE_HEX: &str = concat!(
+    "1f8b08000000000002ffed944d4fc3300c86fb5350cea31f63b452cf70e60037c4216bbd35d0a655924e43d3fe3beed66d6c",
+    "abc4013409789f1edc388df336b1ddc8ec4dce2968b6d67fb5b5f67e98908927938d654e6d1826f1e1bdf347517c137957a1",
+    "77015aeba4e1edbdffc94a68599148052d65d594e4f78920466241c6aa5af35ce4877ec89e9c1ad239e94c9115e96abdf6c0",
+    "2fa7bfeee0d1993673ada13b9a29ad1c5ffcf52e25bedb13beaaff241e9fd4ff6d128e51ff97a97f43b66e4d464fef4dd707",
+    "0612812b5fe58716c1c3d6943c2e9c6bd220d8a5496de64369141c969d7794bef9dcef3fe1db702d37172133a7169de74de9",
+    "6ef39d4cf6c8a97586e7453a93a5a591705be90f534b66217bc953693fffc35e6e51261ba9b3429941bdc7617232aa1fa422",
+    "ab75b7b5d2ae93aa65638b9a65ac049554117bd3e7d5f6ac8e8334d21567ce4a71c890ad5c762722d6a3f3b57e7f1e43210e",
+    "73a7917627c262b23aa78d7036eb177ed0b3010000000000000000000000000000000000803fc7075ec49c6300280000",
+);
 
-const AFTER_ARCHIVE: &[u8] = &[
-    31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 237, 148, 77, 79, 195, 48, 12, 134, 251, 83, 80, 206, 163, 31,
-    99, 108, 82, 207, 112, 230, 0, 55, 196, 33, 107, 189, 53, 208, 165, 85, 146, 78, 67, 83, 255, 59, 110, 215,
-    173, 108, 171, 196, 1, 52, 9, 120, 159, 30, 220, 56, 141, 243, 54, 177, 93, 202, 228, 77, 46, 41, 40, 119,
-    214, 127, 181, 133, 246, 126, 152, 144, 153, 78, 38, 173, 101, 78, 109, 24, 206, 166, 253, 123, 227, 143, 162, 233,
-    77, 228, 93, 133, 222, 5, 168, 172, 147, 134, 183, 247, 254, 39, 91, 161, 229, 138, 68, 44, 104, 35, 87, 101,
-    78, 126, 151, 8, 98, 36, 214, 100, 172, 42, 52, 207, 69, 126, 228, 135, 236, 73, 169, 36, 157, 146, 78, 20,
-    89, 17, 111, 235, 218, 3, 191, 156, 238, 186, 131, 71, 103, 170, 196, 85, 134, 238, 104, 161, 180, 114, 124, 241,
-    215, 251, 148, 248, 110, 79, 248, 170, 254, 103, 211, 241, 73, 253, 223, 206, 194, 49, 234, 255, 50, 245, 111, 200,
-    22, 149, 73, 232, 233, 189, 108, 250, 192, 64, 34, 112, 229, 171, 180, 111, 17, 60, 172, 76, 206, 227, 204, 185,
-    50, 14, 130, 125, 154, 20, 102, 57, 148, 70, 65, 191, 236, 188, 163, 116, 205, 231, 254, 240, 9, 223, 134, 171,
-    184, 185, 8, 153, 56, 181, 110, 60, 111, 74, 55, 155, 239, 101, 178, 71, 206, 173, 51, 60, 47, 226, 133, 204,
-    45, 141, 132, 219, 73, 127, 152, 91, 50, 107, 217, 73, 158, 75, 251, 249, 31, 14, 114, 179, 124, 214, 74, 93,
-    100, 202, 12, 234, 61, 14, 147, 146, 81, 221, 32, 22, 73, 161, 155, 173, 149, 118, 141, 84, 45, 75, 155, 21,
-    44, 99, 43, 40, 167, 21, 177, 55, 126, 222, 238, 206, 234, 56, 72, 41, 93, 118, 230, 92, 41, 14, 25, 178,
-    149, 155, 230, 68, 68, 61, 58, 95, 235, 119, 231, 49, 20, 162, 159, 107, 35, 69, 125, 164, 253, 137, 176, 152,
-    164, 72, 169, 21, 206, 166, 126, 225, 7, 61, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 248, 115, 124, 0, 147, 79, 101, 101, 0, 40, 0, 0,
-];
+const AFTER_HEX: &str = concat!(
+    "1f8b08000000000002ffed944d4fc3300c86fb5350cea31f636c52cf70e60037c4216bbd35d0a555924e4353ff3b6ed7ad6c",
+    "abc4013409789f1edc388df336b15dcae44d2e292877d67fb585f67e9890994e26ad654e6d18cea6fd7be38fa2e94de45d85",
+    "de05a8ac9386b7f7fe275ba1e58a442c682357654e7e97086224d664ac2a34cf457ee487ec49a9249d924e1459116febda03",
+    "bf9ceeba834767aac45586ee68a1b4727cf1d7fb94f86e4ff8aafe67d3f149fddfcec231eaff32f56fc8169549e8e9bd6cfa",
+    "c0402270e5abb46f113cac4ccee3ccb9320e827d9a146639944641bfecbca374cde7fef009df86abb8b9089938b56e3c6f4a",
+    "379bef65b247cead333c2fe285cc2d8d84db497f985b326bd9499e4bfbf91f0e72b37cd64a5d64ca0cea3d0e939251dd2016",
+    "49a19bad95768d542d4b9b152c632b28a715b1377edeeeceea3848295d76e65c290e19b2959be644443d3a5feb77e73114a2",
+    "9f6b23457da4fd89b098a448a915cea67ee1073d1b000000000000000000000000000000000000f8737c00934f6565002800",
+    "00",
+);
 
 fn commandf() -> Command {
     Command::new(env!("CARGO_BIN_EXE_commandf"))
+}
+
+fn decode_hex(value: &str) -> Vec<u8> {
+    assert_eq!(value.len() % 2, 0);
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| (hex_digit(pair[0]) << 4) | hex_digit(pair[1]))
+        .collect()
+}
+
+fn hex_digit(value: u8) -> u8 {
+    match value {
+        b'0'..=b'9' => value - b'0',
+        b'a'..=b'f' => value - b'a' + 10,
+        _ => panic!("invalid test hex digit"),
+    }
 }
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -76,6 +76,15 @@ fn write_locked_state(root: &Path, archive: &[u8], version: &str) -> (PathBuf, P
     );
     fs::write(&lock_path, lockfile.to_bytes().expect("serialize lock")).expect("write lock");
     (lock_path, cache_path)
+}
+
+fn changed_states(dir: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+    let before = decode_hex(BEFORE_HEX);
+    let after = decode_hex(AFTER_HEX);
+    let (before_lock, before_cache) =
+        write_locked_state(&dir.join("before"), &before, "1.0.0");
+    let (after_lock, after_cache) = write_locked_state(&dir.join("after"), &after, "1.1.0");
+    (before_lock, before_cache, after_lock, after_cache)
 }
 
 fn run_check(
@@ -132,18 +141,9 @@ fn check_help_exposes_ci_contract() {
 #[test]
 fn breaking_policy_failure_emits_json_then_exits_two() {
     let dir = unique_temp_dir("check-breaking");
-    let (before_lock, before_cache) =
-        write_locked_state(&dir.join("before"), BEFORE_ARCHIVE, "1.0.0");
-    let (after_lock, after_cache) =
-        write_locked_state(&dir.join("after"), AFTER_ARCHIVE, "1.1.0");
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
+    let output = run_check(&before_lock, &before_cache, &after_lock, &after_cache, &[]);
 
-    let output = run_check(
-        &before_lock,
-        &before_cache,
-        &after_lock,
-        &after_cache,
-        &[],
-    );
     assert_eq!(output.status.code(), Some(2));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["schema"], 1);
@@ -151,18 +151,17 @@ fn breaking_policy_failure_emits_json_then_exits_two() {
     assert_eq!(value["policy"]["fail_on"], "breaking");
     assert_eq!(value["decision"]["passed"], false);
     assert!(value["decision"]["blocking_findings"].as_u64().unwrap() > 0);
-    assert!(!value["compatibility"]["findings"].as_array().unwrap().is_empty());
+    assert!(!value["compatibility"]["findings"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn fail_on_none_passes_without_removing_findings() {
     let dir = unique_temp_dir("check-none");
-    let (before_lock, before_cache) =
-        write_locked_state(&dir.join("before"), BEFORE_ARCHIVE, "1.0.0");
-    let (after_lock, after_cache) =
-        write_locked_state(&dir.join("after"), AFTER_ARCHIVE, "1.1.0");
-
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
     let output = run_check(
         &before_lock,
         &before_cache,
@@ -170,24 +169,24 @@ fn fail_on_none_passes_without_removing_findings() {
         &after_cache,
         &["--fail-on", "none"],
     );
+
     assert_eq!(output.status.code(), Some(0));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["decision"]["passed"], true);
     assert_eq!(value["decision"]["blocking_findings"], 0);
-    assert!(!value["compatibility"]["findings"].as_array().unwrap().is_empty());
+    assert!(!value["compatibility"]["findings"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn sarif_output_file_is_complete_before_policy_exit_two() {
     let dir = unique_temp_dir("check-sarif-file");
-    let (before_lock, before_cache) =
-        write_locked_state(&dir.join("before"), BEFORE_ARCHIVE, "1.0.0");
-    let (after_lock, after_cache) =
-        write_locked_state(&dir.join("after"), AFTER_ARCHIVE, "1.1.0");
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
     let output_path = dir.join("result.sarif");
     let output_string = output_path.to_str().expect("UTF-8 path").to_owned();
-
     let output = run_check(
         &before_lock,
         &before_cache,
@@ -195,6 +194,7 @@ fn sarif_output_file_is_complete_before_policy_exit_two() {
         &after_cache,
         &["--format", "sarif", "--output", &output_string],
     );
+
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let bytes = fs::read(&output_path).expect("SARIF output must exist");
@@ -209,26 +209,21 @@ fn sarif_output_file_is_complete_before_policy_exit_two() {
 #[test]
 fn corrupted_cache_is_operational_exit_one_not_policy_exit_two() {
     let dir = unique_temp_dir("check-corrupt");
-    let (before_lock, before_cache) =
-        write_locked_state(&dir.join("before"), BEFORE_ARCHIVE, "1.0.0");
-    let (after_lock, after_cache) =
-        write_locked_state(&dir.join("after"), AFTER_ARCHIVE, "1.1.0");
-    let digest = PackageCache::digest(AFTER_ARCHIVE);
+    let (before_lock, before_cache, after_lock, after_cache) = changed_states(&dir);
+    let after = decode_hex(AFTER_HEX);
+    let digest = PackageCache::digest(&after);
     fs::write(
         after_cache.join("sha256").join(format!("{digest}.tgz")),
         b"corrupt",
     )
     .expect("corrupt after cache");
+    let output = run_check(&before_lock, &before_cache, &after_lock, &after_cache, &[]);
 
-    let output = run_check(
-        &before_lock,
-        &before_cache,
-        &after_lock,
-        &after_cache,
-        &[],
-    );
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("cache object digest mismatch"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("cache object digest mismatch"),
+        "stderr: {stderr}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }

@@ -317,7 +317,10 @@ fn write_atomic_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if !parent.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("output parent directory does not exist: {}", parent.display()),
+            format!(
+                "output parent directory does not exist: {}",
+                parent.display()
+            ),
         ));
     }
     let file_name = path.file_name().ok_or_else(|| {
