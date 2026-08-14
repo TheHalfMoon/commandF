@@ -146,6 +146,30 @@ fn missing_and_non_file_sources_fail_closed() {
 }
 
 #[test]
+fn source_range_beyond_current_file_fails_closed() {
+    let repo = repo_with_source("example.fsh");
+    let stale = serde_json::to_vec(&json!([{
+        "outputFile": "StructureDefinition-example.json",
+        "fshFile": "example.fsh",
+        "fshName": "Example",
+        "fshType": "Profile",
+        "startLine": 1,
+        "endLine": 5
+    }]))
+    .unwrap();
+
+    assert!(matches!(
+        build_source_mapped_check_report(
+            &report(),
+            &stale,
+            repo.path(),
+            Path::new("input/fsh"),
+        ),
+        Err(SourceMapError::InvalidIndex(_))
+    ));
+}
+
+#[test]
 fn source_index_byte_overflow_fails_before_json_parse() {
     let repo = repo_with_source("example.fsh");
     let oversized = vec![b' '; MAX_SUSHI_INDEX_INPUT_BYTES + 1];
