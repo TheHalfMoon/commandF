@@ -26,7 +26,9 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace --all-features
-      - name: Real FHIR registry, inspect, self-diff, self-classify, and self-terminology smoke
+      - name: CF-08 Action runner security regression
+        run: bash .github/scripts/test-cf08-action-runner.sh
+      - name: Real FHIR registry, inspect, self-diff, self-classify, self-check, and self-terminology smoke
         run: |
           rm -rf /tmp/commandf-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
@@ -37,6 +39,8 @@ jobs:
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- diff hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/diff.json
           cargo run --locked --quiet -p commandf -- classify hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/classify.json
+          cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/check.json
+          cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format sarif > /tmp/commandf-smoke/check.sarif
           cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
 
           python - <<'PY'
@@ -68,6 +72,21 @@ jobs:
           assert classify["after"]["version"] == "4.0.1"
           assert classify["findings"] == []
 
+          check = json.loads(Path("/tmp/commandf-smoke/check.json").read_text())
+          assert check["schema"] == 1
+          assert check["policy"] == {"direction": "both", "fail_on": "breaking"}
+          assert check["decision"]["passed"] is True
+          assert check["decision"]["blocking_findings"] == 0
+          assert check["compatibility"]["findings"] == []
+
+          sarif = json.loads(Path("/tmp/commandf-smoke/check.sarif").read_text())
+          assert sarif["version"] == "2.1.0"
+          assert len(sarif["runs"]) == 1
+          assert sarif["runs"][0]["tool"]["driver"]["name"] == "commandF"
+          assert sarif["runs"][0]["results"] == []
+          assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
+          assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
+
           terminology = json.loads(Path("/tmp/commandf-smoke/terminology.json").read_text())
           assert terminology["schema"] == 1
           assert terminology["ruleset"] == "cf07-terminology-v1"
@@ -78,4 +97,35 @@ jobs:
           assert terminology["code_systems"] == []
           assert terminology["value_sets"] == []
           assert terminology["binding_refinements"] == []
+          PY
+      - name: Local GitHub Action self-check smoke
+        id: cf08-action
+        uses: ./
+        with:
+          package: hl7.fhir.r4.core
+          before-lock: /tmp/commandf-smoke/before.lock
+          before-cache: /tmp/commandf-smoke/before-cache
+          after-lock: /tmp/commandf-smoke/after.lock
+          after-cache: /tmp/commandf-smoke/after-cache
+      - name: Verify local GitHub Action outputs
+        env:
+          REPORT_PATH: ${{ steps.cf08-action.outputs.report-path }}
+          EXIT_CODE: ${{ steps.cf08-action.outputs.exit-code }}
+          PASSED: ${{ steps.cf08-action.outputs.passed }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          assert os.environ["EXIT_CODE"] == "0"
+          assert os.environ["PASSED"] == "true"
+          report_path = Path(os.environ["REPORT_PATH"])
+          assert report_path.is_file()
+          report = json.loads(report_path.read_text())
+          assert report["schema"] == 1
+          assert report["policy"] == {"direction": "both", "fail_on": "breaking"}
+          assert report["decision"]["passed"] is True
+          assert report["decision"]["blocking_findings"] == 0
+          assert report["compatibility"]["findings"] == []
           PY
