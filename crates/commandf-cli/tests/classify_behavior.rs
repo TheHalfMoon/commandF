@@ -134,7 +134,13 @@ fn classify_fails_closed_on_corrupted_cache() {
     let output = run_classify(&before_lock, &before_cache, &after_lock, &after_cache);
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("cache object digest mismatch"), "stderr: {stderr}");
-    assert!(stderr.contains(&digest), "stderr did not include expected digest: {stderr}");
+    assert!(
+        stderr.contains("cache object digest mismatch"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(&digest),
+        "stderr did not include expected digest: {stderr}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }

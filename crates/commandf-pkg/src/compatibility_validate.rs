@@ -121,10 +121,7 @@ fn validate_unique_constraint_keys(
     Ok(())
 }
 
-fn validate_binding_strength(
-    value: Option<&Value>,
-    side: &str,
-) -> Result<(), CompatibilityError> {
+fn validate_binding_strength(value: Option<&Value>, side: &str) -> Result<(), CompatibilityError> {
     let Some(value) = value else {
         return Ok(());
     };
@@ -140,7 +137,10 @@ fn validate_binding_strength(
             message: format!("{side} binding.strength must be a string"),
         });
     };
-    if !matches!(strength, "example" | "preferred" | "extensible" | "required") {
+    if !matches!(
+        strength,
+        "example" | "preferred" | "extensible" | "required"
+    ) {
         return Err(CompatibilityError::InvalidChangeValue {
             field: "binding".to_owned(),
             message: format!("unrecognized {side} binding.strength {strength:?}"),
@@ -149,10 +149,7 @@ fn validate_binding_strength(
     Ok(())
 }
 
-fn validate_slicing_rules(
-    value: Option<&Value>,
-    side: &str,
-) -> Result<(), CompatibilityError> {
+fn validate_slicing_rules(value: Option<&Value>, side: &str) -> Result<(), CompatibilityError> {
     let Some(value) = value else {
         return Ok(());
     };
