@@ -223,9 +223,10 @@ fn inconsistent_check_decision_fails_before_mapping() {
 fn persisted_source_index_entry_count_overflow_is_rejected() {
     let repo = repo_with_source("example.fsh");
     let report = report();
+    let index = index_bytes("example.fsh");
     let mut mapped = build_source_mapped_check_report(
         &report,
-        &index_bytes("example.fsh"),
+        &index,
         repo.path(),
         Path::new("input/fsh"),
     )
@@ -233,7 +234,13 @@ fn persisted_source_index_entry_count_overflow_is_rejected() {
     mapped.source_index.entries = MAX_SUSHI_INDEX_ENTRIES + 1;
 
     assert!(matches!(
-        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped),
+        source_mapped_check_report_to_github_annotations_bytes(
+            &report,
+            &mapped,
+            &index,
+            repo.path(),
+            Path::new("input/fsh"),
+        ),
         Err(SourceMapError::TooManyEntries { .. })
     ));
 }
@@ -242,16 +249,24 @@ fn persisted_source_index_entry_count_overflow_is_rejected() {
 fn mapped_file_workflow_properties_are_escaped() {
     let repo = repo_with_source("weird,%name.fsh");
     let report = report();
+    let index = index_bytes("weird,%name.fsh");
     let mapped = build_source_mapped_check_report(
         &report,
-        &index_bytes("weird,%name.fsh"),
+        &index,
         repo.path(),
         Path::new("input/fsh"),
     )
     .unwrap();
 
     let annotations = String::from_utf8(
-        source_mapped_check_report_to_github_annotations_bytes(&report, &mapped).unwrap(),
+        source_mapped_check_report_to_github_annotations_bytes(
+            &report,
+            &mapped,
+            &index,
+            repo.path(),
+            Path::new("input/fsh"),
+        )
+        .unwrap(),
     )
     .unwrap();
     assert!(annotations.contains("file=input/fsh/weird%2C%25name.fsh,line=1,endLine=4"));
