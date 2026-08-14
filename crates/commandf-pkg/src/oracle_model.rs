@@ -53,7 +53,12 @@ impl OracleStates {
             self.content_interpretation,
         ]
         .into_iter()
-        .any(|state| matches!(state, OracleChangeState::Changed | OracleChangeState::CannotEvaluate))
+        .any(|state| {
+            matches!(
+                state,
+                OracleChangeState::Changed | OracleChangeState::CannotEvaluate
+            )
+        })
     }
 }
 
