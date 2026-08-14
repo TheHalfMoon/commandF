@@ -81,8 +81,7 @@ fn write_locked_state(root: &Path, archive: &[u8], version: &str) -> (PathBuf, P
 fn changed_states(dir: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let before = decode_hex(BEFORE_HEX);
     let after = decode_hex(AFTER_HEX);
-    let (before_lock, before_cache) =
-        write_locked_state(&dir.join("before"), &before, "1.0.0");
+    let (before_lock, before_cache) = write_locked_state(&dir.join("before"), &before, "1.0.0");
     let (after_lock, after_cache) = write_locked_state(&dir.join("after"), &after, "1.1.0");
     (before_lock, before_cache, after_lock, after_cache)
 }
