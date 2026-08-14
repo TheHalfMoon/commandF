@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::{
     CompatibilityDirection, CompatibilityError, CompatibilityFinding, CompatibilityReport,
-    CompatibilitySeverity, ElementView, ResourceKey, StructuralChange, StructuralChangeKind,
+    CompatibilitySeverity, ElementView, StructuralChange, StructuralChangeKind,
     StructuralDiffReport,
 };
 
