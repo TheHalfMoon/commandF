@@ -101,6 +101,21 @@ fn malformed_adapter_json_fails_closed() {
 }
 
 #[test]
+fn oversized_adapter_stdout_fails_before_json_parsing() {
+    let root = unique_temp_dir("oversized-stdout");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let adapter = root.join("adapter.sh");
+    write_executable(&adapter, "head -c 8388609 /dev/zero");
+    let (core, left, right) = package_inputs(&root);
+
+    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(2))
+        .expect_err("oversized stdout must fail");
+    let message = error.to_string();
+    assert!(message.contains("stdout exceeded limit"), "{message}");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn nonzero_adapter_exit_fails_closed_with_bounded_stderr() {
     let root = unique_temp_dir("exit");
     fs::create_dir_all(&root).expect("create temp dir");
