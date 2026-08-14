@@ -25,7 +25,7 @@ Both sides are exact CF-01 lock/cache states. Diff performs no acquisition.
 4. Emit deterministic package/version/archive evidence for both sides.
 5. Match canonical resources primarily by logical canonical URL when that URL is unique on both sides. If a URL occurs multiple times on either side, use exact `url|version` identities for that URL group. Canonical URL changes therefore appear as remove/add unless an exact identity remains.
 6. Match non-canonical resources by unique `(resourceType,id)` when available, otherwise by filename. Ambiguous non-canonical match keys fail explicitly.
-7. Emit typed resource additions/removals, filename/version/content-hash changes, and StructureDefinition structural changes.
+7. Emit typed resource additions/removals, filename/version/resourceType/id/content-hash changes, and StructureDefinition structural changes.
 8. For StructureDefinition resources, compare `snapshot` and `differential` as distinct views and match elements by exact `ElementDefinition.id`.
 9. Compare a versioned structural field set rather than editorial prose. CF-03 v1 includes path/slicing/cardinality/type/contentReference/representation/fixed-pattern/default/min-max/maxLength/conditions/constraints/mustSupport/modifier/summary/binding/extension-related structural fields and selected StructureDefinition metadata.
 10. Normalize known set-like arrays deterministically so irrelevant ordering does not produce a delta; preserve ordering where FHIR semantics may depend on order.
@@ -40,6 +40,8 @@ CF-03 v1 may emit only structural facts such as:
 - `resource_removed`
 - `resource_filename_changed`
 - `resource_version_changed`
+- `resource_type_changed`
+- `resource_id_changed`
 - `resource_bytes_changed`
 - `structure_field_changed`
 - `view_added`
