@@ -1,0 +1,16 @@
+# CF-04 Tasks
+
+Status: Implementation and convergence complete — founder review candidate
+
+- [x] **T001 — Compatibility report model.** Deterministic schema-v1 compatibility report, `BREAKING/RISKY/ADDITIVE` severity, producer/consumer direction, stable `cf04-rules-v1`, evidence-bearing findings, and byte-stable JSON are implemented.
+- [x] **T002 — Fail-closed classifier boundary.** `CompatibilityError` and public `classify_structural_diff` reject unsupported CF-03 schemas, unknown future structural fields, duplicate constraint keys, malformed evidence, and present unknown binding/slicing code values.
+- [x] **T003 — Cardinality and maxLength rules.** Producer/consumer variance is implemented for `min`, `max`, `maxLength`, and unbounded `*` maximums with malformed-value rejection.
+- [x] **T004 — Type-choice rules.** Type-code set narrowing/widening/incomparable replacement is directional; qualifier-only profile/targetProfile/aggregation changes remain conservatively `RISKY` rather than false `BREAKING` claims.
+- [x] **T005 — Fixed/pattern/value-bound rules.** Fixed and pattern add/remove/change behavior is explicit; generic pattern and value-bound rewrites remain `RISKY` when implication/order cannot be proven.
+- [x] **T006 — Terminology binding rules.** FHIR R4 binding-strength changes are directional; ValueSet changes are `RISKY` pending CF-07; unknown present binding strengths fail closed.
+- [x] **T007 — Constraint/support/modifier/slicing rules.** Keyed constraint rules, Must Support `RISKY`, new modifier consumer `BREAKING`, slicing restrict/relax/order rules, duplicate constraint-key rejection, and unknown slicing-rule rejection are implemented.
+- [x] **T008 — Resource/view/element/residual rules.** Every current CF-03 change kind and interpreted field is explicitly classified or fails closed; byte-only facts are subsumed when a more precise fact exists for the same resource.
+- [x] **T009 — Snapshot/differential deduplication.** Snapshot identities are pre-indexed and equivalent differential field evidence is removed through indexed lookup, with snapshot evidence winning.
+- [x] **T010 — CLI.** `commandf classify` uses the same explicit two-state lock/cache contract and loader as `commandf diff`, performs no acquisition, and emits JSON.
+- [x] **T011 — Synthetic/CLI/real smoke validation.** Rule positive/counterexample coverage, fail-closed regressions, deterministic classification, CLI error contracts, offline success, and independent official R4 self-classification are implemented.
+- [x] **T012 — Review and convergence.** Exact implementation head `eccf64f8450cd50e72f771e1c2ade947fead7eb0` passed run `31763844412` (Format, Clippy `--locked`, full tests, independent official R4 inspect/self-diff/self-classify). CodeRabbit returned two actionable findings; both were fixed, regression-covered, replied to with exact-head evidence, and their review threads were resolved. Reviewer nitpicks were dispositioned in the plan/convergence record. Qodo `/review` was requested; no Qodo PASS is claimed without a returned result. Final documentation-head validation is recorded in PR metadata rather than creating a self-referential documentation commit chain. PR remains Draft and CF-05 is not started.
