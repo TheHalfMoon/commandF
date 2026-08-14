@@ -1,6 +1,34 @@
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{self, Command};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+struct TestDir(PathBuf);
+
+impl TestDir {
+    fn new(label: &str) -> Self {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "commandf-cf08-{label}-{}-{nonce}",
+            process::id()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
 
 fn commandf() -> Command {
     Command::new(env!("CARGO_BIN_EXE_commandf"))
@@ -37,7 +65,7 @@ fn github_annotations_requires_input() {
 
 #[test]
 fn github_annotations_empty_valid_report_emits_nothing() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = TestDir::new("empty");
     let report = temp.path().join("check.json");
     write(&report, empty_check_report().as_bytes());
 
@@ -52,7 +80,7 @@ fn github_annotations_empty_valid_report_emits_nothing() {
 
 #[test]
 fn github_annotations_policy_failed_report_still_exits_zero() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = TestDir::new("policy-failed");
     let report = temp.path().join("check.json");
     let content = empty_check_report()
         .replace("\"passed\": true", "\"passed\": false")
@@ -69,7 +97,7 @@ fn github_annotations_policy_failed_report_still_exits_zero() {
 
 #[test]
 fn github_annotations_malformed_json_fails_operationally() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = TestDir::new("malformed");
     let report = temp.path().join("check.json");
     write(&report, b"{not-json");
 
@@ -85,7 +113,7 @@ fn github_annotations_malformed_json_fails_operationally() {
 
 #[test]
 fn github_annotations_oversized_input_fails_before_json_parse() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = TestDir::new("oversized");
     let report = temp.path().join("large.json");
     let file = fs::File::create(&report).unwrap();
     file.set_len(64 * 1024 * 1024 + 1).unwrap();
