@@ -1,6 +1,6 @@
 # CF-06 — HL7 Comparison Oracle Divergence
 
-Status: Approved for implementation
+Status: Implemented — convergence evidence is recorded in `convergence.md` and final-head GitHub metadata
 
 ## Purpose
 
