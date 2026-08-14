@@ -13,6 +13,9 @@ mod cache;
 mod error;
 mod lock;
 mod model;
+mod oracle_error;
+mod oracle_model;
+mod oracle_reconcile;
 mod registry;
 mod resolver;
 mod source;
@@ -30,6 +33,16 @@ pub use cache::PackageCache;
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
+pub use oracle_error::OracleError;
+pub use oracle_model::{
+    Hl7OracleReport, OracleChangeState, OracleDivergenceReport, OracleIdentity, OracleMessage,
+    OracleMessageLevel, OracleResourceResult, OracleResourceStatus, OracleStates,
+    HL7_ORACLE_PROJECT, HL7_ORACLE_RELEASE, HL7_ORACLE_SOURCE_COMMIT,
+    HL7_VALIDATOR_JAR_SHA256,
+};
+pub use oracle_reconcile::{
+    parse_hl7_oracle_report, reconcile_hl7_oracle, validate_hl7_oracle_report,
+};
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
