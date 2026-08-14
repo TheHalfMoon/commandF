@@ -1035,18 +1035,18 @@ fn bool_pair(
     ))
 }
 
-fn optional_bool(
-    value: &Option<Value>,
-    field: &str,
-) -> Result<Option<bool>, CompatibilityError> {
+fn optional_bool(value: &Option<Value>, field: &str) -> Result<Option<bool>, CompatibilityError> {
     match value {
         None => Ok(None),
-        Some(value) => value.as_bool().map(Some).ok_or_else(|| {
-            CompatibilityError::InvalidChangeValue {
-                field: field.to_owned(),
-                message: "expected a boolean".to_owned(),
-            }
-        }),
+        Some(value) => {
+            value
+                .as_bool()
+                .map(Some)
+                .ok_or_else(|| CompatibilityError::InvalidChangeValue {
+                    field: field.to_owned(),
+                    message: "expected a boolean".to_owned(),
+                })
+        }
     }
 }
 

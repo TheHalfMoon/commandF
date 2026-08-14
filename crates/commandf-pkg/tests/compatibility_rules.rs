@@ -172,8 +172,7 @@ fn type_profile_qualifier_change_is_risky_not_false_breaking() {
 
     assert_eq!(classified.findings.len(), 2);
     assert!(classified.findings.iter().all(|finding| {
-        finding.rule_id == "CF04-TYPE-005"
-            && finding.severity == CompatibilitySeverity::Risky
+        finding.rule_id == "CF04-TYPE-005" && finding.severity == CompatibilitySeverity::Risky
     }));
 }
 
@@ -210,8 +209,7 @@ fn fixed_pattern_and_bounds_do_not_overclaim_equivalence() {
             && finding.direction == CompatibilityDirection::Producer
     }));
     assert!(classified.findings.iter().any(|finding| {
-        finding.rule_id == "CF04-PATTERN-003"
-            && finding.severity == CompatibilitySeverity::Risky
+        finding.rule_id == "CF04-PATTERN-003" && finding.severity == CompatibilitySeverity::Risky
     }));
     assert!(classified.findings.iter().any(|finding| {
         finding.rule_id == "CF04-BOUND-003" && finding.severity == CompatibilitySeverity::Risky
@@ -354,8 +352,7 @@ fn same_key_constraint_expression_change_is_risky_not_false_breaking() {
 
     assert_eq!(classified.findings.len(), 2);
     assert!(classified.findings.iter().all(|finding| {
-        finding.rule_id == "CF04-CONSTRAINT-003"
-            && finding.severity == CompatibilitySeverity::Risky
+        finding.rule_id == "CF04-CONSTRAINT-003" && finding.severity == CompatibilitySeverity::Risky
     }));
 }
 
