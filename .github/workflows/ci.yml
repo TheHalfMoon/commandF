@@ -26,7 +26,7 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace --all-features
-      - name: Real FHIR registry, inspect, self-diff, and self-classify smoke
+      - name: Real FHIR registry, inspect, self-diff, self-classify, and self-terminology smoke
         run: |
           rm -rf /tmp/commandf-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
@@ -37,6 +37,7 @@ jobs:
           cargo run --locked --quiet -p commandf -- pkg verify --cache /tmp/commandf-smoke/after-cache --lock /tmp/commandf-smoke/after.lock
           cargo run --locked --quiet -p commandf -- diff hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/diff.json
           cargo run --locked --quiet -p commandf -- classify hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/classify.json
+          cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
 
           python - <<'PY'
           import json
@@ -66,4 +67,15 @@ jobs:
           assert classify["before"]["version"] == "4.0.1"
           assert classify["after"]["version"] == "4.0.1"
           assert classify["findings"] == []
+
+          terminology = json.loads(Path("/tmp/commandf-smoke/terminology.json").read_text())
+          assert terminology["schema"] == 1
+          assert terminology["ruleset"] == "cf07-terminology-v1"
+          assert terminology["package_name"] == "hl7.fhir.r4.core"
+          assert terminology["before"]["version"] == "4.0.1"
+          assert terminology["after"]["version"] == "4.0.1"
+          assert terminology["compatibility"]["findings"] == []
+          assert terminology["code_systems"] == []
+          assert terminology["value_sets"] == []
+          assert terminology["binding_refinements"] == []
           PY
