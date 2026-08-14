@@ -22,7 +22,10 @@ fn archive(body: &[u8]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn diff(before: &[u8], after: &[u8]) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
+fn diff(
+    before: &[u8],
+    after: &[u8],
+) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
     diff_package_archives(
         "example.pkg",
         "1.0.0",
