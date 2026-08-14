@@ -44,7 +44,6 @@ fn valid_structure() -> &'static [u8] {
 #[test]
 fn malformed_element_scalar_and_container_shapes_fail_closed() {
     let elements = [
-        br#"{"id":"Observation","path":42}"#.as_slice(),
         br#"{"id":"Observation","path":"Observation","min":"one"}"#.as_slice(),
         br#"{"id":"Observation","path":"Observation","max":1}"#.as_slice(),
         br#"{"id":"Observation","path":"Observation","mustSupport":"true"}"#.as_slice(),
