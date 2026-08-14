@@ -288,7 +288,7 @@ fn normalized_optional_resource_field(
     let Some(value) = object.get(field) else {
         return Ok(None);
     };
-    validate_resource_structural_field(field, value).map_err(|message| {
+    validate_resource_structural_field(object, field, value).map_err(|message| {
         StructuralDiffError::InvalidStructuralField {
             file: file.to_owned(),
             field: field.to_owned(),
@@ -308,7 +308,7 @@ fn normalized_optional_element_field(
     let Some(value) = object.get(field) else {
         return Ok(None);
     };
-    validate_element_structural_field(field, value).map_err(|message| {
+    validate_element_structural_field(object, field, value).map_err(|message| {
         StructuralDiffError::InvalidStructuralField {
             file: file.to_owned(),
             field: format!("{}.element[{element_id}].{field}", view_name(view)),

@@ -65,7 +65,11 @@ fn canonical_multiplicity_without_usable_version_fails_closed() {
 fn malformed_element_structural_fields_fail_closed() {
     let cases = [
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","representation":"xmlAttr"}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","representation":[42]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","representation":[null]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","representation":["xmlAttr"],"_representation":{}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","condition":{"bad":true}}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","condition":[false]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":{"code":"string"}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":["string"]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":42}]}"#.as_slice(),
@@ -73,6 +77,10 @@ fn malformed_element_structural_fields_fail_closed() {
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"_code":{}}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"","_code":{"extension":[{"url":"x"}]}}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"string","profile":"x"}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"string","profile":[42]}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"Reference","targetProfile":[false]}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"Reference","aggregation":[{}]}]}"#.as_slice(),
+        br#"{"id":"Observation.value[x]","path":"Observation.value[x]","type":[{"code":"Reference","profile":[null]}]}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":{"key":"a"}}"#.as_slice(),
         br#"{"id":"Observation.value[x]","path":"Observation.value[x]","constraint":[{"severity":"error"}]}"#.as_slice(),
     ];
@@ -100,16 +108,36 @@ fn malformed_element_structural_fields_fail_closed() {
 
 #[test]
 fn malformed_resource_context_fields_fail_closed() {
-    let before = archive_with_entries(&[(
-        "package/StructureDefinition-example.json",
-        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","contextInvariant":"not-an-array","snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
-    )]);
     let after = archive_with_entries(&[(
         "package/StructureDefinition-example.json",
         br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
     )]);
+
+    for context_invariant in [
+        br#""not-an-array""#.as_slice(),
+        br#"[42]"#.as_slice(),
+        br#"[null]"#.as_slice(),
+    ] {
+        let before_body = format!(
+            "{{\"resourceType\":\"StructureDefinition\",\"id\":\"example\",\"url\":\"https://example.org/StructureDefinition/example\",\"contextInvariant\":{},\"snapshot\":{{\"element\":[{{\"id\":\"Observation\",\"path\":\"Observation\"}}]}}}}",
+            std::str::from_utf8(context_invariant).unwrap()
+        );
+        let before = archive_with_entries(&[(
+            "package/StructureDefinition-example.json",
+            before_body.as_bytes(),
+        )]);
+        assert!(matches!(
+            diff(&before, &after),
+            Err(StructuralDiffError::InvalidStructuralField { .. })
+        ));
+    }
+
+    let malformed_metadata = archive_with_entries(&[(
+        "package/StructureDefinition-example.json",
+        br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","contextInvariant":["a"],"_contextInvariant":{},"snapshot":{"element":[{"id":"Observation","path":"Observation"}]}}"#,
+    )]);
     assert!(matches!(
-        diff(&before, &after),
+        diff(&malformed_metadata, &after),
         Err(StructuralDiffError::InvalidStructuralField { .. })
     ));
 
@@ -142,6 +170,15 @@ fn valid_primitive_metadata_type_code_is_preserved() {
     );
     let archive =
         archive_with_entries(&[("package/StructureDefinition-example.json", body.as_bytes())]);
+
+    let report = diff(&archive, &archive).unwrap();
+    assert!(report.changes.is_empty());
+}
+
+#[test]
+fn valid_repeating_primitive_metadata_is_accepted() {
+    let body = br#"{"resourceType":"StructureDefinition","id":"example","url":"https://example.org/StructureDefinition/example","contextInvariant":[null,"a"],"_contextInvariant":[{"extension":[{"url":"https://example.org/context","valueString":"x"}]},null],"snapshot":{"element":[{"id":"Observation.value[x]","path":"Observation.value[x]","representation":[null,"xmlAttr"],"_representation":[{"id":"rep"},null],"condition":[null],"_condition":[{"extension":[{"url":"https://example.org/condition","valueString":"x"}]}],"type":[{"code":"Reference","profile":[null],"_profile":[{"extension":[{"url":"https://example.org/profile","valueString":"https://example.org/Profile"}]}]}]}]}}"#;
+    let archive = archive_with_entries(&[("package/StructureDefinition-example.json", body)]);
 
     let report = diff(&archive, &archive).unwrap();
     assert!(report.changes.is_empty());
