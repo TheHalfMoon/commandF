@@ -15,6 +15,7 @@ mod lock;
 mod model;
 mod oracle_error;
 mod oracle_model;
+mod oracle_process;
 mod oracle_reconcile;
 mod registry;
 mod resolver;
@@ -41,6 +42,10 @@ pub use oracle_model::{
     OracleMessageLevel, OracleResourceIdentity, OracleResourceResult, OracleResourceStatus,
     OracleStates, HL7_ORACLE_PROJECT, HL7_ORACLE_RELEASE, HL7_ORACLE_SOURCE_COMMIT,
     HL7_VALIDATOR_JAR_SHA256,
+};
+pub use oracle_process::{
+    run_hl7_oracle_adapter, Hl7OracleInvocation, DEFAULT_ORACLE_TIMEOUT_SECS,
+    MAX_ORACLE_STDERR_BYTES, MAX_ORACLE_STDOUT_BYTES,
 };
 pub use oracle_reconcile::{
     parse_hl7_oracle_report, reconcile_hl7_oracle, validate_hl7_oracle_report,
