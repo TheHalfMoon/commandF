@@ -28,7 +28,7 @@ jobs:
         run: cargo test --locked --workspace --all-features
       - name: CF-08 Action runner security regression
         run: bash .github/scripts/test-cf08-action-runner.sh
-      - name: Real FHIR registry, inspect, self-diff, self-classify, self-check, and self-terminology smoke
+      - name: Real FHIR registry, inspect, self-diff, self-classify, and self-check smoke
         run: |
           rm -rf /tmp/commandf-smoke
           cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 --cache /tmp/commandf-smoke/before-cache --lock /tmp/commandf-smoke/before.lock
@@ -41,7 +41,6 @@ jobs:
           cargo run --locked --quiet -p commandf -- classify hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/classify.json
           cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/check.json
           cargo run --locked --quiet -p commandf -- check hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format sarif > /tmp/commandf-smoke/check.sarif
-          cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
 
           python - <<'PY'
           import json
@@ -86,6 +85,13 @@ jobs:
           assert sarif["runs"][0]["results"] == []
           assert sarif["runs"][0]["properties"]["commandf.decision.passed"] is True
           assert sarif["runs"][0]["properties"]["commandf.sourceMapping"] == "deferred_cf09"
+          PY
+      - name: Real FHIR self-terminology smoke
+        run: |
+          cargo run --locked --quiet -p commandf -- terminology hl7.fhir.r4.core --before-lock /tmp/commandf-smoke/before.lock --before-cache /tmp/commandf-smoke/before-cache --after-lock /tmp/commandf-smoke/after.lock --after-cache /tmp/commandf-smoke/after-cache --format json > /tmp/commandf-smoke/terminology.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
           terminology = json.loads(Path("/tmp/commandf-smoke/terminology.json").read_text())
           assert terminology["schema"] == 1
