@@ -96,7 +96,12 @@ fn value_set(version: &str, codes: &[&str]) -> Value {
     })
 }
 
-fn locked(name: &str, version: &str, sha256: String, dependencies: BTreeMap<String, String>) -> LockedPackage {
+fn locked(
+    name: &str,
+    version: &str,
+    sha256: String,
+    dependencies: BTreeMap<String, String>,
+) -> LockedPackage {
     LockedPackage {
         name: name.to_owned(),
         version: version.to_owned(),
@@ -152,12 +157,7 @@ fn unchanged_binding_detects_narrowed_dependency_value_set() {
                 before_root_digest.clone(),
                 BTreeMap::from([("example.term".to_owned(), "1.0.0".to_owned())]),
             ),
-            locked(
-                "example.term",
-                "1.0.0",
-                before_term_digest,
-                BTreeMap::new(),
-            ),
+            locked("example.term", "1.0.0", before_term_digest, BTreeMap::new()),
         ],
     );
     let after_lock = Lockfile::new(
@@ -169,12 +169,7 @@ fn unchanged_binding_detects_narrowed_dependency_value_set() {
                 after_root_digest.clone(),
                 BTreeMap::from([("example.term".to_owned(), "2.0.0".to_owned())]),
             ),
-            locked(
-                "example.term",
-                "2.0.0",
-                after_term_digest,
-                BTreeMap::new(),
-            ),
+            locked("example.term", "2.0.0", after_term_digest, BTreeMap::new()),
         ],
     );
 
@@ -218,7 +213,10 @@ fn unchanged_binding_detects_narrowed_dependency_value_set() {
     assert_eq!(refinement.rule_id.as_deref(), Some("CF07-BIND-001"));
     assert_eq!(refinement.severity, Some(CompatibilitySeverity::Breaking));
     assert_eq!(refinement.direction, Some(CompatibilityDirection::Producer));
-    assert_eq!(report.to_json_bytes().unwrap(), report.to_json_bytes().unwrap());
+    assert_eq!(
+        report.to_json_bytes().unwrap(),
+        report.to_json_bytes().unwrap()
+    );
 }
 
 #[test]
@@ -248,15 +246,30 @@ fn corrupted_dependency_cache_fails_before_binding_proof() {
     let before_lock = Lockfile::new(
         vec!["example.root@1.0.0".to_owned()],
         vec![
-            locked("example.root", "1.0.0", before_root_digest.clone(), BTreeMap::new()),
+            locked(
+                "example.root",
+                "1.0.0",
+                before_root_digest.clone(),
+                BTreeMap::new(),
+            ),
             locked("example.term", "1.0.0", before_term_digest, BTreeMap::new()),
         ],
     );
     let after_lock = Lockfile::new(
         vec!["example.root@1.0.0".to_owned()],
         vec![
-            locked("example.root", "1.0.0", after_root_digest.clone(), BTreeMap::new()),
-            locked("example.term", "1.0.0", after_term_digest.clone(), BTreeMap::new()),
+            locked(
+                "example.root",
+                "1.0.0",
+                after_root_digest.clone(),
+                BTreeMap::new(),
+            ),
+            locked(
+                "example.term",
+                "1.0.0",
+                after_term_digest.clone(),
+                BTreeMap::new(),
+            ),
         ],
     );
 

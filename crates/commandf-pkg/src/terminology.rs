@@ -239,11 +239,8 @@ fn build_binding_refinements(
                 continue;
             }
 
-            let delta = compare_binding_value_sets(
-                pair.key.clone(),
-                before_resource,
-                after_resource,
-            )?;
+            let delta =
+                compare_binding_value_sets(pair.key.clone(), before_resource, after_resource)?;
             let stable_required = before_strength.as_deref() == Some("required")
                 && after_strength.as_deref() == Some("required");
             let interaction_reason = (before_strength != after_strength)

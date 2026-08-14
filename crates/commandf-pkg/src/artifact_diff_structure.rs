@@ -37,8 +37,8 @@ pub(crate) fn matched_element_bindings(
         ("snapshot", ElementView::Snapshot),
         ("differential", ElementView::Differential),
     ] {
-        let before_view = parse_view(before, view_name_value, &before_resource.filename)?
-            .unwrap_or_default();
+        let before_view =
+            parse_view(before, view_name_value, &before_resource.filename)?.unwrap_or_default();
         let after_view =
             parse_view(after, view_name_value, &after_resource.filename)?.unwrap_or_default();
         for element_id in before_view.keys().filter(|id| after_view.contains_key(*id)) {
