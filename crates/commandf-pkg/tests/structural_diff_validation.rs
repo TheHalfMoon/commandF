@@ -22,7 +22,10 @@ fn archive_with_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn diff(before: &[u8], after: &[u8]) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
+fn diff(
+    before: &[u8],
+    after: &[u8],
+) -> Result<commandf_pkg::StructuralDiffReport, StructuralDiffError> {
     diff_package_archives(
         "example.pkg",
         "1.0.0",
@@ -80,10 +83,8 @@ fn malformed_element_structural_fields_fail_closed() {
             "package/StructureDefinition-example.json",
             before_body.as_bytes(),
         )]);
-        let after = archive_with_entries(&[(
-            "package/StructureDefinition-example.json",
-            after_body,
-        )]);
+        let after =
+            archive_with_entries(&[("package/StructureDefinition-example.json", after_body)]);
 
         let error = diff(&before, &after).unwrap_err();
         assert!(matches!(
