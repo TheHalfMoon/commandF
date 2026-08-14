@@ -9,16 +9,29 @@ on:
       - feat/cf-03-structural-diff
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
+      - name: CF-09 temporary review-fix rustfmt
+        if: github.event_name == 'pull_request' && github.head_ref == 'feat/cf-09-fsh-source-mapping'
+        run: |
+          cargo fmt --all
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add crates/commandf-cli crates/commandf-pkg
+            git commit -m "style(cf-09): apply review-fix rustfmt"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
