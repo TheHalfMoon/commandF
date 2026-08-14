@@ -2,6 +2,7 @@ mod archive;
 mod artifact_error;
 mod artifact_inspect;
 mod artifact_model;
+mod artifact_scan;
 mod cache;
 mod error;
 mod lock;
