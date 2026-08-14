@@ -1,7 +1,7 @@
 use crate::{
     check::{direction_selected, validate_compatibility_report},
-    CheckError, CheckReport, CompatibilityDirection, CompatibilityFinding, CompatibilitySeverity,
-    ElementView, ResourceKeyKind, StructuralChangeKind,
+    evaluate_compatibility_policy, CheckError, CheckReport, CompatibilityDirection,
+    CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind, StructuralChangeKind,
 };
 
 const MAX_ERROR_ANNOTATIONS: usize = 10;
@@ -44,6 +44,10 @@ pub fn check_report_to_github_annotations_bytes(
         });
     }
     validate_compatibility_report(&report.compatibility)?;
+    let expected = evaluate_compatibility_policy(&report.compatibility, report.policy)?;
+    if report.decision != expected.decision {
+        return Err(CheckError::InconsistentCheckDecision);
+    }
 
     let selected = report
         .compatibility
@@ -91,7 +95,9 @@ pub fn check_report_to_github_annotations_bytes(
             omitted[0], omitted[1], omitted[2]
         );
         output.push_str("::notice title=");
-        output.push_str(&escape_property("commandF annotation projection incomplete"));
+        output.push_str(&escape_property(
+            "commandF annotation projection incomplete",
+        ));
         output.push_str("::");
         output.push_str(&escape_data(&message));
         output.push('\n');
