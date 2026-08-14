@@ -1,8 +1,34 @@
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{self, Command};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use tempfile::tempdir;
+struct TestDir(PathBuf);
+
+impl TestDir {
+    fn new() -> Self {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "commandf-cf09-fixture-{}-{nonce}",
+            process::id()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
 
 fn commandf() -> Command {
     Command::new(env!("CARGO_BIN_EXE_commandf"))
@@ -20,7 +46,7 @@ fn failed_check_report() -> String {
 fn committed_sushi_shaped_fixture_maps_and_renders() {
     let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cf09");
     let index = fixture_root.join("fsh-index.json");
-    let temp = tempdir().unwrap();
+    let temp = TestDir::new();
     let report = temp.path().join("check.json");
     let mapped = temp.path().join("mapped.json");
     fs::write(&report, failed_check_report()).unwrap();
