@@ -140,6 +140,12 @@ run_case() {
   if [[ "$source_map_code" == "0" && ( "$check_code" == "0" || "$check_code" == "2" ) ]]; then
     grep -Fx -- '--source-map' "$render_argv" >/dev/null
     grep -Fx -- "$source_map_path" "$render_argv" >/dev/null
+    grep -Fx -- '--fsh-index' "$render_argv" >/dev/null
+    grep -Fx -- "$fsh_index" "$render_argv" >/dev/null
+    grep -Fx -- '--repo-root' "$render_argv" >/dev/null
+    grep -Fx -- "$case_dir/workspace" "$render_argv" >/dev/null
+    grep -Fx -- '--fsh-root' "$render_argv" >/dev/null
+    grep -Fx -- 'input/fsh; literal $(touch never)' "$render_argv" >/dev/null
   fi
 }
 
