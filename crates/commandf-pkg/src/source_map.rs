@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
@@ -100,6 +101,15 @@ pub fn build_source_mapped_check_report(
             return Err(SourceMapError::MissingSource(
                 entry.fsh_file.display().to_string(),
             ));
+        }
+        let line_count = source_line_count(&source_canonical)?;
+        if u64::from(entry.end_line) > line_count {
+            return Err(SourceMapError::InvalidIndex(format!(
+                "line range for {} ends at {}, but current source has {} lines",
+                entry.fsh_file.display(),
+                entry.end_line,
+                line_count
+            )));
         }
 
         let repo_relative = source_canonical
@@ -266,6 +276,35 @@ fn parse_sushi_index(
         }
     }
     Ok(index)
+}
+
+fn source_line_count(path: &Path) -> Result<u64, SourceMapError> {
+    let mut file = fs::File::open(path)?;
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut newline_count = 0_u64;
+    let mut saw_byte = false;
+    let mut last_byte = None;
+
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        saw_byte = true;
+        newline_count += buffer[..read]
+            .iter()
+            .filter(|byte| **byte == b'\n')
+            .count() as u64;
+        last_byte = Some(buffer[read - 1]);
+    }
+
+    if !saw_byte {
+        Ok(0)
+    } else if last_byte == Some(b'\n') {
+        Ok(newline_count)
+    } else {
+        Ok(newline_count + 1)
+    }
 }
 
 fn portable_relative_path(
