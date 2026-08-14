@@ -1,6 +1,6 @@
 # CF-09 — FSH Source Mapping
 
-Status: implemented / convergence candidate
+Status: implemented / reconvergence candidate after late Codex P1 remediation
 
 ## Purpose
 
@@ -60,13 +60,25 @@ commandf source-map \
 
 The command performs no package acquisition and no SUSHI execution. It consumes an already generated SUSHI machine index plus repository source files.
 
-CF-08 presentation accepts optional source-map evidence:
+Artifact-level CF-08 presentation remains:
+
+```text
+commandf github-annotations \
+  --input <check-report.json>
+```
+
+Physical mapped presentation requires current source evidence at render time:
 
 ```text
 commandf github-annotations \
   --input <check-report.json> \
-  [--source-map <mapped-report.json>]
+  --source-map <mapped-report.json> \
+  --fsh-index <fsh-generated/data/fsh-index.json> \
+  --repo-root <repository-root> \
+  --fsh-root <repo-relative-fsh-root>
 ```
+
+`--source-map` is not accepted as physical-location authority by itself. When mapped projection is requested, all four mapping-evidence arguments are required together.
 
 The root Action accepts optional inputs:
 
@@ -75,7 +87,7 @@ fsh-index
 fsh-root
 ```
 
-When `fsh-index` is empty, CF-08 artifact-level behavior remains unchanged. When supplied, the Action uses `$GITHUB_WORKSPACE` as repository root and requires valid CF-09 mapping before rendering physical locations.
+When `fsh-index` is empty, CF-08 artifact-level behavior remains unchanged. When supplied, the Action uses `$GITHUB_WORKSPACE` as repository root, creates the mapped report, and then re-proves the mapping from the same current index and workspace before rendering physical locations.
 
 ## Mapping rule
 
@@ -108,7 +120,7 @@ Columns are not emitted. The annotation message states that the range is definit
 
 A removed resource normally has no current FSH location and remains locationless rather than receiving a fabricated path.
 
-## Source-map report
+## Source-map report and render-time proof
 
 CF-09 emits deterministic schema-v1 JSON containing:
 
@@ -128,7 +140,15 @@ unmapped_no_index_entry
 
 An invalid, stale, ambiguous, escaping, or oversized index is an operational failure rather than an unmapped success state.
 
-The serialized source map is deterministic derived evidence, not a cryptographic freshness attestation. At creation time commandF validates the current repository/FSH roots, source existence, canonical containment, and exported line range. A persisted source-map file can later become stale if the repository changes; callers must not treat its index SHA as a signature of current workspace state. The GitHub Action creates and renders mapping evidence within the same checked-out run/workspace.
+The serialized source map is deterministic derived evidence, not a cryptographic freshness attestation and not standalone physical-location authority. Before mapped GitHub projection commandF MUST:
+
+1. validate the persisted source-map shape and embedded CheckReport;
+2. re-read the current bounded SUSHI index;
+3. re-run the same source-map builder against the current repository root and FSH root;
+4. require full equality between the freshly rebuilt map and the persisted map;
+5. render physical properties from the freshly rebuilt map only.
+
+Any mismatch in source-index digest/root/count, mapping status, file, or range fails with an operational error and emits no mapped annotation. A persisted map can become stale after repository/index changes; current evidence re-proof is mandatory whenever physical locations are emitted.
 
 ## SUSHI-index validation and bounds
 
@@ -157,7 +177,7 @@ Persisted source-map validation also rejects an entry count above 100,000 and re
 
 Unknown future SUSHI index fields MAY be ignored; the six fields owned by CF-09 remain shape-validated.
 
-## Path and publication safety
+## Path, diagnostic, and publication safety
 
 All emitted GitHub `file` properties are normalized repository-relative paths using `/` separators.
 
@@ -165,15 +185,17 @@ CF-09 rejects absolute roots/files, parent traversal, symlink escape, repository
 
 Workflow-command properties reuse CF-08 escaping for `%`, CR/LF, `:`, and `,`. Action inputs are passed as quoted argv and are never evaluated as shell fragments.
 
+Runtime CLI errors are bounded and sanitized before stderr publication. Finding/index-controlled `%`, CR/LF, `:`, `,`, Unicode line separators, and remaining control characters cannot create a second GitHub workflow command through an operational diagnostic. Help/version output remains ordinary static Clap output.
+
 ## Authority preservation
 
 Source mapping cannot change severity, direction, rule id, compatibility message/evidence, blocking counts, CF-05 policy decision, or CF-05 exit code.
 
-The persisted CF-05 report is revalidated before mapping and again before GitHub projection. A supplied mapped report must embed the exact same validated `CheckReport` being rendered.
+The persisted CF-05 report is revalidated before mapping and again before GitHub projection. A supplied mapped report must embed the exact same validated `CheckReport` being rendered, and its physical-location evidence must equal a fresh rebuild from the current index/tree before use.
 
 ## GitHub presentation
 
-Mapped findings add only proven location properties to the existing bounded CF-08 workflow command:
+Mapped findings add only re-proven location properties to the existing bounded CF-08 workflow command:
 
 ```text
 file
@@ -202,6 +224,7 @@ CF-09 does not add:
 - automatic SUSHI execution/download;
 - mapping for non-FSH authoring formats;
 - SARIF physical-location enrichment in V1;
+- cryptographic signing/attestation of persisted source-map files;
 - public real-IG delta corpus — CF-10;
 - ecosystem graph/blast radius — CF-11/12;
 - baselines/suppressions — CF-13;
