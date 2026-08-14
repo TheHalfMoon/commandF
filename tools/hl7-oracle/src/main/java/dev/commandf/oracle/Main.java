@@ -113,7 +113,9 @@ public final class Main {
 
     IContextResourceLoader coreLoader = ValidatorUtils.loaderForVersion(core.fhirVersion());
     SimpleWorkerContext context = new SimpleWorkerContext.SimpleWorkerContextBuilder()
+        .withAllowLoadingDuplicates(true)
         .fromPackage(core, coreLoader, false);
+    context.setAllowLoadingDuplicates(false);
     context.setCanRunWithoutTerminology(true);
 
     NpmPackage side = loadPackage(sidePath);
