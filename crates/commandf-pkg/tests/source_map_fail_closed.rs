@@ -159,12 +159,7 @@ fn source_range_beyond_current_file_fails_closed() {
     .unwrap();
 
     assert!(matches!(
-        build_source_mapped_check_report(
-            &report(),
-            &stale,
-            repo.path(),
-            Path::new("input/fsh"),
-        ),
+        build_source_mapped_check_report(&report(), &stale, repo.path(), Path::new("input/fsh"),),
         Err(SourceMapError::InvalidIndex(_))
     ));
 }
