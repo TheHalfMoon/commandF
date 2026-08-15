@@ -8,15 +8,19 @@ use std::process::{self, ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    build_terminology_diff_report, check_report_to_github_annotations_bytes,
-    check_report_to_sarif_bytes, classify_structural_diff, diff_package_archives,
-    evaluate_compatibility_policy, inspect_package, CheckDirection, CheckFailOn, CheckPolicy,
-    CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile, PackageCache,
-    PackageName, PackageRequest, Resolver, StructuralDiffReport, TerminologyDiffReport,
-    TerminologyPackageState, VersionConstraint,
+    build_source_mapped_check_report, build_terminology_diff_report,
+    check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
+    classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
+    inspect_package, source_mapped_check_report_to_github_annotations_bytes, CheckDirection,
+    CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage,
+    Lockfile, PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
+    StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState, VersionConstraint,
+    MAX_SOURCE_MAPPED_REPORT_BYTES,
 };
 
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_SUSHI_INDEX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_RUNTIME_DIAGNOSTIC_CHARS: usize = 4_096;
 
 #[derive(Parser)]
 #[command(
@@ -119,9 +123,29 @@ enum Command {
         #[arg(long, value_enum, default_value = "json")]
         format: OutputFormat,
     },
+    SourceMap {
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        fsh_index: PathBuf,
+        #[arg(long)]
+        repo_root: PathBuf,
+        #[arg(long)]
+        fsh_root: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     GithubAnnotations {
         #[arg(long)]
         input: PathBuf,
+        #[arg(long)]
+        source_map: Option<PathBuf>,
+        #[arg(long)]
+        fsh_index: Option<PathBuf>,
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
+        #[arg(long)]
+        fsh_root: Option<PathBuf>,
     },
 }
 
@@ -210,7 +234,7 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(exit_code) => exit_code,
         Err(error) => {
-            eprintln!("commandf: {error}");
+            eprintln!("commandf: {}", sanitize_runtime_diagnostic(error.as_ref()));
             ExitCode::from(1)
         }
     }
@@ -397,14 +421,80 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 OutputFormat::Json => io::stdout().write_all(&bytes)?,
             }
         }
-        Command::GithubAnnotations { input } => {
+        Command::SourceMap {
+            input,
+            fsh_index,
+            repo_root,
+            fsh_root,
+            output,
+        } => {
+            let report_bytes = read_bounded_file(&input, MAX_CHECK_REPORT_INPUT_BYTES)?;
+            let report = CheckReport::from_json_slice(&report_bytes)?;
+            let index_bytes = read_bounded_file(&fsh_index, MAX_SUSHI_INDEX_INPUT_BYTES)?;
+            let mapped =
+                build_source_mapped_check_report(&report, &index_bytes, &repo_root, &fsh_root)?;
+            let bytes = mapped.to_json_bytes()?;
+            write_check_output(&bytes, output.as_deref())?;
+        }
+        Command::GithubAnnotations {
+            input,
+            source_map,
+            fsh_index,
+            repo_root,
+            fsh_root,
+        } => {
             let bytes = read_bounded_file(&input, MAX_CHECK_REPORT_INPUT_BYTES)?;
             let report = CheckReport::from_json_slice(&bytes)?;
-            let annotations = check_report_to_github_annotations_bytes(&report)?;
+            let annotations = match (source_map, fsh_index, repo_root, fsh_root) {
+                (None, None, None, None) => check_report_to_github_annotations_bytes(&report)?,
+                (Some(source_map), Some(fsh_index), Some(repo_root), Some(fsh_root)) => {
+                    let mapped_bytes =
+                        read_bounded_file(&source_map, MAX_SOURCE_MAPPED_REPORT_BYTES as u64)?;
+                    let mapped = SourceMappedCheckReport::from_json_slice(&mapped_bytes)?;
+                    let index_bytes = read_bounded_file(&fsh_index, MAX_SUSHI_INDEX_INPUT_BYTES)?;
+                    source_mapped_check_report_to_github_annotations_bytes(
+                        &report,
+                        &mapped,
+                        &index_bytes,
+                        &repo_root,
+                        &fsh_root,
+                    )?
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "mapped GitHub projection requires --source-map, --fsh-index, --repo-root, and --fsh-root together",
+                    )
+                    .into());
+                }
+            };
             io::stdout().write_all(&annotations)?;
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn sanitize_runtime_diagnostic(error: &dyn std::fmt::Display) -> String {
+    let text = error.to_string();
+    let mut chars = text.chars();
+    let mut output = String::new();
+    for character in chars.by_ref().take(MAX_RUNTIME_DIAGNOSTIC_CHARS) {
+        match character {
+            '%' => output.push_str("%25"),
+            '\r' => output.push_str("%0D"),
+            '\n' => output.push_str("%0A"),
+            ':' => output.push_str("%3A"),
+            ',' => output.push_str("%2C"),
+            '\u{2028}' => output.push_str("\\u2028"),
+            '\u{2029}' => output.push_str("\\u2029"),
+            value if value.is_control() => output.extend(value.escape_default()),
+            value => output.push(value),
+        }
+    }
+    if chars.next().is_some() {
+        output.push_str("… [diagnostic truncated]");
+    }
+    output
 }
 
 fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {

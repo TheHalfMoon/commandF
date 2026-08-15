@@ -49,6 +49,21 @@ pub fn evaluate_compatibility_policy(
     })
 }
 
+pub fn validate_check_report(report: &CheckReport) -> Result<(), CheckError> {
+    if report.schema != CheckReport::SCHEMA_V1 {
+        return Err(CheckError::UnsupportedCheckSchema {
+            found: report.schema,
+            expected: CheckReport::SCHEMA_V1,
+        });
+    }
+    validate_compatibility_report(&report.compatibility)?;
+    let expected = evaluate_compatibility_policy(&report.compatibility, report.policy)?;
+    if report.decision != expected.decision {
+        return Err(CheckError::InconsistentCheckDecision);
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_compatibility_report(
     compatibility: &CompatibilityReport,
 ) -> Result<(), CheckError> {

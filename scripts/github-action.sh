@@ -28,7 +28,7 @@ reject_output_control_characters() {
 }
 
 if [[ "${RUNNER_OS:-}" != "Linux" ]]; then
-  emit_operational_failure "CF-08 source-backed Action supports Linux runners only"
+  emit_operational_failure "CF-08/09 source-backed Action supports Linux runners only"
 fi
 
 require_nonempty "package" "${COMMANDF_PACKAGE:-}"
@@ -49,6 +49,17 @@ else
     emit_operational_failure "unable to create default report directory"
 fi
 export COMMANDF_RESOLVED_REPORT_PATH
+
+if [[ -n "${COMMANDF_FSH_INDEX:-}" ]]; then
+  require_nonempty "fsh-root" "${COMMANDF_FSH_ROOT:-}"
+  require_nonempty "GITHUB_WORKSPACE" "${GITHUB_WORKSPACE:-}"
+  COMMANDF_SOURCE_MAP_PATH="$RUNNER_TEMP/commandf/source-map.json"
+  mkdir -p "$(dirname "$COMMANDF_SOURCE_MAP_PATH")" || \
+    emit_operational_failure "unable to create source-map working directory"
+else
+  COMMANDF_SOURCE_MAP_PATH=""
+fi
+export COMMANDF_SOURCE_MAP_PATH
 
 if ! command -v rustup >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
   emit_operational_failure "rustup and cargo are required to build the source-backed Action"

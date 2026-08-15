@@ -1,8 +1,11 @@
+use std::path::Path;
+
 use crate::{
-    check::{direction_selected, validate_compatibility_report},
-    evaluate_compatibility_policy, CheckError, CheckReport, CompatibilityDirection,
-    CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind,
-    StructuralChangeKind,
+    build_source_mapped_check_report,
+    check::{direction_selected, validate_check_report},
+    validate_source_mapped_check_report, CheckError, CheckReport, CompatibilityDirection,
+    CompatibilityFinding, CompatibilitySeverity, ElementView, ResourceKeyKind, SourceLocation,
+    SourceMapError, SourceMappedCheckReport, SourceMappingEntry, StructuralChangeKind,
 };
 
 const MAX_ERROR_ANNOTATIONS: usize = 10;
@@ -39,27 +42,45 @@ impl AnnotationLevel {
 pub fn check_report_to_github_annotations_bytes(
     report: &CheckReport,
 ) -> Result<Vec<u8>, CheckError> {
-    if report.schema != CheckReport::SCHEMA_V1 {
-        return Err(CheckError::UnsupportedCheckSchema {
-            found: report.schema,
-            expected: CheckReport::SCHEMA_V1,
-        });
-    }
-    validate_compatibility_report(&report.compatibility)?;
-    let expected = evaluate_compatibility_policy(&report.compatibility, report.policy)?;
-    if report.decision != expected.decision {
-        return Err(CheckError::InconsistentCheckDecision);
+    validate_check_report(report)?;
+    Ok(render_annotations(report, None))
+}
+
+pub fn source_mapped_check_report_to_github_annotations_bytes(
+    report: &CheckReport,
+    source_map: &SourceMappedCheckReport,
+    index_bytes: &[u8],
+    repo_root: &Path,
+    fsh_root: &Path,
+) -> Result<Vec<u8>, SourceMapError> {
+    validate_check_report(report)?;
+    validate_source_mapped_check_report(source_map)?;
+    if source_map.check != *report {
+        return Err(SourceMapError::CheckReportMismatch);
     }
 
+    let verified = build_source_mapped_check_report(report, index_bytes, repo_root, fsh_root)?;
+    if verified != *source_map {
+        return Err(SourceMapError::SourceEvidenceMismatch);
+    }
+
+    Ok(render_annotations(report, Some(&verified)))
+}
+
+fn render_annotations(
+    report: &CheckReport,
+    source_map: Option<&SourceMappedCheckReport>,
+) -> Vec<u8> {
     let selected = report
         .compatibility
         .findings
         .iter()
-        .filter(|finding| direction_selected(report.policy.direction, finding.direction))
+        .enumerate()
+        .filter(|(_, finding)| direction_selected(report.policy.direction, finding.direction))
         .collect::<Vec<_>>();
 
     let mut totals = [0_usize; 3];
-    for finding in &selected {
+    for (_, finding) in &selected {
         totals[annotation_level(finding.severity).index()] += 1;
     }
 
@@ -80,7 +101,7 @@ pub fn check_report_to_github_annotations_bytes(
     let mut omitted = [0_usize; 3];
     let mut output = String::new();
 
-    for finding in selected {
+    for (finding_index, finding) in selected {
         let level = annotation_level(finding.severity);
         let index = level.index();
         if emitted[index] >= limits[index] {
@@ -88,7 +109,8 @@ pub fn check_report_to_github_annotations_bytes(
             continue;
         }
         emitted[index] += 1;
-        write_annotation(&mut output, level, finding);
+        let mapping = source_map.map(|mapped| &mapped.mappings[finding_index]);
+        write_annotation(&mut output, level, finding, mapping);
     }
 
     if overflow {
@@ -105,20 +127,37 @@ pub fn check_report_to_github_annotations_bytes(
         output.push('\n');
     }
 
-    Ok(output.into_bytes())
+    output.into_bytes()
 }
 
-fn write_annotation(output: &mut String, level: AnnotationLevel, finding: &CompatibilityFinding) {
+fn write_annotation(
+    output: &mut String,
+    level: AnnotationLevel,
+    finding: &CompatibilityFinding,
+    mapping: Option<&SourceMappingEntry>,
+) {
     let title = bounded_title(&format!("commandF {}", finding.rule_id));
-    let message = bounded_message(&annotation_message(finding));
+    let message = bounded_message(&annotation_message(finding, mapping));
 
     output.push_str("::");
     output.push_str(level.command());
     output.push_str(" title=");
     output.push_str(&escape_property(&title));
+    if let Some(location) = mapping.and_then(|entry| entry.location.as_ref()) {
+        write_location_properties(output, location);
+    }
     output.push_str("::");
     output.push_str(&escape_data(&message));
     output.push('\n');
+}
+
+fn write_location_properties(output: &mut String, location: &SourceLocation) {
+    output.push_str(",file=");
+    output.push_str(&escape_property(&location.file));
+    output.push_str(",line=");
+    output.push_str(&location.line.to_string());
+    output.push_str(",endLine=");
+    output.push_str(&location.end_line.to_string());
 }
 
 fn annotation_level(severity: CompatibilitySeverity) -> AnnotationLevel {
@@ -129,9 +168,19 @@ fn annotation_level(severity: CompatibilitySeverity) -> AnnotationLevel {
     }
 }
 
-fn annotation_message(finding: &CompatibilityFinding) -> String {
+fn annotation_message(
+    finding: &CompatibilityFinding,
+    mapping: Option<&SourceMappingEntry>,
+) -> String {
+    let source_message = match mapping.and_then(|entry| entry.location.as_ref()) {
+        Some(_) => {
+            "FSH definition-range mapping via SUSHI fsh-index.json; exact rule-line attribution not proven"
+        }
+        None if mapping.is_some() => "artifact-level finding; no proven current FSH source mapping",
+        None => "artifact-level finding; source mapping deferred to CF-09",
+    };
     let mut parts = vec![
-        "artifact-level finding; source mapping deferred to CF-09".to_owned(),
+        source_message.to_owned(),
         format!("severity={}", severity_name(finding.severity)),
         format!("direction={}", direction_name(finding.direction)),
         format!("change={}", change_kind_name(finding.source_kind)),
