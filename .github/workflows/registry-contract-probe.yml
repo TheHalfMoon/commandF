@@ -12,41 +12,112 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - name: Probe registry response shape without downloading package content into git
+      - name: Checkout probe branch
+        uses: actions/checkout@v4
+        with:
+          path: probe
+
+      - name: Checkout exact registry hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/fhir-registry-tarball-manifest
+          fetch-depth: 0
+          path: hotfix
+
+      - uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Extract US Core dependency graph and probe registry shapes
         run: |
           set -euo pipefail
           rm -rf /tmp/registry-probe
           mkdir -p /tmp/registry-probe
 
-          for url in \
+          HOTFIX_EXPECTED=ddc7e83fe5df8e6f907f76df0681909ccc220826
+          test "$(git -C hotfix rev-parse HEAD)" = "$HOTFIX_EXPECTED"
+
+          curl -sS --fail --max-redirs 0 \
             https://packages.fhir.org/hl7.fhir.us.core/8.0.1 \
-            https://packages2.fhir.org/packages/hl7.fhir.us.core/8.0.1 \
-            https://packages2.fhir.org/web/hl7.fhir.us.core-8.0.1.tgz
-          do
-            safe="$(printf '%s' "$url" | tr '/:.' '_')"
-            echo "=== $url ==="
-            set +e
-            status="$(curl -sS --max-redirs 0 -D "/tmp/registry-probe/$safe.headers" -o "/tmp/registry-probe/$safe.body" -w '%{http_code}' "$url")"
-            curl_status=$?
-            set -e
-            echo "curl_exit=$curl_status http_status=$status"
-            grep -Ei '^(content-type|content-length|location):' "/tmp/registry-probe/$safe.headers" || true
-            python - "/tmp/registry-probe/$safe.body" <<'PY'
+            -o /tmp/registry-probe/us-core.tgz
+          python - <<'PY'
+          from pathlib import Path
+          data = Path('/tmp/registry-probe/us-core.tgz').read_bytes()
+          assert data[:2] == b'\x1f\x8b'
+          print('US Core root bytes=', len(data))
+          PY
+          tar -xOzf /tmp/registry-probe/us-core.tgz package/package.json \
+            > /tmp/registry-probe/us-core-package.json
+
+          python - <<'PY' > /tmp/registry-probe/dependencies.tsv
+          import json
+          from pathlib import Path
+          pkg = json.loads(Path('/tmp/registry-probe/us-core-package.json').read_text())
+          deps = pkg.get('dependencies', {})
+          print('ROOT\thl7.fhir.us.core\t8.0.1')
+          for name, version in sorted(deps.items()):
+              print(f'DEP\t{name}\t{version}')
+          PY
+
+          echo '=== declared dependencies ==='
+          cat /tmp/registry-probe/dependencies.tsv
+
+          while IFS=$'\t' read -r kind package version; do
+            [ "$kind" = DEP ] || continue
+            echo "=== dependency $package@$version ==="
+            for url in \
+              "https://packages.fhir.org/$package" \
+              "https://packages2.fhir.org/packages/$package" \
+              "https://packages.fhir.org/$package/$version" \
+              "https://packages2.fhir.org/packages/$package/$version"
+            do
+              safe="$(printf '%s' "$url" | tr '/:.' '_')"
+              set +e
+              status="$(curl -sS --max-redirs 0 \
+                -D "/tmp/registry-probe/$safe.headers" \
+                -o "/tmp/registry-probe/$safe.body" \
+                -w '%{http_code}' "$url")"
+              curl_status=$?
+              set -e
+              echo "URL=$url curl_exit=$curl_status http_status=$status"
+              grep -Ei '^(content-type|content-length|location):' "/tmp/registry-probe/$safe.headers" || true
+              python - "/tmp/registry-probe/$safe.body" <<'PY'
           import json, sys
           from pathlib import Path
           data = Path(sys.argv[1]).read_bytes()
           print('bytes=', len(data), 'first8=', data[:8].hex())
           if data.startswith(b'\x1f\x8b'):
               print('shape=direct_gzip')
-              raise SystemExit(0)
-          try:
-              obj = json.loads(data)
-          except Exception as exc:
-              print('shape=non_json_non_gzip', type(exc).__name__)
-              raise SystemExit(0)
-          print('shape=json keys=', sorted(obj.keys())[:20] if isinstance(obj, dict) else type(obj).__name__)
-          print('dist=', obj.get('dist') if isinstance(obj, dict) else None)
+          else:
+              try:
+                  obj = json.loads(data)
+              except Exception as exc:
+                  print('shape=non_json_non_gzip', type(exc).__name__)
+              else:
+                  print('shape=json type=', type(obj).__name__)
+                  if isinstance(obj, dict):
+                      print('keys=', sorted(obj.keys())[:20])
           PY
-          done
+            done
+          done < /tmp/registry-probe/dependencies.tsv
+
+      - name: Reproduce recursive resolver error on exact hotfix head
+        working-directory: hotfix
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/registry-hotfix-repro
+          set +e
+          cargo run --locked --quiet -p commandf -- \
+            pkg resolve hl7.fhir.us.core@8.0.1 \
+            --cache /tmp/registry-hotfix-repro/cache \
+            --lock /tmp/registry-hotfix-repro/commandf.lock \
+            > /tmp/registry-hotfix-repro.stdout \
+            2> /tmp/registry-hotfix-repro.stderr
+          status=$?
+          set -e
+          echo "resolver_exit=$status"
+          echo '=== resolver stderr ==='
+          cat /tmp/registry-hotfix-repro.stderr
+          echo '=== resolver stdout ==='
+          cat /tmp/registry-hotfix-repro.stdout
+          test "$status" -ne 0
