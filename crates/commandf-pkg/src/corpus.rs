@@ -116,12 +116,13 @@ pub fn attest_corpus_package_state(
         });
     }
 
-    let bytes = cache
-        .read_verified(&locked.sha256)
-        .map_err(|error| CorpusError::CacheVerification {
-            case_id: case.id.clone(),
-            message: error.to_string(),
-        })?;
+    let bytes =
+        cache
+            .read_verified(&locked.sha256)
+            .map_err(|error| CorpusError::CacheVerification {
+                case_id: case.id.clone(),
+                message: error.to_string(),
+            })?;
     let actual_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     if actual_bytes != expected.archive_bytes {
         return Err(CorpusError::ArchiveSizeMismatch {
