@@ -3,8 +3,10 @@ use std::collections::BTreeSet;
 use semver::Version;
 
 use crate::corpus_error::CorpusError;
-use crate::corpus_model::{CorpusPackageState, RealIgCase, RealIgCorpus};
-use crate::PackageName;
+use crate::corpus_model::{
+    CorpusPackageAttestation, CorpusPackageSide, CorpusPackageState, RealIgCase, RealIgCorpus,
+};
+use crate::{Lockfile, PackageCache, PackageName};
 
 pub const MAX_CORPUS_MANIFEST_BYTES: usize = 256 * 1024;
 pub const MAX_CORPUS_CASES: usize = 64;
@@ -68,6 +70,96 @@ pub fn canonical_corpus_manifest_bytes(corpus: &RealIgCorpus) -> Result<Vec<u8>,
         .map_err(|error| CorpusError::Serialization(error.to_string()))?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+
+pub fn attest_corpus_package_state(
+    case: &RealIgCase,
+    side: CorpusPackageSide,
+    lockfile: &Lockfile,
+    cache: &PackageCache,
+) -> Result<CorpusPackageAttestation, CorpusError> {
+    validate_case(case)?;
+    lockfile
+        .verify_cache(cache)
+        .map_err(|error| CorpusError::CacheVerification {
+            case_id: case.id.clone(),
+            message: error.to_string(),
+        })?;
+
+    let (side_name, expected) = expected_state(case, side);
+    let mut matches = lockfile
+        .packages
+        .iter()
+        .filter(|package| package.name == case.package && package.version == expected.version);
+    let locked = matches
+        .next()
+        .ok_or_else(|| CorpusError::LockedPackageMissing {
+            case_id: case.id.clone(),
+            package: case.package.clone(),
+            version: expected.version.clone(),
+        })?;
+    if matches.next().is_some() {
+        return Err(CorpusError::LockedPackageAmbiguous {
+            case_id: case.id.clone(),
+            package: case.package.clone(),
+            version: expected.version.clone(),
+        });
+    }
+
+    if locked.sha256 != expected.archive_sha256 {
+        return Err(CorpusError::LockedPackageDigestMismatch {
+            case_id: case.id.clone(),
+            package: case.package.clone(),
+            version: expected.version.clone(),
+            expected: expected.archive_sha256.clone(),
+            found: locked.sha256.clone(),
+        });
+    }
+
+    let bytes = cache
+        .read_verified(&locked.sha256)
+        .map_err(|error| CorpusError::CacheVerification {
+            case_id: case.id.clone(),
+            message: error.to_string(),
+        })?;
+    let actual_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if actual_bytes != expected.archive_bytes {
+        return Err(CorpusError::ArchiveSizeMismatch {
+            case_id: case.id.clone(),
+            side: side_name,
+            expected: expected.archive_bytes,
+            found: actual_bytes,
+        });
+    }
+
+    let actual_sha256 = PackageCache::digest(&bytes);
+    if actual_sha256 != expected.archive_sha256 {
+        return Err(CorpusError::ArchiveDigestMismatch {
+            case_id: case.id.clone(),
+            side: side_name,
+            expected: expected.archive_sha256.clone(),
+            found: actual_sha256,
+        });
+    }
+
+    Ok(CorpusPackageAttestation {
+        case_id: case.id.clone(),
+        package: case.package.clone(),
+        side,
+        version: expected.version.clone(),
+        sha256: expected.archive_sha256.clone(),
+        archive_bytes: expected.archive_bytes,
+    })
+}
+
+fn expected_state(
+    case: &RealIgCase,
+    side: CorpusPackageSide,
+) -> (&'static str, &CorpusPackageState) {
+    match side {
+        CorpusPackageSide::Before => ("before", &case.before),
+        CorpusPackageSide::After => ("after", &case.after),
+    }
 }
 
 fn validate_case(case: &RealIgCase) -> Result<(), CorpusError> {
