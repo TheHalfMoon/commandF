@@ -220,8 +220,36 @@ fn build_binding_refinements(
             };
 
             let references_changed = before_reference != after_reference;
-            let before_resource = before_closure.resolve_value_set(before_reference)?;
-            let after_resource = after_closure.resolve_value_set(after_reference)?;
+            let before_resource = match before_closure.resolve_value_set(before_reference) {
+                Ok(resource) => resource,
+                Err(TerminologyError::AmbiguousCanonical { .. }) => {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::AmbiguousCanonical,
+                    ));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let after_resource = match after_closure.resolve_value_set(after_reference) {
+                Ok(resource) => resource,
+                Err(TerminologyError::AmbiguousCanonical { .. }) => {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::AmbiguousCanonical,
+                    ));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             let (before_resource, after_resource) = match (before_resource, after_resource) {
                 (None, None) if !references_changed => continue,
                 (Some(before_resource), Some(after_resource)) => (before_resource, after_resource),
@@ -272,16 +300,15 @@ fn compare_binding_value_sets(
     after: &TerminologyResource,
 ) -> Result<TerminologySetDelta, TerminologyError> {
     let mut after_value = after.value.clone();
-    let before_url =
-        before
-            .value
-            .get("url")
-            .cloned()
-            .ok_or_else(|| TerminologyError::InvalidField {
-                resource: before.filename.clone(),
-                field: "url".to_owned(),
-                message: "resolved ValueSet is missing its canonical URL".to_owned(),
-            })?;
+    let before_url = before
+        .value
+        .get("url")
+        .cloned()
+        .ok_or_else(|| TerminologyError::InvalidField {
+            resource: before.filename.clone(),
+            field: "url".to_owned(),
+            message: "resolved ValueSet is missing its canonical URL".to_owned(),
+        })?;
     let after_object =
         after_value
             .as_object_mut()
