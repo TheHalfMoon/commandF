@@ -70,17 +70,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn persisted_source_map_input_size_limit_is_inclusive() {
-        assert!(ensure_source_map_input_size(
-            MAX_SOURCE_MAPPED_REPORT_BYTES,
-            MAX_SOURCE_MAPPED_REPORT_BYTES,
-        )
-        .is_ok());
+    fn persisted_source_map_decoder_checks_size_before_json_decode() {
+        let bytes = vec![b'x'; MAX_SOURCE_MAPPED_REPORT_BYTES + 1];
+
         assert!(matches!(
-            ensure_source_map_input_size(
-                MAX_SOURCE_MAPPED_REPORT_BYTES + 1,
-                MAX_SOURCE_MAPPED_REPORT_BYTES,
-            ),
+            SourceMappedCheckReport::from_json_slice(&bytes[..MAX_SOURCE_MAPPED_REPORT_BYTES]),
+            Err(SourceMapError::Json(_))
+        ));
+        assert!(matches!(
+            SourceMappedCheckReport::from_json_slice(&bytes),
             Err(SourceMapError::ReportTooLarge {
                 found,
                 maximum: MAX_SOURCE_MAPPED_REPORT_BYTES,
