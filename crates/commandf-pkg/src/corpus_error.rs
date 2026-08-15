@@ -44,7 +44,10 @@ pub enum CorpusError {
         maximum: u64,
     },
     #[error("case {case_id} has invalid or missing {field}")]
-    InvalidEvidence { case_id: String, field: &'static str },
+    InvalidEvidence {
+        case_id: String,
+        field: &'static str,
+    },
     #[error("canonical corpus serialization failed: {0}")]
     Serialization(String),
 }
