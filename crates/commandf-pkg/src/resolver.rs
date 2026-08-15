@@ -19,20 +19,14 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
     pub fn resolve(&self, roots: Vec<PackageRequest>) -> Result<Lockfile, PackageError> {
         let root_labels = roots.iter().map(PackageRequest::display).collect();
         let mut queue: VecDeque<PackageRequest> = roots.into();
-        let mut selected: BTreeMap<String, LockedPackage> = BTreeMap::new();
+        let mut selected: BTreeMap<(String, String), LockedPackage> = BTreeMap::new();
 
         while let Some(request) = queue.pop_front() {
             let version = self.select_version(&request)?;
+            let identity = (request.name.to_string(), version.to_string());
 
-            if let Some(existing) = selected.get(request.name.as_str()) {
-                if existing.version == version.to_string() {
-                    continue;
-                }
-                return Err(PackageError::VersionConflict {
-                    name: request.name.to_string(),
-                    selected: existing.version.clone(),
-                    requested: request.constraint.to_string(),
-                });
+            if selected.contains_key(&identity) {
+                continue;
             }
 
             let archive = self.source.archive_with_source(&request.name, &version)?;
@@ -47,7 +41,7 @@ impl<'a, S: PackageSource> Resolver<'a, S> {
             let digest = self.cache.put(&archive.bytes)?;
             let dependencies = manifest.dependencies;
             selected.insert(
-                request.name.to_string(),
+                identity,
                 LockedPackage {
                     name: request.name.to_string(),
                     version: version.to_string(),
