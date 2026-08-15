@@ -3,6 +3,8 @@ package dev.commandf.oracle;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.hl7.fhir.convertors.loaders.loaderR5.NullLoaderKnowledgeProviderR5;
+import org.hl7.fhir.convertors.loaders.loaderR5.R4ToR5Loader;
 import org.hl7.fhir.r5.comparison.CanonicalResourceComparer.ChangeAnalysisState;
 import org.hl7.fhir.r5.comparison.ComparisonSession;
 import org.hl7.fhir.r5.comparison.ResourceComparer;
@@ -12,6 +14,8 @@ import org.hl7.fhir.r5.comparison.StructureDefinitionComparer.ProfileComparison;
 import org.hl7.fhir.r5.context.IContextResourceLoader;
 import org.hl7.fhir.r5.context.SimpleWorkerContext;
 import org.hl7.fhir.r5.model.StructureDefinition;
+import org.hl7.fhir.utilities.Utilities;
+import org.hl7.fhir.utilities.VersionUtilities;
 import org.hl7.fhir.utilities.i18n.RenderingI18nContext;
 import org.hl7.fhir.utilities.npm.NpmPackage;
 import org.hl7.fhir.utilities.validation.ValidationMessage;
@@ -135,7 +139,7 @@ public final class Main {
       if (samePackage(core, dependency) || samePackage(side, dependency)) {
         continue;
       }
-      IContextResourceLoader dependencyLoader = ValidatorUtils.loaderForVersion(dependency.fhirVersion());
+      IContextResourceLoader dependencyLoader = structureDefinitionLoader(dependency);
       context.loadFromPackage(dependency, dependencyLoader, false);
     }
     if (!samePackage(core, side)) {
@@ -143,6 +147,19 @@ public final class Main {
       context.loadFromPackage(side, sideLoader, false);
     }
     return new ContextAndPackage(context, side.name(), side.version());
+  }
+
+  private static IContextResourceLoader structureDefinitionLoader(NpmPackage dependency) {
+    String version = dependency.fhirVersion();
+    if (!VersionUtilities.isR4Ver(version)) {
+      throw new IllegalArgumentException(
+          "oracle dependency context must be FHIR R4 but " + dependency.name() + "#"
+              + dependency.version() + " declares " + version);
+    }
+    return new R4ToR5Loader(
+        Utilities.stringSet("StructureDefinition"),
+        new NullLoaderKnowledgeProviderR5(),
+        version);
   }
 
   private static NpmPackage loadPackage(Path path) throws IOException {
@@ -189,69 +206,61 @@ public final class Main {
         emptyToNull(resource.getType()));
   }
 
-  private static void collectStructuralMatch(StructuralMatch<?> match, TreeSet<OracleMessage> output) {
-    if (match == null) {
-      return;
-    }
-    collectMessages(match.getMessages(), output);
-    for (StructuralMatch<?> child : match.getChildren()) {
-      collectStructuralMatch(child, output);
-    }
-  }
-
-  private static void collectMessages(List<ValidationMessage> messages, TreeSet<OracleMessage> output) {
-    for (ValidationMessage message : messages) {
-      output.add(new OracleMessage(
-          message.getLevel().name().toLowerCase(Locale.ROOT),
-          nullToEmpty(message.getLocation()),
-          nullToEmpty(message.getMessage())));
-    }
-  }
-
   private static String normalizeState(ChangeAnalysisState state) {
     return switch (state) {
-      case Unknown -> "unknown";
       case NotChanged -> "not_changed";
       case Changed -> "changed";
+      case Either -> "either";
       case CannotEvaluate -> "cannot_evaluate";
     };
   }
 
-  private static String safeMessage(Throwable error) {
-    String message = error.getMessage();
-    return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
+  private static void collectStructuralMatch(StructuralMatch<String> match, TreeSet<OracleMessage> output) {
+    if (match == null) {
+      return;
+    }
+    collectMessages(match.getMessages(), output);
   }
 
-  private static String nullToEmpty(String value) {
-    return value == null ? "" : value;
+  private static void collectMessages(List<ValidationMessage> messages, TreeSet<OracleMessage> output) {
+    if (messages == null) {
+      return;
+    }
+    for (ValidationMessage message : messages) {
+      output.add(new OracleMessage(
+          normalizeLevel(message),
+          normalizeText(message.getLocation()),
+          normalizeText(message.getMessage())));
+    }
+  }
+
+  private static String normalizeLevel(ValidationMessage message) {
+    if (message.getLevel() == null) {
+      return "unknown";
+    }
+    return message.getLevel().name().toLowerCase(Locale.ROOT);
+  }
+
+  private static String normalizeText(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value.replace("\r\n", "\n").replace('\r', '\n');
   }
 
   private static String emptyToNull(String value) {
     return value == null || value.isBlank() ? null : value;
   }
 
+  private static String safeMessage(Throwable error) {
+    String message = error.getMessage();
+    if (message == null || message.isBlank()) {
+      return error.getClass().getName();
+    }
+    return message.replace('\r', ' ').replace('\n', ' ');
+  }
+
   record ContextAndPackage(SimpleWorkerContext context, String packageName, String packageVersion) {
-  }
-
-  record OracleIdentity(String project, String release, String source_commit) {
-  }
-
-  record OracleResourceIdentity(String url, String version, String id, String type) {
-  }
-
-  record OracleStates(String metadata, String definitions, String content, String content_interpretation) {
-  }
-
-  record OracleMessage(String level, String location, String message) {
-  }
-
-  record Hl7OracleReport(
-      int schema,
-      OracleIdentity oracle,
-      OracleResourceIdentity left,
-      OracleResourceIdentity right,
-      OracleStates states,
-      List<OracleMessage> messages) {
   }
 
   record Arguments(
@@ -324,5 +333,30 @@ public final class Main {
       }
       return value;
     }
+  }
+
+  record OracleIdentity(String project, String release, String sourceCommit) {
+  }
+
+  record OracleResourceIdentity(String url, String version, String id, String type) {
+  }
+
+  record OracleStates(
+      String metadata,
+      String definitions,
+      String content,
+      String contentInterpretation) {
+  }
+
+  record OracleMessage(String level, String location, String message) {
+  }
+
+  record Hl7OracleReport(
+      int schema,
+      OracleIdentity oracle,
+      OracleResourceIdentity left,
+      OracleResourceIdentity right,
+      OracleStates states,
+      List<OracleMessage> messages) {
   }
 }
