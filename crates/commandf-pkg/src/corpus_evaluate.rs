@@ -1,13 +1,14 @@
 use crate::{
     attest_corpus_package_state, build_terminology_diff_report, classify_structural_diff,
     diff_package_archives, CompatibilityDirection, CompatibilityReport, CompatibilitySeverity,
-    CorpusCaseStatus, CorpusCaseSummary, CorpusCompatibilitySummary, CorpusError,
-    CorpusOracleSummary, CorpusPackageSide, CorpusStructuralSummary, CorpusSummaryPackageState,
-    CorpusTerminologySummary, Lockfile, OracleDivergenceReport, OracleIdentity,
-    OracleResourceStatus, PackageCache, RealIgCase, StructuralDiffReport, TerminologyDiffReport,
-    TerminologyPackageState,
+    CorpusCaseStatus, CorpusCaseSummary, CorpusClosurePackage, CorpusCompatibilitySummary,
+    CorpusError, CorpusOracleSummary, CorpusPackageSide, CorpusStructuralSummary,
+    CorpusSummaryPackageState, CorpusTerminologySummary, Lockfile, OracleDivergenceReport,
+    OracleIdentity, OracleResourceStatus, PackageCache, RealIgCase, StructuralDiffReport,
+    TerminologyDiffReport, TerminologyPackageState,
 };
 
+#[derive(Clone, Copy)]
 pub struct CorpusPackageStateInput<'a> {
     pub lockfile: &'a Lockfile,
     pub cache: &'a PackageCache,
@@ -20,35 +21,15 @@ pub struct CorpusCaseReports {
     pub terminology: TerminologyDiffReport,
 }
 
-pub fn evaluate_corpus_case(
+pub fn evaluate_corpus_structural(
     case: &RealIgCase,
     before: CorpusPackageStateInput<'_>,
     after: CorpusPackageStateInput<'_>,
-) -> Result<CorpusCaseReports, CorpusError> {
-    attest_corpus_package_state(
-        case,
-        CorpusPackageSide::Before,
-        before.lockfile,
-        before.cache,
-    )?;
-    attest_corpus_package_state(case, CorpusPackageSide::After, after.lockfile, after.cache)?;
+) -> Result<StructuralDiffReport, CorpusError> {
+    let before_bytes = attested_root_bytes(case, CorpusPackageSide::Before, before)?;
+    let after_bytes = attested_root_bytes(case, CorpusPackageSide::After, after)?;
 
-    let before_bytes = before
-        .cache
-        .read_verified(&case.before.archive_sha256)
-        .map_err(|error| CorpusError::CacheVerification {
-            case_id: case.id.clone(),
-            message: error.to_string(),
-        })?;
-    let after_bytes = after
-        .cache
-        .read_verified(&case.after.archive_sha256)
-        .map_err(|error| CorpusError::CacheVerification {
-            case_id: case.id.clone(),
-            message: error.to_string(),
-        })?;
-
-    let structural = diff_package_archives(
+    diff_package_archives(
         case.package.clone(),
         case.before.version.clone(),
         case.before.archive_sha256.clone(),
@@ -61,16 +42,31 @@ pub fn evaluate_corpus_case(
         case_id: case.id.clone(),
         stage: "structural",
         message: error.to_string(),
-    })?;
+    })
+}
 
-    let compatibility =
-        classify_structural_diff(&structural).map_err(|error| CorpusError::Evaluation {
-            case_id: case.id.clone(),
-            stage: "compatibility",
-            message: error.to_string(),
-        })?;
+pub fn evaluate_corpus_compatibility(
+    case: &RealIgCase,
+    structural: &StructuralDiffReport,
+) -> Result<CompatibilityReport, CorpusError> {
+    classify_structural_diff(structural).map_err(|error| CorpusError::Evaluation {
+        case_id: case.id.clone(),
+        stage: "compatibility",
+        message: error.to_string(),
+    })
+}
 
-    let terminology = build_terminology_diff_report(
+pub fn evaluate_corpus_terminology(
+    case: &RealIgCase,
+    before: CorpusPackageStateInput<'_>,
+    after: CorpusPackageStateInput<'_>,
+    structural: &StructuralDiffReport,
+    compatibility: &CompatibilityReport,
+) -> Result<TerminologyDiffReport, CorpusError> {
+    let before_bytes = attested_root_bytes(case, CorpusPackageSide::Before, before)?;
+    let after_bytes = attested_root_bytes(case, CorpusPackageSide::After, after)?;
+
+    build_terminology_diff_report(
         TerminologyPackageState {
             lockfile: before.lockfile,
             cache: before.cache,
@@ -81,14 +77,25 @@ pub fn evaluate_corpus_case(
             cache: after.cache,
             root_bytes: &after_bytes,
         },
-        &structural,
-        &compatibility,
+        structural,
+        compatibility,
     )
     .map_err(|error| CorpusError::Evaluation {
         case_id: case.id.clone(),
         stage: "terminology",
         message: error.to_string(),
-    })?;
+    })
+}
+
+pub fn evaluate_corpus_case(
+    case: &RealIgCase,
+    before: CorpusPackageStateInput<'_>,
+    after: CorpusPackageStateInput<'_>,
+) -> Result<CorpusCaseReports, CorpusError> {
+    let structural = evaluate_corpus_structural(case, before, after)?;
+    let compatibility = evaluate_corpus_compatibility(case, &structural)?;
+    let terminology =
+        evaluate_corpus_terminology(case, before, after, &structural, &compatibility)?;
 
     Ok(CorpusCaseReports {
         structural,
@@ -101,6 +108,8 @@ pub fn summarize_corpus_case(
     case: &RealIgCase,
     reports: &CorpusCaseReports,
     oracle: &OracleDivergenceReport,
+    before_lockfile: &Lockfile,
+    after_lockfile: &Lockfile,
 ) -> Result<CorpusCaseSummary, CorpusError> {
     validate_report_identity(case, reports, oracle)?;
 
@@ -160,8 +169,20 @@ pub fn summarize_corpus_case(
     Ok(CorpusCaseSummary {
         case_id: case.id.clone(),
         package: case.package.clone(),
-        before: summary_state(&case.before.version, &case.before.archive_sha256),
-        after: summary_state(&case.after.version, &case.after.archive_sha256),
+        before: summary_state_with_closure(
+            case,
+            "before_closure",
+            &case.before.version,
+            &case.before.archive_sha256,
+            before_lockfile,
+        )?,
+        after: summary_state_with_closure(
+            case,
+            "after_closure",
+            &case.after.version,
+            &case.after.archive_sha256,
+            after_lockfile,
+        )?,
         status: CorpusCaseStatus::Complete,
         structural: Some(CorpusStructuralSummary {
             changes: reports.structural.changes.len(),
@@ -201,14 +222,64 @@ pub fn failed_corpus_case_summary(
     CorpusCaseSummary {
         case_id: case.id.clone(),
         package: case.package.clone(),
-        before: summary_state(&case.before.version, &case.before.archive_sha256),
-        after: summary_state(&case.after.version, &case.after.archive_sha256),
+        before: summary_state_without_closure(&case.before.version, &case.before.archive_sha256),
+        after: summary_state_without_closure(&case.after.version, &case.after.archive_sha256),
         status,
         structural: None,
         compatibility: None,
         terminology: None,
         oracle: None,
     }
+}
+
+pub fn failed_corpus_case_summary_with_closure(
+    case: &RealIgCase,
+    status: CorpusCaseStatus,
+    before_lockfile: &Lockfile,
+    after_lockfile: &Lockfile,
+) -> Result<CorpusCaseSummary, CorpusError> {
+    Ok(CorpusCaseSummary {
+        case_id: case.id.clone(),
+        package: case.package.clone(),
+        before: summary_state_with_closure(
+            case,
+            "before_closure",
+            &case.before.version,
+            &case.before.archive_sha256,
+            before_lockfile,
+        )?,
+        after: summary_state_with_closure(
+            case,
+            "after_closure",
+            &case.after.version,
+            &case.after.archive_sha256,
+            after_lockfile,
+        )?,
+        status,
+        structural: None,
+        compatibility: None,
+        terminology: None,
+        oracle: None,
+    })
+}
+
+fn attested_root_bytes(
+    case: &RealIgCase,
+    side: CorpusPackageSide,
+    state: CorpusPackageStateInput<'_>,
+) -> Result<Vec<u8>, CorpusError> {
+    let manifest_state = match side {
+        CorpusPackageSide::Before => &case.before,
+        CorpusPackageSide::After => &case.after,
+    };
+    attest_corpus_package_state(case, side, state.lockfile, state.cache)?;
+    state
+        .cache
+        .read_verified(&manifest_state.archive_sha256)
+        .map_err(|error| CorpusError::CacheVerification {
+            case_id: case.id.clone(),
+            message: error.to_string(),
+        })
 }
 
 fn validate_report_identity(
@@ -265,10 +336,59 @@ fn validate_report_identity(
     Ok(())
 }
 
-fn summary_state(version: &str, sha256: &str) -> CorpusSummaryPackageState {
+fn summary_state_with_closure(
+    case: &RealIgCase,
+    report: &'static str,
+    version: &str,
+    sha256: &str,
+    lockfile: &Lockfile,
+) -> Result<CorpusSummaryPackageState, CorpusError> {
+    let matches = lockfile
+        .packages
+        .iter()
+        .filter(|package| {
+            package.name == case.package && package.version == version && package.sha256 == sha256
+        })
+        .count();
+    let expected_root = format!("{}@{}", case.package, version);
+    if matches != 1 || !lockfile.roots.iter().any(|root| root == &expected_root) {
+        return Err(identity(case, report));
+    }
+
+    let mut closure = lockfile
+        .packages
+        .iter()
+        .map(|package| CorpusClosurePackage {
+            name: package.name.clone(),
+            version: package.version.clone(),
+            sha256: package.sha256.clone(),
+            dependencies: package.dependencies.clone(),
+        })
+        .collect::<Vec<_>>();
+    closure.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then_with(|| left.version.cmp(&right.version))
+            .then_with(|| left.sha256.cmp(&right.sha256))
+            .then_with(|| left.dependencies.cmp(&right.dependencies))
+    });
+    let closure_bytes =
+        serde_json::to_vec(&closure).map_err(|error| serialization_error(case, report, error))?;
+
+    Ok(CorpusSummaryPackageState {
+        version: version.to_owned(),
+        sha256: sha256.to_owned(),
+        closure_sha256: Some(PackageCache::digest(&closure_bytes)),
+        closure: Some(closure),
+    })
+}
+
+fn summary_state_without_closure(version: &str, sha256: &str) -> CorpusSummaryPackageState {
     CorpusSummaryPackageState {
         version: version.to_owned(),
         sha256: sha256.to_owned(),
+        closure_sha256: None,
+        closure: None,
     }
 }
 
