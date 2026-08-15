@@ -372,8 +372,8 @@ fn summary_state_with_closure(
             .then_with(|| left.sha256.cmp(&right.sha256))
             .then_with(|| left.dependencies.cmp(&right.dependencies))
     });
-    let closure_bytes = serde_json::to_vec(&closure)
-        .map_err(|error| serialization_error(case, report, error))?;
+    let closure_bytes =
+        serde_json::to_vec(&closure).map_err(|error| serialization_error(case, report, error))?;
 
     Ok(CorpusSummaryPackageState {
         version: version.to_owned(),

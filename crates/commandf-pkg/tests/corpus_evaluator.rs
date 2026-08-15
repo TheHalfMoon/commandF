@@ -156,7 +156,14 @@ fn evaluator_reuses_canonical_reports_and_summary_hashes_them() {
             commandf_change_kinds: Vec::new(),
         }],
     };
-    let summary = summarize_corpus_case(&fixture.case, &reports, &oracle).unwrap();
+    let summary = summarize_corpus_case(
+        &fixture.case,
+        &reports,
+        &oracle,
+        &fixture.before_lock,
+        &fixture.after_lock,
+    )
+    .unwrap();
 
     assert_eq!(summary.status, CorpusCaseStatus::Complete);
     assert_eq!(
@@ -181,6 +188,56 @@ fn evaluator_reuses_canonical_reports_and_summary_hashes_them() {
     );
     assert_eq!(summary.oracle.as_ref().unwrap().compared, 0);
     assert_eq!(summary.oracle.as_ref().unwrap().uncomparable, 1);
+    let before_closure = summary
+        .before
+        .closure
+        .as_ref()
+        .expect("before closure evidence");
+    assert_eq!(before_closure.len(), fixture.before_lock.packages.len());
+    assert_eq!(before_closure[0].name, "example.pkg");
+    assert_eq!(before_closure[0].sha256, fixture.case.before.archive_sha256);
+    assert_eq!(
+        summary.before.closure_sha256.as_deref().map(str::len),
+        Some(64)
+    );
+
+    let mut transport_changed = fixture.before_lock.clone();
+    transport_changed.packages[0].source =
+        "https://fallback.example.org/example.pkg/1.0.0".to_owned();
+    let transport_summary = summarize_corpus_case(
+        &fixture.case,
+        &reports,
+        &oracle,
+        &transport_changed,
+        &fixture.after_lock,
+    )
+    .unwrap();
+    assert_eq!(
+        transport_summary.before.closure_sha256,
+        summary.before.closure_sha256
+    );
+
+    let mut dependency_digest_changed = fixture.before_lock.clone();
+    dependency_digest_changed
+        .packages
+        .push(locked("example.dep", "1.0.0", &"c".repeat(64)));
+    dependency_digest_changed.packages.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then_with(|| left.version.cmp(&right.version))
+    });
+    let changed_summary = summarize_corpus_case(
+        &fixture.case,
+        &reports,
+        &oracle,
+        &dependency_digest_changed,
+        &fixture.after_lock,
+    )
+    .unwrap();
+    assert_ne!(
+        changed_summary.before.closure_sha256,
+        summary.before.closure_sha256
+    );
 }
 
 #[test]
@@ -207,7 +264,13 @@ fn summary_rejects_cross_case_oracle_identity() {
     };
 
     assert_eq!(
-        summarize_corpus_case(&fixture.case, &reports, &oracle),
+        summarize_corpus_case(
+            &fixture.case,
+            &reports,
+            &oracle,
+            &fixture.before_lock,
+            &fixture.after_lock,
+        ),
         Err(CorpusError::ReportIdentityMismatch {
             case_id: "C001".to_owned(),
             report: "oracle",
@@ -223,6 +286,8 @@ fn deterministic_run_summary_has_no_failure_detail_or_paths() {
     assert!(failed.compatibility.is_none());
     assert!(failed.terminology.is_none());
     assert!(failed.oracle.is_none());
+    assert!(failed.before.closure.is_none());
+    assert!(failed.after.closure.is_none());
 
     let report = CorpusRunSummary {
         schema: CorpusRunSummary::SCHEMA_V1,
