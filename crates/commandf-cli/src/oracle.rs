@@ -6,7 +6,8 @@ use std::time::Duration;
 use commandf_pkg::{
     diff_package_archives, matched_structure_definition_pairs, reconcile_hl7_oracle,
     run_hl7_oracle_adapter, validate_hl7_oracle_adapter, Hl7OracleInvocation, LockedPackage,
-    Lockfile, PackageCache, PackageName, ResourceKey, ResourceKeyKind, DEFAULT_ORACLE_TIMEOUT_SECS,
+    Lockfile, OracleDivergenceReport, PackageCache, PackageName, ResourceKey, ResourceKeyKind,
+    DEFAULT_ORACLE_TIMEOUT_SECS,
 };
 
 const ORACLE_CORE_PACKAGE: &str = "hl7.fhir.r4.core";
@@ -21,6 +22,27 @@ pub fn run(
     oracle_adapter: PathBuf,
     oracle_java: Option<PathBuf>,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(run_report(
+        package,
+        before_lock,
+        before_cache,
+        after_lock,
+        after_cache,
+        oracle_adapter,
+        oracle_java,
+    )?
+    .to_json_bytes()?)
+}
+
+pub fn run_report(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+    oracle_adapter: PathBuf,
+    oracle_java: Option<PathBuf>,
+) -> Result<OracleDivergenceReport, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
     validate_hl7_oracle_adapter(&oracle_adapter, oracle_java.as_deref())?;
 
@@ -101,8 +123,7 @@ pub fn run(
         }
     }
 
-    let report = reconcile_hl7_oracle(structural_diff, observations)?;
-    Ok(report.to_json_bytes()?)
+    Ok(reconcile_hl7_oracle(structural_diff, observations)?)
 }
 
 fn select_oracle_core(lockfile: &Lockfile) -> Result<&LockedPackage, io::Error> {
