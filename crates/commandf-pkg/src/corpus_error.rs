@@ -84,6 +84,22 @@ pub enum CorpusError {
         expected: String,
         found: String,
     },
+    #[error("case {case_id} {stage} evaluation failed: {message}")]
+    Evaluation {
+        case_id: String,
+        stage: &'static str,
+        message: String,
+    },
+    #[error("case {case_id} {report} report identity does not match the corpus case")]
+    ReportIdentityMismatch {
+        case_id: String,
+        report: &'static str,
+    },
+    #[error("case {case_id} {report} report uses unsupported schema/ruleset")]
+    UnsupportedReport {
+        case_id: String,
+        report: &'static str,
+    },
     #[error("canonical corpus serialization failed: {0}")]
     Serialization(String),
 }
