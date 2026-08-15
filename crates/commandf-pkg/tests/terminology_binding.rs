@@ -4,7 +4,7 @@ use std::io::Cursor;
 use commandf_pkg::{
     build_terminology_diff_report, classify_structural_diff, diff_package_archives,
     CompatibilityDirection, CompatibilitySeverity, LockedPackage, Lockfile, PackageCache,
-    TerminologyPackageState, TerminologyRelation,
+    TerminologyIndeterminateReason, TerminologyPackageState, TerminologyRelation,
 };
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -217,6 +217,107 @@ fn unchanged_binding_detects_narrowed_dependency_value_set() {
         report.to_json_bytes().unwrap(),
         report.to_json_bytes().unwrap()
     );
+}
+
+#[test]
+fn bare_binding_ambiguity_is_explicit_indeterminate_evidence() {
+    let before_dir = tempdir().unwrap();
+    let after_dir = tempdir().unwrap();
+    let before_cache = PackageCache::new(before_dir.path());
+    let after_cache = PackageCache::new(after_dir.path());
+
+    let root = archive(
+        "example.root",
+        "1.0.0",
+        json!({"example.term": "1.x"}),
+        &[("StructureDefinition-test-profile.json", profile())],
+    );
+    let term_v1 = archive(
+        "example.term",
+        "1.0.0",
+        json!({}),
+        &[("ValueSet-gender.json", value_set("1", &["a"]))],
+    );
+    let term_v2 = archive(
+        "example.term",
+        "2.0.0",
+        json!({}),
+        &[("ValueSet-gender.json", value_set("2", &["a", "b"]))],
+    );
+
+    let before_root_digest = before_cache.put(&root).unwrap();
+    let after_root_digest = after_cache.put(&root).unwrap();
+    let before_v1_digest = before_cache.put(&term_v1).unwrap();
+    let before_v2_digest = before_cache.put(&term_v2).unwrap();
+    let after_v1_digest = after_cache.put(&term_v1).unwrap();
+    let after_v2_digest = after_cache.put(&term_v2).unwrap();
+
+    let before_lock = Lockfile::new(
+        vec!["example.root@1.0.0".to_owned()],
+        vec![
+            locked(
+                "example.root",
+                "1.0.0",
+                before_root_digest.clone(),
+                BTreeMap::from([("example.term".to_owned(), "1.x".to_owned())]),
+            ),
+            locked("example.term", "1.0.0", before_v1_digest, BTreeMap::new()),
+            locked("example.term", "2.0.0", before_v2_digest, BTreeMap::new()),
+        ],
+    );
+    let after_lock = Lockfile::new(
+        vec!["example.root@1.0.0".to_owned()],
+        vec![
+            locked(
+                "example.root",
+                "1.0.0",
+                after_root_digest.clone(),
+                BTreeMap::from([("example.term".to_owned(), "1.x".to_owned())]),
+            ),
+            locked("example.term", "1.0.0", after_v1_digest, BTreeMap::new()),
+            locked("example.term", "2.0.0", after_v2_digest, BTreeMap::new()),
+        ],
+    );
+
+    let structural = diff_package_archives(
+        "example.root",
+        "1.0.0",
+        &before_root_digest,
+        &root,
+        "1.0.0",
+        &after_root_digest,
+        &root,
+    )
+    .unwrap();
+    let compatibility = classify_structural_diff(&structural).unwrap();
+    let report = build_terminology_diff_report(
+        TerminologyPackageState {
+            lockfile: &before_lock,
+            cache: &before_cache,
+            root_bytes: &root,
+        },
+        TerminologyPackageState {
+            lockfile: &after_lock,
+            cache: &after_cache,
+            root_bytes: &root,
+        },
+        &structural,
+        &compatibility,
+    )
+    .unwrap();
+
+    assert_eq!(report.binding_refinements.len(), 1);
+    let refinement = &report.binding_refinements[0];
+    assert_eq!(refinement.relation, TerminologyRelation::Indeterminate);
+    assert_eq!(
+        refinement.reason,
+        Some(TerminologyIndeterminateReason::AmbiguousCanonical)
+    );
+    assert!(!refinement.binding_proof_eligible);
+    assert!(refinement.proof_mode.is_none());
+    assert!(refinement.rule_id.is_none());
+    assert!(refinement.severity.is_none());
+    assert!(refinement.direction.is_none());
 }
 
 #[test]
