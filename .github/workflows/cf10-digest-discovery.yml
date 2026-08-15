@@ -1,6 +1,11 @@
 name: cf10-digest-discovery
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/cf10-digest-discovery.yml
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
   push:
     branches:
       - feat/cf-10-real-ig-delta-corpus
