@@ -85,6 +85,7 @@ pub enum CorpusCaseStatus {
     CompatibilityFailed,
     TerminologyFailed,
     OracleFailed,
+    EvidenceFailed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
