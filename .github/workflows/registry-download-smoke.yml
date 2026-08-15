@@ -38,6 +38,66 @@ jobs:
       - name: Real secondary redirect-to-tarball response
         run: cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact
 
+      - name: Diagnostic US Core archive layout
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip
+          import io
+          import json
+          import tarfile
+          import urllib.request
+
+          LIMIT = 128 * 1024 * 1024
+          url = 'https://packages.fhir.org/hl7.fhir.us.core/8.0.1'
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = response.read(LIMIT + 1)
+          if len(data) > LIMIT:
+              raise SystemExit('compressed archive exceeds 128 MiB probe bound')
+          if not data.startswith(b'\x1f\x8b'):
+              raise SystemExit('not gzip')
+
+          class CountingReader:
+              def __init__(self, inner):
+                  self.inner = inner
+                  self.read_bytes = 0
+              def read(self, size=-1):
+                  chunk = self.inner.read(size)
+                  self.read_bytes += len(chunk)
+                  return chunk
+
+          gz = gzip.GzipFile(fileobj=io.BytesIO(data), mode='rb')
+          counted = CountingReader(gz)
+          entries_before = 0
+          payload_before = 0
+          max_entry = ('', 0)
+          manifest = None
+          with tarfile.open(fileobj=counted, mode='r|') as tf:
+              for member in tf:
+                  normalized = member.name[2:] if member.name.startswith('./') else member.name
+                  if member.size > max_entry[1]:
+                      max_entry = (member.name, member.size)
+                  if normalized == 'package/package.json':
+                      manifest = {
+                          'index': entries_before,
+                          'size': member.size,
+                          'decompressed_bytes_read_to_header': counted.read_bytes,
+                      }
+                      break
+                  entries_before += 1
+                  payload_before += member.size
+          if manifest is None:
+              raise SystemExit('package/package.json not found')
+          print(json.dumps({
+              'compressed_bytes': len(data),
+              'entries_before_package_json': entries_before,
+              'payload_bytes_before_package_json': payload_before,
+              'manifest': manifest,
+              'largest_entry_seen': {'name': max_entry[0], 'bytes': max_entry[1]},
+              'read_to_manifest_ratio': round(manifest['decompressed_bytes_read_to_header'] / len(data), 3),
+          }, indent=2))
+          PY
+
       - name: End-to-end exact US Core resolve and verify
         run: |
           set -euo pipefail
