@@ -1,0 +1,185 @@
+name: cf11-multi-version-proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf11-multi-version-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/011-cf-11-multi-version-package-graph/**
+      - donors/cf-11-multi-version-package-graph.yaml
+  push:
+    branches:
+      - fix/cf-11-multi-version-package-graph
+    paths:
+      - .github/workflows/cf11-multi-version-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/011-cf-11-multi-version-package-graph/**
+      - donors/cf-11-multi-version-package-graph.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF11_PROOF_CONTAINER: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+
+jobs:
+  real-package-graph:
+    runs-on: ubuntu-24.04
+    container:
+      # Docker Official Image rust:1.97.1-trixie, pinned to the linux/amd64 manifest.
+      image: rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - name: Assert pinned execution toolchain
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          test "$(rustc --version | awk '{print $2}')" = "1.97.1"
+
+      - name: Build commandF resolver
+        run: cargo build --locked -p commandf
+
+      - name: Resolve previously blocked frozen IPS state twice
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/cf11-multiversion
+          mkdir -p /tmp/cf11-multiversion
+
+          for pass in a b; do
+            root="/tmp/cf11-multiversion/$pass"
+            mkdir -p "$root"
+            cargo run --locked --quiet -p commandf -- \
+              pkg resolve hl7.fhir.uv.ips@2.0.1 \
+              --cache "$root/cache" \
+              --lock "$root/commandf.lock"
+            cargo run --locked --quiet -p commandf -- \
+              pkg verify \
+              --cache "$root/cache" \
+              --lock "$root/commandf.lock"
+          done
+
+      - name: Prove multi-version identity and deterministic semantic lock identity
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+
+          first = json.loads(Path('/tmp/cf11-multiversion/a/commandf.lock').read_text())
+          second = json.loads(Path('/tmp/cf11-multiversion/b/commandf.lock').read_text())
+
+          def package_evidence(package):
+              source = package.get('source')
+              assert isinstance(source, str) and source, package
+              return {
+                  'name': package['name'],
+                  'version': package['version'],
+                  'source': source,
+                  'sha256': package['sha256'],
+                  'dependencies': dict(sorted(package.get('dependencies', {}).items())),
+              }
+
+          def semantic_identity(lock):
+              packages = []
+              for package in lock['packages']:
+                  item = package_evidence(package)
+                  item.pop('source')
+                  packages.append(item)
+              return {
+                  'schema': lock['schema'],
+                  'roots': sorted(lock['roots']),
+                  'packages': sorted(packages, key=lambda package: (package['name'], package['version'])),
+              }
+
+          first_semantic = semantic_identity(first)
+          second_semantic = semantic_identity(second)
+          assert first_semantic == second_semantic, (
+              'independent resolutions produced different package identities, digests, or declared dependencies'
+          )
+
+          roots = [
+              package for package in first['packages']
+              if package['name'] == 'hl7.fhir.uv.ips' and package['version'] == '2.0.1'
+          ]
+          assert len(roots) == 1, roots
+
+          by_name = {}
+          for package in first['packages']:
+              by_name.setdefault(package['name'], set()).add(package['version'])
+
+          multi = {
+              name: sorted(versions)
+              for name, versions in by_name.items()
+              if len(versions) > 1
+          }
+          assert multi, 'expected at least one same-name multi-version dependency'
+
+          terminology = by_name.get('hl7.terminology.r4', set())
+          assert {'7.1.0', '7.2.0'} <= terminology, terminology
+
+          first_packages = sorted(
+              (package_evidence(package) for package in first['packages']),
+              key=lambda package: (package['name'], package['version']),
+          )
+          second_packages = sorted(
+              (package_evidence(package) for package in second['packages']),
+              key=lambda package: (package['name'], package['version']),
+          )
+          first_sources = [(p['name'], p['version'], p['source']) for p in first_packages]
+          second_sources = [(p['name'], p['version'], p['source']) for p in second_packages]
+
+          evidence = {
+              'schema': 3,
+              'frozen_state': 'C002-ips-after',
+              'package': 'hl7.fhir.uv.ips',
+              'version': '2.0.1',
+              'independent_resolutions': 2,
+              'semantic_lock_identity_identical': True,
+              'transport_provenance_identical': first_sources == second_sources,
+              'execution_environment': {
+                  'container': os.environ['CF11_PROOF_CONTAINER'],
+                  'machine': platform.machine(),
+                  'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),
+                  'cargo': subprocess.check_output(['cargo', '--version'], text=True).strip(),
+              },
+              'multi_version_packages': multi,
+              'resolution_a': {
+                  'roots': sorted(first['roots']),
+                  'packages': first_packages,
+              },
+              'resolution_b': {
+                  'roots': sorted(second['roots']),
+                  'packages': second_packages,
+              },
+          }
+          out = Path('/tmp/cf11-multiversion/evidence.json')
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(out.read_text())
+          PY
+
+      - name: Assert repository remains clean
+        run: test -z "$(git status --porcelain)"
+
+      - name: Upload foundation evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf11-multi-version-proof
+          path: /tmp/cf11-multiversion/evidence.json
+          if-no-files-found: error
+          retention-days: 3
