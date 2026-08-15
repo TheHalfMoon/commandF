@@ -55,26 +55,48 @@ jobs:
               --lock "$root/commandf.lock"
           done
 
-      - name: Prove multi-version identity and deterministic lock bytes
+      - name: Prove multi-version identity and deterministic semantic lock identity
         run: |
           set -euo pipefail
-          cmp /tmp/cf11-multiversion/a/commandf.lock /tmp/cf11-multiversion/b/commandf.lock
 
           python - <<'PY'
           import json
           from pathlib import Path
 
-          first = Path('/tmp/cf11-multiversion/a/commandf.lock')
-          lock = json.loads(first.read_text())
+          first = json.loads(Path('/tmp/cf11-multiversion/a/commandf.lock').read_text())
+          second = json.loads(Path('/tmp/cf11-multiversion/b/commandf.lock').read_text())
+
+          def semantic_identity(lock):
+              packages = []
+              for package in lock['packages']:
+                  source = package.get('source')
+                  assert isinstance(source, str) and source, package
+                  packages.append({
+                      'name': package['name'],
+                      'version': package['version'],
+                      'sha256': package['sha256'],
+                      'dependencies': dict(sorted(package.get('dependencies', {}).items())),
+                  })
+              return {
+                  'schema': lock['schema'],
+                  'roots': sorted(lock['roots']),
+                  'packages': sorted(packages, key=lambda package: (package['name'], package['version'])),
+              }
+
+          first_semantic = semantic_identity(first)
+          second_semantic = semantic_identity(second)
+          assert first_semantic == second_semantic, (
+              'independent resolutions produced different package identities, digests, or declared dependencies'
+          )
 
           roots = [
-              package for package in lock['packages']
+              package for package in first['packages']
               if package['name'] == 'hl7.fhir.uv.ips' and package['version'] == '2.0.1'
           ]
           assert len(roots) == 1, roots
 
           by_name = {}
-          for package in lock['packages']:
+          for package in first['packages']:
               by_name.setdefault(package['name'], set()).add(package['version'])
 
           multi = {
@@ -87,13 +109,23 @@ jobs:
           terminology = by_name.get('hl7.terminology.r4', set())
           assert {'7.1.0', '7.2.0'} <= terminology, terminology
 
+          first_sources = sorted(
+              (package['name'], package['version'], package['source'])
+              for package in first['packages']
+          )
+          second_sources = sorted(
+              (package['name'], package['version'], package['source'])
+              for package in second['packages']
+          )
+
           evidence = {
-              'schema': 1,
+              'schema': 2,
               'frozen_state': 'C002-ips-after',
               'package': 'hl7.fhir.uv.ips',
               'version': '2.0.1',
               'independent_resolutions': 2,
-              'lock_bytes_identical': True,
+              'semantic_lock_identity_identical': True,
+              'transport_provenance_identical': first_sources == second_sources,
               'multi_version_packages': multi,
           }
           out = Path('/tmp/cf11-multiversion/evidence.json')
