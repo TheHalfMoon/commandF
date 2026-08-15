@@ -1,0 +1,95 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-15
+
+sources:
+  - id: us-core-real-delta
+    project: HL7 US Core Implementation Guide
+    package: hl7.fhir.us.core
+    before_version: 8.0.1
+    after_version: 9.0.0
+    before_publication: https://hl7.org/fhir/us/core/STU8.0.1/
+    after_publication: https://hl7.org/fhir/us/core/STU9/
+    change_evidence: https://hl7.org/fhir/us/core/STU9/changes.html
+    rights_evidence:
+      - https://hl7.org/fhir/us/core/STU8.0.1/ImplementationGuide-hl7.fhir.us.core.html
+      - https://hl7.org/fhir/us/core/STU9/ImplementationGuide-hl7.fhir.us.core.html
+    fhir_version: 4.0.1
+    mode: [PUBLIC_RUNTIME_INPUT, BENCHMARK_METADATA]
+    redistribution: NONE
+    rights_note: >-
+      Publication metadata identifies HL7 copyright/legal Creative Commons terms. CF-10 does not
+      vendor or redistribute the NPM package or its terminology/content; package bytes are ephemeral
+      public runtime inputs and retain all upstream rights/terms.
+    adopted_patterns:
+      - published exact package/version identity
+      - public change-history evidence
+      - runtime digest attestation through commandF
+    exclusions:
+      - no NPM archive copied into the repository
+      - no examples or terminology expansions copied into the repository
+      - no ballot/CI build selected for corpus v1
+
+  - id: ips-real-delta
+    project: HL7 International Patient Summary Implementation Guide
+    package: hl7.fhir.uv.ips
+    before_version: 1.1.0
+    after_version: 2.0.1
+    before_publication: https://hl7.org/fhir/uv/ips/STU1.1/
+    after_publication: https://hl7.org/fhir/uv/ips/en/
+    change_evidence: https://hl7.org/fhir/uv/ips/en/changes.html
+    rights_evidence:
+      - https://hl7.org/fhir/uv/ips/STU1.1/terminology.html
+      - https://hl7.org/fhir/uv/ips/en/terminology.html
+    fhir_version: 4.0.1
+    mode: [PUBLIC_RUNTIME_INPUT, BENCHMARK_METADATA]
+    redistribution: NONE
+    rights_note: >-
+      IPS includes mixed upstream IP/terminology statements, including SNOMED CT and other code-system
+      rights. CF-10 intentionally records metadata only and does not redistribute package content,
+      terminology expansions, examples, or imply that commandF's repository license grants rights to
+      those upstream materials.
+    adopted_patterns:
+      - published exact package/version identity
+      - explicit upstream non-compatible/compatible change evidence
+      - runtime digest attestation through commandF
+    exclusions:
+      - no NPM archive copied into the repository
+      - no SNOMED CT/RxNorm/ISO/EDQM payload copied into the repository
+      - no ballot/continuous-build package selected for corpus v1
+
+  - id: mcode-real-delta
+    project: HL7 minimal Common Oncology Data Elements (mCODE) Implementation Guide
+    package: hl7.fhir.us.mcode
+    before_version: 3.0.0
+    after_version: 4.0.0
+    before_publication: https://hl7.org/fhir/us/mcode/STU3/
+    after_publication: https://hl7.org/fhir/us/mcode/STU4/
+    change_evidence: https://hl7.org/fhir/us/mcode/STU4/changes.html
+    rights_evidence:
+      - https://hl7.org/fhir/us/mcode/STU3/downloads.html
+      - https://hl7.org/fhir/us/mcode/STU4/downloads.html
+      - https://hl7.org/fhir/us/mcode/STU4/terminology.html
+    fhir_version: 4.0.1
+    mode: [PUBLIC_RUNTIME_INPUT, BENCHMARK_METADATA]
+    redistribution: NONE
+    rights_note: >-
+      The publication records HL7/Creative Commons-publication terms while individual terminology
+      artifacts may carry separate upstream terms such as SNOMED CT. CF-10 does not redistribute
+      package or terminology content and retains those upstream obligations.
+    adopted_patterns:
+      - published exact package/version identity
+      - specialty-oncology version-delta evidence
+      - runtime digest attestation through commandF
+    exclusions:
+      - no NPM archive copied into the repository
+      - no terminology expansion copied into the repository
+      - no license simplification from mixed artifact-level IP statements
+
+rules:
+  - corpus v1 selection criteria and version pairs are frozen before commandF result discovery
+  - selected cases cannot be removed because commandF reports an unfavorable or divergent result
+  - exact package digests and byte sizes must come from two independent clean commandF resolutions
+  - digest metadata is adopted only after byte-for-byte equality and CF-01 verification
+  - package bytes remain ephemeral and never enter git history
+  - repository license must not be presented as relicensing upstream IG or terminology content
+  - a rights/access failure may block a case but must be documented rather than silently substituted
