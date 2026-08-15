@@ -20,12 +20,12 @@ jobs:
           rm -rf /tmp/registry-probe
           mkdir -p /tmp/registry-probe
 
-          for base in \
-            https://packages.fhir.org \
-            https://packages2.fhir.org/packages
+          for url in \
+            https://packages.fhir.org/hl7.fhir.us.core/8.0.1 \
+            https://packages2.fhir.org/packages/hl7.fhir.us.core/8.0.1 \
+            https://packages2.fhir.org/web/hl7.fhir.us.core-8.0.1.tgz
           do
-            safe="$(printf '%s' "$base" | tr '/:.' '_')"
-            url="$base/hl7.fhir.us.core/8.0.1"
+            safe="$(printf '%s' "$url" | tr '/:.' '_')"
             echo "=== $url ==="
             set +e
             status="$(curl -sS --max-redirs 0 -D "/tmp/registry-probe/$safe.headers" -o "/tmp/registry-probe/$safe.body" -w '%{http_code}' "$url")"
@@ -33,11 +33,10 @@ jobs:
             set -e
             echo "curl_exit=$curl_status http_status=$status"
             grep -Ei '^(content-type|content-length|location):' "/tmp/registry-probe/$safe.headers" || true
-            python - "$base" "/tmp/registry-probe/$safe.body" <<'PY'
+            python - "/tmp/registry-probe/$safe.body" <<'PY'
           import json, sys
           from pathlib import Path
-          base = sys.argv[1]
-          data = Path(sys.argv[2]).read_bytes()
+          data = Path(sys.argv[1]).read_bytes()
           print('bytes=', len(data), 'first8=', data[:8].hex())
           if data.startswith(b'\x1f\x8b'):
               print('shape=direct_gzip')
@@ -47,10 +46,7 @@ jobs:
           except Exception as exc:
               print('shape=non_json_non_gzip', type(exc).__name__)
               raise SystemExit(0)
-          print('shape=json keys=', sorted(obj.keys())[:20])
-          dist = obj.get('dist') if isinstance(obj, dict) else None
-          print('dist=', dist)
-          if isinstance(dist, dict) and isinstance(dist.get('tarball'), str):
-              print('tarball=', dist['tarball'])
+          print('shape=json keys=', sorted(obj.keys())[:20] if isinstance(obj, dict) else type(obj).__name__)
+          print('dist=', obj.get('dist') if isinstance(obj, dict) else None)
           PY
           done
