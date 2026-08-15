@@ -59,8 +59,10 @@ public final class Main {
   }
 
   static Hl7OracleReport compare(Arguments args) throws Exception {
-    ContextAndPackage left = loadContext(args.corePackage(), args.leftPackage());
-    ContextAndPackage right = loadContext(args.corePackage(), args.rightPackage());
+    ContextAndPackage left = loadContext(
+        args.corePackage(), args.leftContextPackages(), args.leftPackage());
+    ContextAndPackage right = loadContext(
+        args.corePackage(), args.rightContextPackages(), args.rightPackage());
 
     StructureDefinition leftResource = fetchStructureDefinition(
         left.context(), args.leftUrl(), args.leftVersion(), "left");
@@ -115,7 +117,8 @@ public final class Main {
         List.copyOf(normalizedMessages));
   }
 
-  private static ContextAndPackage loadContext(Path corePath, Path sidePath) throws Exception {
+  private static ContextAndPackage loadContext(
+      Path corePath, List<Path> contextPaths, Path sidePath) throws Exception {
     NpmPackage core = loadPackage(corePath);
     requirePackage(core, CORE_PACKAGE_NAME, CORE_PACKAGE_VERSION, "core");
 
@@ -127,6 +130,14 @@ public final class Main {
     context.setCanRunWithoutTerminology(true);
 
     NpmPackage side = loadPackage(sidePath);
+    for (Path contextPath : contextPaths) {
+      NpmPackage dependency = loadPackage(contextPath);
+      if (samePackage(core, dependency) || samePackage(side, dependency)) {
+        continue;
+      }
+      IContextResourceLoader dependencyLoader = ValidatorUtils.loaderForVersion(dependency.fhirVersion());
+      context.loadFromPackage(dependency, dependencyLoader, false);
+    }
     if (!samePackage(core, side)) {
       IContextResourceLoader sideLoader = ValidatorUtils.loaderForVersion(side.fhirVersion());
       context.loadFromPackage(side, sideLoader, false);
@@ -247,6 +258,8 @@ public final class Main {
       Path corePackage,
       Path leftPackage,
       Path rightPackage,
+      List<Path> leftContextPackages,
+      List<Path> rightContextPackages,
       String leftUrl,
       String leftVersion,
       String rightUrl,
@@ -254,6 +267,8 @@ public final class Main {
 
     static Arguments parse(String[] args) {
       Map<String, String> values = new LinkedHashMap<>();
+      List<Path> leftContextPackages = new ArrayList<>();
+      List<Path> rightContextPackages = new ArrayList<>();
       for (int index = 0; index < args.length; index += 2) {
         if (index + 1 >= args.length) {
           throw new IllegalArgumentException("missing value for " + args[index]);
@@ -262,7 +277,12 @@ public final class Main {
         if (!key.startsWith("--")) {
           throw new IllegalArgumentException("unexpected positional argument: " + key);
         }
-        if (values.put(key, args[index + 1]) != null) {
+        String value = args[index + 1];
+        if (key.equals("--left-context-package")) {
+          leftContextPackages.add(Path.of(value));
+        } else if (key.equals("--right-context-package")) {
+          rightContextPackages.add(Path.of(value));
+        } else if (values.put(key, value) != null) {
           throw new IllegalArgumentException("duplicate argument: " + key);
         }
       }
@@ -289,6 +309,8 @@ public final class Main {
           Path.of(required(values, "--core-package")),
           Path.of(required(values, "--left-package")),
           Path.of(required(values, "--right-package")),
+          List.copyOf(leftContextPackages),
+          List.copyOf(rightContextPackages),
           required(values, "--left-url"),
           values.get("--left-version"),
           required(values, "--right-url"),
