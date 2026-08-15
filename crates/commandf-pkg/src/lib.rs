@@ -67,13 +67,14 @@ pub use compatibility_model::{
 };
 pub use compatibility_validate::classify_structural_diff;
 pub use corpus::{
-    canonical_corpus_manifest_bytes, parse_corpus_manifest, validate_corpus_manifest,
-    MAX_CORPUS_ARCHIVE_BYTES, MAX_CORPUS_CASES, MAX_CORPUS_MANIFEST_BYTES,
+    attest_corpus_package_state, canonical_corpus_manifest_bytes, parse_corpus_manifest,
+    validate_corpus_manifest, MAX_CORPUS_ARCHIVE_BYTES, MAX_CORPUS_CASES,
+    MAX_CORPUS_MANIFEST_BYTES,
 };
 pub use corpus_error::CorpusError;
 pub use corpus_model::{
-    CorpusOracleMode, CorpusPackageState, CorpusRightsMode, CorpusSelectionPolicy, RealIgCase,
-    RealIgCorpus,
+    CorpusOracleMode, CorpusPackageAttestation, CorpusPackageSide, CorpusPackageState,
+    CorpusRightsMode, CorpusSelectionPolicy, RealIgCase, RealIgCorpus,
 };
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
