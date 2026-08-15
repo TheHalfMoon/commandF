@@ -85,7 +85,10 @@ pub fn run(
 
         let structural_bytes = match bounded_report_bytes(
             "structural",
-            reports.structural.to_json_bytes().map_err(|error| error.to_string()),
+            reports
+                .structural
+                .to_json_bytes()
+                .map_err(|error| error.to_string()),
         ) {
             Ok(bytes) => bytes,
             Err(message) => {
@@ -268,7 +271,8 @@ fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
 }
 
 fn bounded_report_bytes(label: &str, result: Result<Vec<u8>, String>) -> Result<Vec<u8>, String> {
-    let bytes = result.map_err(|message| format!("{label} report serialization failed: {message}"))?;
+    let bytes =
+        result.map_err(|message| format!("{label} report serialization failed: {message}"))?;
     if bytes.len() > MAX_CORPUS_RAW_REPORT_BYTES {
         return Err(format!(
             "{label} report is {} bytes; maximum is {}",
