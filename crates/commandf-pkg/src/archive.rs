@@ -7,7 +7,9 @@ use tar::Archive;
 use crate::{model::PackageManifest, PackageError};
 
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
-const MAX_ARCHIVE_DECOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
+const MIN_MANIFEST_SCAN_DECOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES: u64 = 1024 * 1024 * 1024;
+const MANIFEST_SCAN_EXPANSION_RATIO: u64 = 16;
 const MAX_ARCHIVE_ENTRIES: usize = 50_000;
 
 struct BoundedReader<R> {
@@ -52,7 +54,21 @@ impl<R: Read> Read for BoundedReader<R> {
 }
 
 pub(crate) fn read_manifest(bytes: &[u8]) -> Result<PackageManifest, PackageError> {
-    read_manifest_with_limits(bytes, MAX_ARCHIVE_DECOMPRESSED_BYTES, MAX_ARCHIVE_ENTRIES)
+    read_manifest_with_limits(
+        bytes,
+        manifest_scan_decompressed_limit(bytes.len()),
+        MAX_ARCHIVE_ENTRIES,
+    )
+}
+
+fn manifest_scan_decompressed_limit(compressed_bytes: usize) -> u64 {
+    let compressed_bytes = u64::try_from(compressed_bytes).unwrap_or(u64::MAX);
+    compressed_bytes
+        .saturating_mul(MANIFEST_SCAN_EXPANSION_RATIO)
+        .clamp(
+            MIN_MANIFEST_SCAN_DECOMPRESSED_BYTES,
+            MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES,
+        )
 }
 
 fn read_manifest_with_limits(
@@ -118,6 +134,26 @@ mod tests {
             builder.finish().unwrap();
         }
         encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn manifest_scan_budget_preserves_floor_scales_and_caps() {
+        assert_eq!(
+            manifest_scan_decompressed_limit(1),
+            MIN_MANIFEST_SCAN_DECOMPRESSED_BYTES
+        );
+        assert_eq!(
+            manifest_scan_decompressed_limit(40 * 1024 * 1024),
+            640 * 1024 * 1024
+        );
+        assert_eq!(
+            manifest_scan_decompressed_limit(78_238_082),
+            MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES
+        );
+        assert_eq!(
+            manifest_scan_decompressed_limit(usize::MAX),
+            MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES
+        );
     }
 
     #[test]
