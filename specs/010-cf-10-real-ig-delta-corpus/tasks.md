@@ -1,6 +1,17 @@
 # CF-10 Tasks — Public Real-IG Delta Corpus
 
-Status: planned / selection rules frozen
+Status: canonical CF-11 foundation reconciled / frozen six-state eligibility rerun authorized
+
+## Foundation reconciliation gate
+
+- [x] CF-11 multi-version package graph is canonical on `main` at merge commit `5cb1a4c3445c0ebd86654cfb467a5e008e801c3e`.
+- [x] Canonical CF-11 was merged into this frozen CF-10 branch by reconciliation merge `5ec463f0ae53b76f9c2c151335d98598b53e5abc`.
+- [x] The five pre-existing CF-10 paths remained byte-identical across reconciliation before this authorization update.
+- [x] Frozen selection remains exactly: US Core 8.0.1→9.0.0, IPS 1.1.0→2.0.1, mCODE 3.0.0→4.0.0.
+- [ ] Rerun the exact same six package states through the existing digest-discovery workflow on the reconciled foundation.
+- [ ] Review the resulting artifact before authorizing any semantic diff/classify/check/terminology/oracle corpus execution.
+
+No semantic CF-10 execution is authorized by this task update. An eligibility failure must remain visible and must not cause case replacement.
 
 ## Selection and provenance
 
@@ -12,7 +23,7 @@ Status: planned / selection rules frozen
 
 ## Digest discovery
 
-- [ ] T006 Add guarded exact-version digest-discovery workflow/tool.
+- [x] T006 Add guarded exact-version digest-discovery workflow/tool.
 - [ ] T007 Resolve every selected package/version into independent cache A and cache B.
 - [ ] T008 Verify both caches with CF-01.
 - [ ] T009 Require byte/digest equality between independent resolutions.
