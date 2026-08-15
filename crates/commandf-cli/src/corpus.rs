@@ -154,11 +154,7 @@ pub fn run(
             Ok(report) => report,
             Err(error) => {
                 failed = true;
-                summaries.push(record_oracle_failure(
-                    case,
-                    &evidence_dir,
-                    error.as_ref(),
-                )?);
+                summaries.push(record_oracle_failure(case, &evidence_dir, error.as_ref())?);
                 continue;
             }
         };
