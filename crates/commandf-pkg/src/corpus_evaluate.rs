@@ -137,6 +137,11 @@ pub fn summarize_corpus_case(
         }
     }
 
+    let compared = oracle
+        .resources
+        .iter()
+        .filter(|resource| resource.oracle.is_some())
+        .count();
     let mut agreement = 0usize;
     let mut commandf_only = 0usize;
     let mut authority_only = 0usize;
@@ -178,7 +183,7 @@ pub fn summarize_corpus_case(
             report_sha256: PackageCache::digest(&terminology_bytes),
         }),
         oracle: Some(CorpusOracleSummary {
-            compared: oracle.resources.len(),
+            compared,
             agreement,
             commandf_only,
             authority_only,
