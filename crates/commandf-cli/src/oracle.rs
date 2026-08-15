@@ -43,6 +43,50 @@ pub fn run_report(
     oracle_adapter: PathBuf,
     oracle_java: Option<PathBuf>,
 ) -> Result<OracleDivergenceReport, Box<dyn std::error::Error>> {
+    run_report_inner(
+        package,
+        before_lock,
+        before_cache,
+        after_lock,
+        after_cache,
+        oracle_adapter,
+        oracle_java,
+        false,
+    )
+}
+
+pub fn run_changed_report(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+    oracle_adapter: PathBuf,
+    oracle_java: Option<PathBuf>,
+) -> Result<OracleDivergenceReport, Box<dyn std::error::Error>> {
+    run_report_inner(
+        package,
+        before_lock,
+        before_cache,
+        after_lock,
+        after_cache,
+        oracle_adapter,
+        oracle_java,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_report_inner(
+    package: String,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+    oracle_adapter: PathBuf,
+    oracle_java: Option<PathBuf>,
+    changed_only: bool,
+) -> Result<OracleDivergenceReport, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
     validate_hl7_oracle_adapter(&oracle_adapter, oracle_java.as_deref())?;
 
@@ -101,6 +145,14 @@ pub fn run_report(
 
         for pair in pairs {
             if pair.resource.kind != ResourceKeyKind::Canonical {
+                continue;
+            }
+            if changed_only
+                && !structural_diff
+                    .changes
+                    .iter()
+                    .any(|change| change.resource == pair.resource)
+            {
                 continue;
             }
             let (url, version) = canonical_parts(&pair.resource)?;
