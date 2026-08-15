@@ -354,13 +354,13 @@ fn changed_unresolved_reference_is_indeterminate() {
 }
 
 #[test]
-fn ambiguous_bare_value_set_reference_fails_closed() {
+fn ambiguous_bare_value_set_reference_is_indeterminate_not_hard_proof() {
     let url = "http://example.org/ValueSet/gender";
     let before_one = value_set("gender-1", url, "1", &["a"]);
     let before_two = value_set("gender-2", url, "2", &["a"]);
     let after_one = value_set("gender-1", url, "1", &["a"]);
     let after_two = value_set("gender-2", url, "2", &["a"]);
-    let error = report_case(
+    let report = report_case(
         "required",
         url,
         &[
@@ -374,6 +374,17 @@ fn ambiguous_bare_value_set_reference_fails_closed() {
             ("ValueSet-gender-2.json", after_two),
         ],
     )
-    .unwrap_err();
-    assert!(error.contains("ambiguous terminology canonical"), "{error}");
+    .unwrap();
+    assert_eq!(report.binding_refinements.len(), 1);
+    let finding = &report.binding_refinements[0];
+    assert_eq!(finding.relation, TerminologyRelation::Indeterminate);
+    assert_eq!(
+        finding.reason,
+        Some(TerminologyIndeterminateReason::AmbiguousCanonical)
+    );
+    assert!(!finding.binding_proof_eligible);
+    assert!(finding.proof_mode.is_none());
+    assert!(finding.rule_id.is_none());
+    assert!(finding.severity.is_none());
+    assert!(finding.direction.is_none());
 }
