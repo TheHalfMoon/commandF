@@ -74,14 +74,17 @@ pub use corpus::{
 };
 pub use corpus_error::CorpusError;
 pub use corpus_evaluate::{
-    evaluate_corpus_case, failed_corpus_case_summary, summarize_corpus_case, CorpusCaseReports,
+    evaluate_corpus_case, evaluate_corpus_compatibility, evaluate_corpus_structural,
+    evaluate_corpus_terminology, failed_corpus_case_summary,
+    failed_corpus_case_summary_with_closure, summarize_corpus_case, CorpusCaseReports,
     CorpusPackageStateInput,
 };
 pub use corpus_model::{
-    CorpusCaseStatus, CorpusCaseSummary, CorpusCompatibilitySummary, CorpusOracleMode,
-    CorpusOracleSummary, CorpusPackageAttestation, CorpusPackageSide, CorpusPackageState,
-    CorpusRightsMode, CorpusRunSummary, CorpusSelectionPolicy, CorpusStructuralSummary,
-    CorpusSummaryPackageState, CorpusTerminologySummary, RealIgCase, RealIgCorpus,
+    CorpusCaseStatus, CorpusCaseSummary, CorpusClosurePackage, CorpusCompatibilitySummary,
+    CorpusOracleMode, CorpusOracleSummary, CorpusPackageAttestation, CorpusPackageSide,
+    CorpusPackageState, CorpusRightsMode, CorpusRunSummary, CorpusSelectionPolicy,
+    CorpusStructuralSummary, CorpusSummaryPackageState, CorpusTerminologySummary, RealIgCase,
+    RealIgCorpus,
 };
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
