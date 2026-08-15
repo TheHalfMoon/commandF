@@ -128,8 +128,14 @@ fn existing_work_root_fails_before_acquisition() {
         .expect("commandf corpus run must execute");
 
     assert_eq!(output.status.code(), Some(1));
-    assert!(marker.exists(), "existing work root content must be preserved");
-    assert!(!oracle.exists(), "oracle must not be touched before work-root gate");
+    assert!(
+        marker.exists(),
+        "existing work root content must be preserved"
+    );
+    assert!(
+        !oracle.exists(),
+        "oracle must not be touched before work-root gate"
+    );
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("work root already exists"));
