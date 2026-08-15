@@ -18,9 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Build commandF resolver
         run: cargo build --locked -p commandf
@@ -118,7 +120,7 @@ jobs:
           fi
 
       - name: Upload digest discovery evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cf10-package-attestation
           path: /tmp/cf10-digest-discovery/cf10-package-attestation.json
