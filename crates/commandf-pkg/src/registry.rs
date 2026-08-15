@@ -86,13 +86,17 @@ impl FhirRegistrySource {
                 .headers()
                 .get("location")
                 .and_then(|value| value.to_str().ok())
-                .ok_or_else(|| format!("registry redirect from {url} omitted a valid Location header"))?;
+                .ok_or_else(|| {
+                    format!("registry redirect from {url} omitted a valid Location header")
+                })?;
             let target = validated_secondary_redirect(endpoint, status, name, version, location)?;
             return self.direct_archive_from_url(&target);
         }
 
         if !(200..300).contains(&status) {
-            return Err(format!("registry download from {url} returned HTTP {status}"));
+            return Err(format!(
+                "registry download from {url} returned HTTP {status}"
+            ));
         }
 
         let bytes = read_archive_body(&mut response, &url)?;
@@ -293,8 +297,7 @@ mod tests {
 
     #[test]
     fn accepts_gzip_magic() {
-        validate_gzip_archive(&[0x1f, 0x8b, 0x08, 0x00], "https://example.test/package")
-            .unwrap();
+        validate_gzip_archive(&[0x1f, 0x8b, 0x08, 0x00], "https://example.test/package").unwrap();
     }
 
     #[test]
