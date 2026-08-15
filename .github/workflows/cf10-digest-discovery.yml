@@ -4,15 +4,25 @@ on:
   pull_request:
     paths:
       - .github/workflows/cf10-digest-discovery.yml
+      - corpus/real-ig/v1/**
       - specs/010-cf-10-real-ig-delta-corpus/**
       - donors/cf-10-real-ig-delta-corpus.yaml
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - Cargo.toml
+      - Cargo.lock
   push:
     branches:
-      - feat/cf-10-real-ig-delta-corpus
+      - main
     paths:
       - .github/workflows/cf10-digest-discovery.yml
+      - corpus/real-ig/v1/**
       - specs/010-cf-10-real-ig-delta-corpus/**
       - donors/cf-10-real-ig-delta-corpus.yaml
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - Cargo.toml
+      - Cargo.lock
   workflow_dispatch:
 
 permissions:
@@ -58,7 +68,7 @@ jobs:
                 --cache "$root/cache" \
                 --lock "$root/commandf.lock" \
                 2>"$root/resolve.err"; then
-                error="$(tr '\r\n\t' '   ' < "$root/resolve.err" | head -c 1000)"
+                error="$(head -c 1000 "$root/resolve.err" | tr '\r\n\t' '   ')"
                 printf '%s\t%s\t%s\t%s\tresolve\t%s\n' \
                   "$id" "$package" "$version" "$pass" "$error" \
                   >> /tmp/cf10-digest-discovery/failures.tsv
@@ -69,7 +79,7 @@ jobs:
                 --cache "$root/cache" \
                 --lock "$root/commandf.lock" \
                 2>"$root/verify.err"; then
-                error="$(tr '\r\n\t' '   ' < "$root/verify.err" | head -c 1000)"
+                error="$(head -c 1000 "$root/verify.err" | tr '\r\n\t' '   ')"
                 printf '%s\t%s\t%s\t%s\tverify\t%s\n' \
                   "$id" "$package" "$version" "$pass" "$error" \
                   >> /tmp/cf10-digest-discovery/failures.tsv
