@@ -83,18 +83,60 @@ pub fn run(
             }
         };
 
-        write_bounded_report(
-            &evidence_dir.join("structural.json"),
-            &reports.structural.to_json_bytes()?,
-        )?;
-        write_bounded_report(
-            &evidence_dir.join("compatibility.json"),
-            &reports.compatibility.to_json_bytes()?,
-        )?;
-        write_bounded_report(
-            &evidence_dir.join("terminology.json"),
-            &reports.terminology.to_json_bytes()?,
-        )?;
+        let structural_bytes = match bounded_report_bytes(
+            "structural",
+            reports.structural.to_json_bytes().map_err(|error| error.to_string()),
+        ) {
+            Ok(bytes) => bytes,
+            Err(message) => {
+                failed = true;
+                write_failure_message(&evidence_dir, "evidence-failure.txt", &message)?;
+                summaries.push(failed_corpus_case_summary(
+                    case,
+                    CorpusCaseStatus::EvidenceFailed,
+                ));
+                continue;
+            }
+        };
+        let compatibility_bytes = match bounded_report_bytes(
+            "compatibility",
+            reports
+                .compatibility
+                .to_json_bytes()
+                .map_err(|error| error.to_string()),
+        ) {
+            Ok(bytes) => bytes,
+            Err(message) => {
+                failed = true;
+                write_failure_message(&evidence_dir, "evidence-failure.txt", &message)?;
+                summaries.push(failed_corpus_case_summary(
+                    case,
+                    CorpusCaseStatus::EvidenceFailed,
+                ));
+                continue;
+            }
+        };
+        let terminology_bytes = match bounded_report_bytes(
+            "terminology",
+            reports
+                .terminology
+                .to_json_bytes()
+                .map_err(|error| error.to_string()),
+        ) {
+            Ok(bytes) => bytes,
+            Err(message) => {
+                failed = true;
+                write_failure_message(&evidence_dir, "evidence-failure.txt", &message)?;
+                summaries.push(failed_corpus_case_summary(
+                    case,
+                    CorpusCaseStatus::EvidenceFailed,
+                ));
+                continue;
+            }
+        };
+        fs::write(evidence_dir.join("structural.json"), structural_bytes)?;
+        fs::write(evidence_dir.join("compatibility.json"), compatibility_bytes)?;
+        fs::write(evidence_dir.join("terminology.json"), terminology_bytes)?;
 
         let oracle_report = match oracle::run_changed_report(
             case.package.clone(),
@@ -116,10 +158,24 @@ pub fn run(
                 continue;
             }
         };
-        write_bounded_report(
-            &evidence_dir.join("oracle.json"),
-            &oracle_report.to_json_bytes()?,
-        )?;
+        let oracle_bytes = match bounded_report_bytes(
+            "oracle",
+            oracle_report
+                .to_json_bytes()
+                .map_err(|error| error.to_string()),
+        ) {
+            Ok(bytes) => bytes,
+            Err(message) => {
+                failed = true;
+                write_failure_message(&evidence_dir, "evidence-failure.txt", &message)?;
+                summaries.push(failed_corpus_case_summary(
+                    case,
+                    CorpusCaseStatus::EvidenceFailed,
+                ));
+                continue;
+            }
+        };
+        fs::write(evidence_dir.join("oracle.json"), oracle_bytes)?;
 
         match summarize_corpus_case(case, &reports, &oracle_report) {
             Ok(summary) => summaries.push(summary),
@@ -128,7 +184,7 @@ pub fn run(
                 write_failure(&evidence_dir, "summary-failure.txt", &error)?;
                 summaries.push(failed_corpus_case_summary(
                     case,
-                    CorpusCaseStatus::OracleFailed,
+                    CorpusCaseStatus::EvidenceFailed,
                 ));
             }
         }
@@ -211,19 +267,16 @@ fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn write_bounded_report(path: &Path, bytes: &[u8]) -> io::Result<()> {
+fn bounded_report_bytes(label: &str, result: Result<Vec<u8>, String>) -> Result<Vec<u8>, String> {
+    let bytes = result.map_err(|message| format!("{label} report serialization failed: {message}"))?;
     if bytes.len() > MAX_CORPUS_RAW_REPORT_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "corpus report is {} bytes; maximum is {}: {}",
-                bytes.len(),
-                MAX_CORPUS_RAW_REPORT_BYTES,
-                path.display()
-            ),
+        return Err(format!(
+            "{label} report is {} bytes; maximum is {}",
+            bytes.len(),
+            MAX_CORPUS_RAW_REPORT_BYTES
         ));
     }
-    fs::write(path, bytes)
+    Ok(bytes)
 }
 
 fn evaluation_status(error: &CorpusError) -> CorpusCaseStatus {
@@ -268,13 +321,20 @@ fn write_failure(
     file_name: &str,
     error: &dyn std::fmt::Display,
 ) -> io::Result<()> {
-    let mut text = bounded_diagnostic(error);
+    write_failure_message(evidence_dir, file_name, &error.to_string())
+}
+
+fn write_failure_message(evidence_dir: &Path, file_name: &str, message: &str) -> io::Result<()> {
+    let mut text = bounded_text(message);
     text.push('\n');
     fs::write(evidence_dir.join(file_name), text)
 }
 
 fn bounded_diagnostic(error: &dyn std::fmt::Display) -> String {
-    let text = error.to_string();
+    bounded_text(&error.to_string())
+}
+
+fn bounded_text(text: &str) -> String {
     let mut chars = text.chars();
     let mut output = chars
         .by_ref()
