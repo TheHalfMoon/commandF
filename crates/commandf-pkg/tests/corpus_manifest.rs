@@ -8,8 +8,8 @@ use commandf_pkg::{
 use serde_json::{json, Value};
 
 fn canonical_manifest_bytes() -> Vec<u8> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../corpus/real-ig/v1/corpus.json");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../corpus/real-ig/v1/corpus.json");
     fs::read(path).expect("canonical CF-10 manifest should be readable")
 }
 
@@ -23,7 +23,8 @@ fn parse_value(value: &Value) -> Result<commandf_pkg::RealIgCorpus, CorpusError>
 
 #[test]
 fn canonical_manifest_matches_frozen_discovery_evidence() {
-    let corpus = parse_corpus_manifest(&canonical_manifest_bytes()).expect("manifest should validate");
+    let corpus =
+        parse_corpus_manifest(&canonical_manifest_bytes()).expect("manifest should validate");
     assert_eq!(corpus.cases.len(), 3);
 
     assert_eq!(corpus.cases[0].id, "C001");
@@ -74,7 +75,8 @@ fn canonical_manifest_matches_frozen_discovery_evidence() {
 
 #[test]
 fn canonical_round_trip_is_deterministic() {
-    let corpus = parse_corpus_manifest(&canonical_manifest_bytes()).expect("manifest should validate");
+    let corpus =
+        parse_corpus_manifest(&canonical_manifest_bytes()).expect("manifest should validate");
     let first = canonical_corpus_manifest_bytes(&corpus).expect("serialization should succeed");
     let reparsed = parse_corpus_manifest(&first).expect("canonical bytes should validate");
     let second = canonical_corpus_manifest_bytes(&reparsed).expect("serialization should succeed");
@@ -195,8 +197,7 @@ fn non_r4_digest_and_size_fail_closed() {
 #[test]
 fn evidence_urls_and_publisher_fail_closed() {
     let mut http_publication = canonical_value();
-    http_publication["cases"][0]["before"]["publication_url"] =
-        json!("http://example.invalid/ig");
+    http_publication["cases"][0]["before"]["publication_url"] = json!("http://example.invalid/ig");
     assert!(matches!(
         parse_value(&http_publication),
         Err(CorpusError::InvalidEvidence { .. })
