@@ -59,11 +59,12 @@ jobs:
       - name: Build pinned HL7 oracle adapter
         run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
 
-      - name: Commit tested tree without ops tooling
+      - name: Commit tested tree without ops tooling or build output
         run: |
           set -euo pipefail
           rm -f .github/scripts/apply-cf10-oracle-context-fix.py
           rm -f .github/workflows/cf10-oracle-context-fix.yml
+          rm -rf tools/hl7-oracle/target
           git add -A
           git config user.name 'commandF ops'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
