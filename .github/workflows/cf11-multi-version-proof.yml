@@ -1,0 +1,113 @@
+name: cf11-multi-version-proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf11-multi-version-proof.yml
+      - crates/commandf-pkg/src/resolver.rs
+      - crates/commandf-pkg/tests/resolution.rs
+      - specs/011-cf-11-multi-version-package-graph/**
+      - donors/cf-11-multi-version-package-graph.yaml
+  push:
+    branches:
+      - fix/cf-11-multi-version-package-graph
+    paths:
+      - .github/workflows/cf11-multi-version-proof.yml
+      - crates/commandf-pkg/src/resolver.rs
+      - crates/commandf-pkg/tests/resolution.rs
+      - specs/011-cf-11-multi-version-package-graph/**
+      - donors/cf-11-multi-version-package-graph.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-package-graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Build commandF resolver
+        run: cargo build --locked -p commandf
+
+      - name: Resolve previously blocked frozen IPS state twice
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/cf11-multiversion
+          mkdir -p /tmp/cf11-multiversion
+
+          for pass in a b; do
+            root="/tmp/cf11-multiversion/$pass"
+            mkdir -p "$root"
+            cargo run --locked --quiet -p commandf -- \
+              pkg resolve hl7.fhir.uv.ips@2.0.1 \
+              --cache "$root/cache" \
+              --lock "$root/commandf.lock"
+            cargo run --locked --quiet -p commandf -- \
+              pkg verify \
+              --cache "$root/cache" \
+              --lock "$root/commandf.lock"
+          done
+
+      - name: Prove multi-version identity and deterministic lock bytes
+        run: |
+          set -euo pipefail
+          cmp /tmp/cf11-multiversion/a/commandf.lock /tmp/cf11-multiversion/b/commandf.lock
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          first = Path('/tmp/cf11-multiversion/a/commandf.lock')
+          lock = json.loads(first.read_text())
+
+          roots = [
+              package for package in lock['packages']
+              if package['name'] == 'hl7.fhir.uv.ips' and package['version'] == '2.0.1'
+          ]
+          assert len(roots) == 1, roots
+
+          by_name = {}
+          for package in lock['packages']:
+              by_name.setdefault(package['name'], set()).add(package['version'])
+
+          multi = {
+              name: sorted(versions)
+              for name, versions in by_name.items()
+              if len(versions) > 1
+          }
+          assert multi, 'expected at least one same-name multi-version dependency'
+
+          terminology = by_name.get('hl7.terminology.r4', set())
+          assert {'7.1.0', '7.2.0'} <= terminology, terminology
+
+          evidence = {
+              'schema': 1,
+              'frozen_state': 'C002-ips-after',
+              'package': 'hl7.fhir.uv.ips',
+              'version': '2.0.1',
+              'independent_resolutions': 2,
+              'lock_bytes_identical': True,
+              'multi_version_packages': multi,
+          }
+          out = Path('/tmp/cf11-multiversion/evidence.json')
+          out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(out.read_text())
+          PY
+
+      - name: Assert repository remains clean
+        run: test -z "$(git status --porcelain)"
+
+      - name: Upload foundation evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf11-multi-version-proof
+          path: /tmp/cf11-multiversion/evidence.json
+          if-no-files-found: error
+          retention-days: 3
