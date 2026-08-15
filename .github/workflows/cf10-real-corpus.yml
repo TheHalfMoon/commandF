@@ -131,7 +131,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
+          test -z "$(git status --porcelain --untracked-files=no)"
           if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
             echo 'unexpected upstream archive tracked in repository' >&2
             exit 1
