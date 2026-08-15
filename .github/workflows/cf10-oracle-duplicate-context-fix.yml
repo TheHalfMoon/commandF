@@ -1,0 +1,138 @@
+name: cf10-oracle-duplicate-context-fix
+
+on:
+  push:
+    branches:
+      - ops/cf10-oracle-duplicate-context
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Apply guarded adapter fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply-cf10-oracle-duplicate-context.py /tmp/apply-cf10-oracle-duplicate-context.py
+          git fetch origin feat/cf-10-real-ig-delta-corpus
+          git checkout -B cf10-target origin/feat/cf-10-real-ig-delta-corpus
+          test "$(git rev-parse HEAD)" = "60e773434ed72136377bd239572e5d289846669b"
+          python /tmp/apply-cf10-oracle-duplicate-context.py
+          changed="$(git diff --name-only)"
+          test "$changed" = "tools/hl7-oracle/src/main/java/dev/commandf/oracle/Main.java"
+
+      - name: Validate Rust remains green
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Build pinned HL7 adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+
+      - name: Resolve exact duplicate-context fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/cf10-oracle-dup
+          mkdir -p /tmp/cf10-oracle-dup
+          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.r4.core@4.0.1 \
+            --cache /tmp/cf10-oracle-dup/core-cache \
+            --lock /tmp/cf10-oracle-dup/core.lock
+          cargo run --locked --quiet -p commandf -- pkg verify \
+            --cache /tmp/cf10-oracle-dup/core-cache \
+            --lock /tmp/cf10-oracle-dup/core.lock
+          cargo run --locked --quiet -p commandf -- pkg resolve hl7.fhir.uv.extensions.r4@5.2.0 \
+            --cache /tmp/cf10-oracle-dup/ext-cache \
+            --lock /tmp/cf10-oracle-dup/ext.lock
+          cargo run --locked --quiet -p commandf -- pkg verify \
+            --cache /tmp/cf10-oracle-dup/ext-cache \
+            --lock /tmp/cf10-oracle-dup/ext.lock
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          def archive(lock_path, cache, name, version):
+              lock = json.loads(Path(lock_path).read_text())
+              matches = [p for p in lock['packages'] if p['name'] == name and p['version'] == version]
+              assert len(matches) == 1, (name, version, matches)
+              return str(Path(cache) / 'sha256' / f"{matches[0]['sha256']}.tgz")
+          Path('/tmp/cf10-oracle-dup/core.path').write_text(archive(
+              '/tmp/cf10-oracle-dup/core.lock', '/tmp/cf10-oracle-dup/core-cache',
+              'hl7.fhir.r4.core', '4.0.1'))
+          Path('/tmp/cf10-oracle-dup/ext.path').write_text(archive(
+              '/tmp/cf10-oracle-dup/ext.lock', '/tmp/cf10-oracle-dup/ext-cache',
+              'hl7.fhir.uv.extensions.r4', '5.2.0'))
+          PY
+
+      - name: Prove exact core and extension canonical versions coexist
+        shell: bash
+        run: |
+          set -euo pipefail
+          CORE="$(cat /tmp/cf10-oracle-dup/core.path)"
+          EXT="$(cat /tmp/cf10-oracle-dup/ext.path)"
+          JAR=tools/hl7-oracle/target/commandf-hl7-oracle.jar
+          URL=http://hl7.org/fhir/StructureDefinition/11179-objectClass
+
+          "$JAVA_HOME/bin/java" -jar "$JAR" \
+            --core-package "$CORE" \
+            --left-context-package "$EXT" \
+            --right-context-package "$EXT" \
+            --left-package "$CORE" \
+            --right-package "$CORE" \
+            --left-url "$URL" --left-version 4.0.1 \
+            --right-url "$URL" --right-version 4.0.1 \
+            > /tmp/cf10-oracle-dup/core.json
+
+          "$JAVA_HOME/bin/java" -jar "$JAR" \
+            --core-package "$CORE" \
+            --left-context-package "$EXT" \
+            --right-context-package "$EXT" \
+            --left-package "$CORE" \
+            --right-package "$CORE" \
+            --left-url "$URL" --left-version 5.2.0 \
+            --right-url "$URL" --right-version 5.2.0 \
+            > /tmp/cf10-oracle-dup/ext.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          core = json.loads(Path('/tmp/cf10-oracle-dup/core.json').read_text())
+          ext = json.loads(Path('/tmp/cf10-oracle-dup/ext.json').read_text())
+          assert core['left']['url'] == 'http://hl7.org/fhir/StructureDefinition/11179-objectClass'
+          assert core['left']['version'] == '4.0.1', core['left']
+          assert core['right']['version'] == '4.0.1', core['right']
+          assert ext['left']['url'] == 'http://hl7.org/fhir/StructureDefinition/11179-objectClass'
+          assert ext['left']['version'] == '5.2.0', ext['left']
+          assert ext['right']['version'] == '5.2.0', ext['right']
+          for report in (core, ext):
+              assert all(v not in {'changed', 'cannot_evaluate'} for v in report['states'].values()), report['states']
+          PY
+
+      - name: Commit and push guarded fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "commandF evidence bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tools/hl7-oracle/src/main/java/dev/commandf/oracle/Main.java
+          git commit -m "fix(oracle): allow versioned dependency profile coexistence"
+          git push origin HEAD:feat/cf-10-real-ig-delta-corpus
