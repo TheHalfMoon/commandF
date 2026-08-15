@@ -49,3 +49,21 @@ pub enum CorpusRightsMode {
 pub enum CorpusOracleMode {
     ChangedStructureDefinitionsOnly,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CorpusPackageSide {
+    Before,
+    After,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CorpusPackageAttestation {
+    pub case_id: String,
+    pub package: String,
+    pub side: CorpusPackageSide,
+    pub version: String,
+    pub sha256: String,
+    pub archive_bytes: u64,
+}
