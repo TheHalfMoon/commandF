@@ -125,10 +125,7 @@ fn remaining_request_timeout(elapsed: Duration) -> Result<Duration, String> {
 
 fn direct_archive_from_url(url: &str, timeout: Duration) -> Result<PackageArchive, String> {
     let agent = agent_with_timeout(timeout);
-    let mut response = agent
-        .get(url)
-        .call()
-        .map_err(|error| error.to_string())?;
+    let mut response = agent.get(url).call().map_err(|error| error.to_string())?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!(
