@@ -47,16 +47,37 @@ jobs:
           source['cases'] = cases
           Path('/tmp/cf10-c002.json').write_text(json.dumps(source, indent=2, sort_keys=True) + '\n')
           PY
-      - name: Prove frozen C002 through real corpus path
+      - name: Run frozen C002 and capture outcome
         run: |
-          set -euo pipefail
+          set -u
+          runner_status=0
           ./target/debug/commandf corpus run \
             --manifest /tmp/cf10-c002.json \
             --work-root /tmp/cf10-c002-work \
             --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
             --oracle-java "$JAVA_HOME/bin/java" \
             --format json \
-            > /tmp/cf10-c002-summary.json
+            > /tmp/cf10-c002-summary.json \
+            || runner_status=$?
+          printf '%s\n' "$runner_status" > /tmp/cf10-c002-status
+          cat /tmp/cf10-c002-summary.json || true
+          find /tmp/cf10-c002-work/evidence -maxdepth 2 -type f -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; || true
+      - name: Upload targeted C002 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cf10-c002-structure-context-evidence
+          path: |
+            /tmp/cf10-c002-status
+            /tmp/cf10-c002-summary.json
+            /tmp/cf10-c002-work/summary.json
+            /tmp/cf10-c002-work/evidence
+          if-no-files-found: warn
+          retention-days: 1
+      - name: Enforce frozen C002 proof
+        run: |
+          set -euo pipefail
+          test "$(cat /tmp/cf10-c002-status)" = 0
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -68,7 +89,6 @@ jobs:
           assert len(case['after']['closure_sha256']) == 64
           assert case['before']['closure']
           assert case['after']['closure']
-          print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Commit tested source tree only
         run: |
