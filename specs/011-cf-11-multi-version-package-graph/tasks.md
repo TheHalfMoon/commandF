@@ -1,6 +1,6 @@
 # CF-11 Tasks — Multi-Version Package Graph
 
-Status: implementation and exact-head evidence complete; reviewer reconciliation pending
+Status: implementation, reviewer reconciliation, and implementation-head evidence complete; final documentation-head gates pending
 
 - [x] T001 — Record CF-10 comprehensive eligibility evidence and freeze CF-10 as `BLOCKED_BY_FOUNDATION` without changing cases.
 - [x] T002 — Audit current resolver, lock schema, CLI locked-package selection, and terminology ambiguity boundaries.
@@ -11,6 +11,6 @@ Status: implementation and exact-head evidence complete; reviewer reconciliation
 - [x] T007 — Preserve schema-v1 lock ordering and cache verification; do not add implicit edge semantics.
 - [x] T008 — Add bounded real-network proof for a previously failing CF-10 state.
 - [x] T009 — Run Format, locked Clippy, full workspace tests, CF-08/CF-09 security gates, real FHIR smoke, and CF-06 oracle gates.
-- [ ] T010 — Reconcile Codex, Qodo, CodeRabbit, and Greptile review truth on the final candidate; disposition every substantive returned finding and record unavailable/rate-limited reviewers without inventing PASS.
+- [x] T010 — Reconcile Codex, Qodo, CodeRabbit, and Greptile review truth on the implementation candidate; no substantive returned finding remains unresolved and unavailable/rate-limited reviewers are recorded without invented PASS.
 - [x] T011 — Write convergence truth with exact implementation head/run identities and real multi-version lock evidence; final documentation head must rerun all configured CF-11 gates.
-- [ ] T012 — Merge only after final exact-head gates/review reconciliation; then reconcile CF-10 and rerun the same frozen six-state eligibility sweep before semantic execution.
+- [ ] T012 — Merge only after final exact-head gates; then reconcile CF-10 and rerun the same frozen six-state eligibility sweep before semantic execution.
