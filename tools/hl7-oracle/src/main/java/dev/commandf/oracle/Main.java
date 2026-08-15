@@ -131,14 +131,19 @@ public final class Main {
     context.setCanRunWithoutTerminology(true);
 
     NpmPackage side = loadPackage(sidePath);
-    for (Path contextPath : contextPaths) {
-      NpmPackage dependency = loadPackage(contextPath);
-      if (samePackage(core, dependency) || samePackage(side, dependency)) {
-        continue;
+    context.setAllowLoadingDuplicates(true);
+    try {
+      for (Path contextPath : contextPaths) {
+        NpmPackage dependency = loadPackage(contextPath);
+        if (samePackage(core, dependency) || samePackage(side, dependency)) {
+          continue;
+        }
+        IContextResourceLoader dependencyLoader = ValidatorUtils.loaderForVersion(dependency.fhirVersion());
+        dependencyLoader.getTypes().retainAll(Set.of("StructureDefinition"));
+        context.loadFromPackage(dependency, dependencyLoader, false);
       }
-      IContextResourceLoader dependencyLoader = ValidatorUtils.loaderForVersion(dependency.fhirVersion());
-      dependencyLoader.getTypes().retainAll(Set.of("StructureDefinition"));
-      context.loadFromPackage(dependency, dependencyLoader, false);
+    } finally {
+      context.setAllowLoadingDuplicates(false);
     }
     if (!samePackage(core, side)) {
       IContextResourceLoader sideLoader = ValidatorUtils.loaderForVersion(side.fhirVersion());
