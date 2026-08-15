@@ -14,7 +14,7 @@ on:
       - Cargo.lock
   push:
     branches:
-      - feat/cf-10-real-ig-delta-corpus
+      - main
     paths:
       - .github/workflows/cf10-real-corpus.yml
       - corpus/real-ig/v1/**
