@@ -20,8 +20,8 @@ pub fn parse_corpus_manifest(bytes: &[u8]) -> Result<RealIgCorpus, CorpusError> 
         });
     }
 
-    let corpus: RealIgCorpus =
-        serde_json::from_slice(bytes).map_err(|error| CorpusError::InvalidJson(error.to_string()))?;
+    let corpus: RealIgCorpus = serde_json::from_slice(bytes)
+        .map_err(|error| CorpusError::InvalidJson(error.to_string()))?;
     validate_corpus_manifest(&corpus)?;
     Ok(corpus)
 }
@@ -102,20 +102,13 @@ fn validate_case(case: &RealIgCase) -> Result<(), CorpusError> {
 
 fn validate_case_id(id: &str) -> Result<(), CorpusError> {
     let bytes = id.as_bytes();
-    if bytes.len() != 4
-        || bytes[0] != b'C'
-        || !bytes[1..].iter().all(u8::is_ascii_digit)
-    {
+    if bytes.len() != 4 || bytes[0] != b'C' || !bytes[1..].iter().all(u8::is_ascii_digit) {
         return Err(CorpusError::InvalidCaseId(id.to_owned()));
     }
     Ok(())
 }
 
-fn validate_version(
-    case_id: &str,
-    side: &'static str,
-    raw: &str,
-) -> Result<Version, CorpusError> {
+fn validate_version(case_id: &str, side: &'static str, raw: &str) -> Result<Version, CorpusError> {
     Version::parse(raw).map_err(|_| CorpusError::InvalidVersion {
         case_id: case_id.to_owned(),
         side,
@@ -157,7 +150,9 @@ fn validate_https_url(case_id: &str, field: &'static str, value: &str) -> Result
     if value.len() > MAX_EVIDENCE_URL_BYTES
         || !value.starts_with("https://")
         || value.len() <= "https://".len()
-        || value.chars().any(|ch| ch.is_whitespace() || ch.is_control())
+        || value
+            .chars()
+            .any(|ch| ch.is_whitespace() || ch.is_control())
     {
         return Err(CorpusError::InvalidEvidence {
             case_id: case_id.to_owned(),
@@ -173,10 +168,7 @@ fn validate_text(
     value: &str,
     maximum: usize,
 ) -> Result<(), CorpusError> {
-    if value.trim().is_empty()
-        || value.len() > maximum
-        || value.chars().any(char::is_control)
-    {
+    if value.trim().is_empty() || value.len() > maximum || value.chars().any(char::is_control) {
         return Err(CorpusError::InvalidEvidence {
             case_id: case_id.to_owned(),
             field,
