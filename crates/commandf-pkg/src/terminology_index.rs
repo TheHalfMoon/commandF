@@ -4,10 +4,15 @@ use std::fs;
 use serde_json::{Map, Value};
 
 use crate::{
-    archive::read_manifest, artifact_scan::scan_package_resources, compare_value_set_expansions,
-    Lockfile, PackageCache, PackageError, ResourceKey, ResourceKeyKind, TerminologyError,
-    TerminologyProofMode, TerminologyRelation,
+    archive::read_manifest, artifact_scan::scan_package_resources_with_limit,
+    compare_value_set_expansions, Lockfile, PackageCache, PackageError, ResourceKey,
+    ResourceKeyKind, TerminologyError, TerminologyProofMode, TerminologyRelation,
 };
+
+// CF-03 keeps its 512 MiB decompressed root-package scan limit unchanged. Binding resolution has
+// to inspect the verified dependency closure, where valid public terminology packages can exceed
+// that root-diff envelope. Keep CF-07 independently bounded rather than relaxing CF-03 globally.
+const MAX_TERMINOLOGY_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub(crate) struct TerminologyResource {
@@ -53,7 +58,9 @@ impl TerminologyClosure {
             }
 
             let mut seen_filenames = BTreeSet::new();
-            for scanned in scan_package_resources(&bytes)? {
+            for scanned in
+                scan_package_resources_with_limit(&bytes, MAX_TERMINOLOGY_ARCHIVE_BYTES)?
+            {
                 let filename = scanned.filename;
                 if !seen_filenames.insert(filename.clone()) {
                     return Err(TerminologyError::InvalidField {
