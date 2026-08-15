@@ -43,12 +43,12 @@ jobs:
       - name: Real secondary redirect-to-tarball response
         run: cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact
 
-      - name: End-to-end exact US Core resolve and verify
+      - name: End-to-end exact VSAC fallback resolve and verify
         run: |
           set -euo pipefail
           rm -rf /tmp/commandf-registry-smoke
           cargo run --locked --quiet -p commandf -- \
-            pkg resolve hl7.fhir.us.core@8.0.1 \
+            pkg resolve us.nlm.vsac@0.24.0 \
             --cache /tmp/commandf-registry-smoke/cache \
             --lock /tmp/commandf-registry-smoke/commandf.lock
           cargo run --locked --quiet -p commandf -- \
@@ -62,13 +62,10 @@ jobs:
           lock = json.loads(Path('/tmp/commandf-registry-smoke/commandf.lock').read_text())
           matches = [
               item for item in lock['packages']
-              if item['name'] == 'hl7.fhir.us.core' and item['version'] == '8.0.1'
+              if item['name'] == 'us.nlm.vsac' and item['version'] == '0.24.0'
           ]
           assert len(matches) == 1
           package = matches[0]
           assert len(package['sha256']) == 64
-          assert package['source'] in {
-              'https://packages.fhir.org/hl7.fhir.us.core/8.0.1',
-              'https://packages2.fhir.org/web/hl7.fhir.us.core-8.0.1.tgz',
-          }
+          assert package['source'] == 'https://packages2.fhir.org/web/us.nlm.vsac-0.24.0.tgz'
           PY
