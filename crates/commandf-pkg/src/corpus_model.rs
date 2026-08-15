@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -70,9 +72,22 @@ pub struct CorpusPackageAttestation {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct CorpusClosurePackage {
+    pub name: String,
+    pub version: String,
+    pub sha256: String,
+    pub dependencies: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CorpusSummaryPackageState {
     pub version: String,
     pub sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closure_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closure: Option<Vec<CorpusClosurePackage>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
