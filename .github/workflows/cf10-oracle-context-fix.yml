@@ -30,6 +30,20 @@ jobs:
       - name: Apply bounded oracle-context correction
         run: python3 .github/scripts/apply-cf10-oracle-context-fix.py
 
+      - name: Keep Rust test module after implementation items
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/commandf-cli/src/oracle.rs')
+          text = path.read_text()
+          marker = '#[cfg(test)]\nmod tests {'
+          start = text.index(marker)
+          end = text.index('\nfn canonical_parts', start)
+          tests = text[start:end].strip()
+          implementation = (text[:start] + text[end:]).rstrip()
+          path.write_text(implementation + '\n\n' + tests + '\n')
+          PY
+
       - name: Apply rustfmt
         run: cargo fmt --all
 
