@@ -59,12 +59,12 @@ jobs:
               print(f'DEP\t{name}\t{version}')
           PY
 
-          echo '=== declared dependencies ==='
-          cat /tmp/registry-probe/dependencies.tsv
+          : > /tmp/registry-probe/shapes.txt
+          cat /tmp/registry-probe/dependencies.tsv | tee -a /tmp/registry-probe/shapes.txt
 
           while IFS=$'\t' read -r kind package version; do
             [ "$kind" = DEP ] || continue
-            echo "=== dependency $package@$version ==="
+            echo "=== dependency $package@$version ===" | tee -a /tmp/registry-probe/shapes.txt
             for url in \
               "https://packages.fhir.org/$package" \
               "https://packages2.fhir.org/packages/$package" \
@@ -79,9 +79,9 @@ jobs:
                 -w '%{http_code}' "$url")"
               curl_status=$?
               set -e
-              echo "URL=$url curl_exit=$curl_status http_status=$status"
-              grep -Ei '^(content-type|content-length|location):' "/tmp/registry-probe/$safe.headers" || true
-              python - "/tmp/registry-probe/$safe.body" <<'PY'
+              echo "URL=$url curl_exit=$curl_status http_status=$status" | tee -a /tmp/registry-probe/shapes.txt
+              grep -Ei '^(content-type|content-length|location):' "/tmp/registry-probe/$safe.headers" | tee -a /tmp/registry-probe/shapes.txt || true
+              python - "/tmp/registry-probe/$safe.body" <<'PY' | tee -a /tmp/registry-probe/shapes.txt
           import json, sys
           from pathlib import Path
           data = Path(sys.argv[1]).read_bytes()
@@ -115,9 +115,20 @@ jobs:
             2> /tmp/registry-hotfix-repro.stderr
           status=$?
           set -e
+          echo "$status" > /tmp/registry-hotfix-repro.exit
           echo "resolver_exit=$status"
-          echo '=== resolver stderr ==='
           cat /tmp/registry-hotfix-repro.stderr
-          echo '=== resolver stdout ==='
-          cat /tmp/registry-hotfix-repro.stdout
           test "$status" -ne 0
+
+      - name: Upload concise probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-recursive-probe
+          path: |
+            /tmp/registry-probe/dependencies.tsv
+            /tmp/registry-probe/shapes.txt
+            /tmp/registry-hotfix-repro.stderr
+            /tmp/registry-hotfix-repro.stdout
+            /tmp/registry-hotfix-repro.exit
+          if-no-files-found: error
+          retention-days: 1
