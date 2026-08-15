@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/cf10-digest-discovery
           mkdir -p /tmp/cf10-digest-discovery
+          : > /tmp/cf10-digest-discovery/failures.tsv
 
           cat > /tmp/cf10-cases.tsv <<'CASES'
           C001-us-core-before	hl7.fhir.us.core	8.0.1
@@ -52,14 +53,27 @@ jobs:
             for pass in a b; do
               root="/tmp/cf10-digest-discovery/$id/$pass"
               mkdir -p "$root"
-              cargo run --locked --quiet -p commandf -- \
+              if ! cargo run --locked --quiet -p commandf -- \
                 pkg resolve "$package@$version" \
                 --cache "$root/cache" \
-                --lock "$root/commandf.lock"
-              cargo run --locked --quiet -p commandf -- \
+                --lock "$root/commandf.lock" \
+                2>"$root/resolve.err"; then
+                error="$(tr '\r\n\t' '   ' < "$root/resolve.err" | head -c 1000)"
+                printf '%s\t%s\t%s\t%s\tresolve\t%s\n' \
+                  "$id" "$package" "$version" "$pass" "$error" \
+                  >> /tmp/cf10-digest-discovery/failures.tsv
+                continue
+              fi
+              if ! cargo run --locked --quiet -p commandf -- \
                 pkg verify \
                 --cache "$root/cache" \
-                --lock "$root/commandf.lock"
+                --lock "$root/commandf.lock" \
+                2>"$root/verify.err"; then
+                error="$(tr '\r\n\t' '   ' < "$root/verify.err" | head -c 1000)"
+                printf '%s\t%s\t%s\t%s\tverify\t%s\n' \
+                  "$id" "$package" "$version" "$pass" "$error" \
+                  >> /tmp/cf10-digest-discovery/failures.tsv
+              fi
             done
           done < /tmp/cf10-cases.tsv
 
@@ -69,9 +83,33 @@ jobs:
           from pathlib import Path
 
           root = Path('/tmp/cf10-digest-discovery')
+          failures = {}
+          failure_path = root / 'failures.tsv'
+          for raw in failure_path.read_text().splitlines():
+              state_id, package, version, run, phase, error = raw.split('\t', 5)
+              failures.setdefault(state_id, []).append({
+                  'run': run,
+                  'phase': phase,
+                  'error': error,
+              })
+
           rows = []
           for raw in Path('/tmp/cf10-cases.tsv').read_text().splitlines():
               case_state, package, version = raw.split('\t')
+              state_failures = sorted(
+                  failures.get(case_state, []),
+                  key=lambda item: (item['run'], item['phase'], item['error']),
+              )
+              if state_failures:
+                  rows.append({
+                      'state_id': case_state,
+                      'package': package,
+                      'version': version,
+                      'status': 'ineligible_resolution_failure',
+                      'failures': state_failures,
+                  })
+                  continue
+
               observed = []
               for run in ('a', 'b'):
                   state = root / case_state / run
@@ -98,6 +136,7 @@ jobs:
                   'state_id': case_state,
                   'package': package,
                   'version': version,
+                  'status': 'attested',
                   'sha256': observed[0]['sha256'],
                   'archive_bytes': observed[0]['bytes'],
                   'independent_resolutions': 2,
@@ -108,9 +147,10 @@ jobs:
           output = {
               'schema': 1,
               'selection_frozen_before_results': True,
+              'eligibility_sweep_complete': True,
               'states': rows,
           }
-          out = Path('/tmp/cf10-digest-discovery/cf10-package-attestation.json')
+          out = root / 'cf10-package-attestation.json'
           out.write_text(json.dumps(output, indent=2, sort_keys=True) + '\n')
           print(out.read_text())
           PY
@@ -131,3 +171,27 @@ jobs:
           path: /tmp/cf10-digest-discovery/cf10-package-attestation.json
           if-no-files-found: error
           retention-days: 3
+
+      - name: Fail if any frozen package state is ineligible
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path('/tmp/cf10-digest-discovery/cf10-package-attestation.json').read_text()
+          )
+          failed = [state for state in evidence['states'] if state['status'] != 'attested']
+          if failed:
+              for state in failed:
+                  print(
+                      f"ineligible frozen state: {state['state_id']} "
+                      f"{state['package']}@{state['version']}"
+                  )
+                  for failure in state['failures']:
+                      print(
+                          f"  run={failure['run']} phase={failure['phase']} "
+                          f"error={failure['error']}"
+                      )
+              raise SystemExit(1)
+          PY
