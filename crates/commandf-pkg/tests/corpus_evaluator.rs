@@ -5,7 +5,8 @@ use commandf_pkg::{
     evaluate_corpus_case, failed_corpus_case_summary, summarize_corpus_case, CorpusCaseStatus,
     CorpusError, CorpusOracleMode, CorpusPackageState, CorpusPackageStateInput, CorpusRightsMode,
     CorpusRunSummary, LockedPackage, Lockfile, OracleDivergenceReport, OracleIdentity,
-    PackageCache, RealIgCase,
+    OracleResourceResult, OracleResourceStatus, PackageCache, RealIgCase, ResourceKey,
+    ResourceKeyKind,
 };
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -145,7 +146,15 @@ fn evaluator_reuses_canonical_reports_and_summary_hashes_them() {
         oracle: OracleIdentity::pinned_hl7(),
         package_name: fixture.case.package.clone(),
         structural_diff: reports.structural.clone(),
-        resources: Vec::new(),
+        resources: vec![OracleResourceResult {
+            resource: ResourceKey {
+                kind: ResourceKeyKind::ResourceId,
+                value: "Patient/example".to_owned(),
+            },
+            status: OracleResourceStatus::Uncomparable,
+            oracle: None,
+            commandf_change_kinds: Vec::new(),
+        }],
     };
     let summary = summarize_corpus_case(&fixture.case, &reports, &oracle).unwrap();
 
@@ -171,6 +180,7 @@ fn evaluator_reuses_canonical_reports_and_summary_hashes_them() {
         PackageCache::digest(&oracle.to_json_bytes().unwrap())
     );
     assert_eq!(summary.oracle.as_ref().unwrap().compared, 0);
+    assert_eq!(summary.oracle.as_ref().unwrap().uncomparable, 1);
 }
 
 #[test]
