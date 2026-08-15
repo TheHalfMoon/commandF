@@ -68,7 +68,9 @@ fn oversized_manifest_fails_before_work_root_creation() {
     fs::create_dir_all(&root).expect("create test root");
     let manifest = root.join("oversized.json");
     let work_root = root.join("work");
-    fs::write(&manifest, vec![b' '; MAX_CORPUS_MANIFEST_BYTES + 1]).expect("write oversized manifest");
+    let oracle = root.join("missing-oracle.jar");
+    fs::write(&manifest, vec![b' '; MAX_CORPUS_MANIFEST_BYTES + 1])
+        .expect("write oversized manifest");
 
     let output = commandf()
         .args([
@@ -79,7 +81,7 @@ fn oversized_manifest_fails_before_work_root_creation() {
             "--work-root",
             work_root.to_str().expect("UTF-8 path"),
             "--oracle-adapter",
-            root.join("missing-oracle.jar").to_str().expect("UTF-8 path"),
+            oracle.to_str().expect("UTF-8 path"),
             "--format",
             "json",
         ])
