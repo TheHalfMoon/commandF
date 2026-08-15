@@ -1,0 +1,69 @@
+name: registry-download-smoke
+
+on:
+  pull_request:
+    paths:
+      - crates/commandf-pkg/src/registry.rs
+      - .github/workflows/registry-download-smoke.yml
+  push:
+    branches:
+      - main
+    paths:
+      - crates/commandf-pkg/src/registry.rs
+      - .github/workflows/registry-download-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registry-download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Focused registry unit tests
+        run: cargo test --locked -p commandf-pkg registry::tests -- --skip real_primary_us_core_is_direct_gzip --skip real_secondary_us_core_follows_only_expected_tarball
+
+      - name: Real primary US Core archive response
+        run: cargo test --locked -p commandf-pkg registry::tests::real_primary_us_core_is_direct_gzip -- --ignored --exact
+
+      - name: Real secondary redirect-to-tarball response
+        run: cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact
+
+      - name: End-to-end exact US Core resolve and verify
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/commandf-registry-smoke
+          cargo run --locked --quiet -p commandf -- \
+            pkg resolve hl7.fhir.us.core@8.0.1 \
+            --cache /tmp/commandf-registry-smoke/cache \
+            --lock /tmp/commandf-registry-smoke/commandf.lock
+          cargo run --locked --quiet -p commandf -- \
+            pkg verify \
+            --cache /tmp/commandf-registry-smoke/cache \
+            --lock /tmp/commandf-registry-smoke/commandf.lock
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          lock = json.loads(Path('/tmp/commandf-registry-smoke/commandf.lock').read_text())
+          matches = [
+              item for item in lock['packages']
+              if item['name'] == 'hl7.fhir.us.core' and item['version'] == '8.0.1'
+          ]
+          assert len(matches) == 1
+          package = matches[0]
+          assert len(package['sha256']) == 64
+          assert package['source'] in {
+              'https://packages.fhir.org/hl7.fhir.us.core/8.0.1',
+              'https://packages2.fhir.org/web/hl7.fhir.us.core-8.0.1.tgz',
+          }
+          PY
