@@ -1,11 +1,11 @@
 # CF-11 Convergence — Multi-Version Package Graph
 
-Status: foundation behavior proven; final documentation-head gates and reviewer reconciliation pending
+Status: foundation behavior proven; reviewer truth reconciled; final documentation-head gates pending
 
 ## Decision
 
 ```text
-CF-11_FOUNDATION_BEHAVIOR_PROVEN_PENDING_FINAL_REVIEW_RECONCILIATION
+CF-11_FOUNDATION_BEHAVIOR_PROVEN_PENDING_FINAL_DOCUMENTATION_HEAD_GATES
 ```
 
 CF-11 corrects only the package-closure identity model. It does not reinterpret compatibility, policy, terminology, oracle, source attribution, or CF-10 corpus semantics.
@@ -90,15 +90,15 @@ CF-10 / PR #11 remains frozen and `BLOCKED_BY_FOUNDATION` until CF-11 is canonic
 
 After CF-11 becomes canonical, the first CF-10 action must be to reconcile onto the new main and rerun the exact same six frozen package states. Semantic diff/classify/check/terminology/oracle execution remains blocked until that eligibility rerun establishes the new foundation state.
 
-## Reviewer truth at convergence-document creation
+## Reviewer truth
 
-- **Codex Code Review:** requested on implementation head `7411ceba...`; no returned substantive result was observed at this document's creation time. No PASS claimed.
-- **Qodo:** accepted the request and reported that review agents were working; no final findings/result was available yet. No PASS claimed.
-- **CodeRabbit:** exact-head review attempt was rate-limited and explicitly did not start a substantive review. A commit status alone is not treated as review certification. No fresh PASS claimed.
-- **Greptile:** exact-head review requested; no returned result observed. No PASS claimed.
+- **Codex Code Review:** reviewed implementation head `7411cebaa3` and reported: `Didn't find any major issues.` This is positive implementation-head review evidence; it is not represented as a separate approval state.
+- **Qodo:** accepted the exact-head request and produced a PR summary. No substantive inline finding/thread was returned in the final reviewer sweep. No separate Qodo PASS is claimed.
+- **CodeRabbit:** exact-head and documentation-head review attempts were rate-limited and explicitly did not start a substantive review. A commit status alone is not treated as review certification. No fresh CodeRabbit PASS is claimed.
+- **Greptile:** exact-head review requested; no returned result observed in the final reviewer sweep. No PASS claimed.
 - **Cubic:** generated PR summary only; not treated as correctness certification.
 
-Any substantive result returned after this document is created must be dispositioned before merge. Reviewer absence or rate limits must be recorded rather than replaced with invented approval.
+At reviewer reconciliation time there were no unresolved review threads. Any substantive result appearing after this point reopens the merge gate and must be dispositioned before merge. Reviewer absence or rate limits are recorded rather than replaced with invented approval.
 
 ## Research inputs explicitly outside CF-11
 
@@ -106,7 +106,7 @@ Recent research/donor inputs — CPGPrompt, PathWISE, and `reason-healthcare/rh-
 
 ## Final documentation-head rule
 
-This convergence update changes documentation only. Its resulting repository head must pass all three configured CF-11 gates again:
+This reviewer reconciliation changes documentation only. Its resulting repository head must pass all three configured CF-11 gates again:
 
 ```text
 ci
