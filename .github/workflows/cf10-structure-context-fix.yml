@@ -24,6 +24,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
         with:
           components: rustfmt, clippy
+      - name: Apply minimal dependency-context patch
+        run: python3 .github/scripts/apply-cf10-structure-context-fix.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -71,6 +73,7 @@ jobs:
       - name: Commit tested source tree only
         run: |
           set -euo pipefail
+          rm -f .github/scripts/apply-cf10-structure-context-fix.py
           rm -f .github/workflows/cf10-structure-context-fix.yml
           rm -rf tools/hl7-oracle/target
           git add -A
