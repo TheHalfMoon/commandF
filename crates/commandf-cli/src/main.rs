@@ -302,8 +302,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 oracle_java,
                 format,
             } => {
-                let execution =
-                    corpus::run(manifest, work_root, oracle_adapter, oracle_java)?;
+                let execution = corpus::run(manifest, work_root, oracle_adapter, oracle_java)?;
                 let bytes = execution.summary.to_json_bytes()?;
                 match format {
                     OutputFormat::Json => io::stdout().write_all(&bytes)?,
