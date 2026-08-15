@@ -1,0 +1,71 @@
+name: cf10-context-scope-fix
+
+on:
+  push:
+    branches:
+      - ops/cf10-context-scope-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Apply guarded fix to CF-10 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply-cf10-context-scope-fix.py /tmp/apply-cf10-context-scope-fix.py
+          git fetch origin feat/cf-10-real-ig-delta-corpus
+          git checkout -B cf10-target origin/feat/cf-10-real-ig-delta-corpus
+          test "$(git rev-parse HEAD)" = "e5391d8ce968d001e1f9e3434b9e310acce248f8"
+          python /tmp/apply-cf10-context-scope-fix.py
+          cargo fmt --all
+          changed="$(git diff --name-only | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            crates/commandf-cli/src/oracle.rs \
+            crates/commandf-pkg/src/terminology.rs \
+            crates/commandf-pkg/src/terminology_index.rs \
+            tools/hl7-oracle/src/main/java/dev/commandf/oracle/Main.java | sort)"
+          test "$changed" = "$expected"
+
+      - name: Validate Rust
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Validate pinned HL7 adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml test
+
+      - name: Commit and push guarded fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "commandF evidence bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            crates/commandf-cli/src/oracle.rs \
+            crates/commandf-pkg/src/terminology.rs \
+            crates/commandf-pkg/src/terminology_index.rs \
+            tools/hl7-oracle/src/main/java/dev/commandf/oracle/Main.java
+          git commit -m "fix(corpus): scope terminology and oracle contexts"
+          git push origin HEAD:feat/cf-10-real-ig-delta-corpus
