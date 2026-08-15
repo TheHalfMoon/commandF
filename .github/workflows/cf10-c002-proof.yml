@@ -1,0 +1,71 @@
+name: cf10-c002-proof
+
+on:
+  push:
+    branches:
+      - ops/cf10-c002-proof
+
+permissions:
+  contents: read
+
+jobs:
+  c002:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+      - name: Build pinned HL7 oracle adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+      - name: Build commandF corpus runner
+        run: cargo build --locked -p commandf
+      - name: Create temporary frozen C002-only manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          source = json.loads(Path('corpus/real-ig/v1/corpus.json').read_text())
+          cases = [case for case in source['cases'] if case['id'] == 'C002']
+          assert len(cases) == 1
+          source['cases'] = cases
+          Path('/tmp/cf10-c002.json').write_text(json.dumps(source, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Run C002 through the real corpus path
+        run: |
+          set -euo pipefail
+          ./target/debug/commandf corpus run \
+            --manifest /tmp/cf10-c002.json \
+            --work-root /tmp/cf10-c002-work \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-c002-summary.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          summary = json.loads(Path('/tmp/cf10-c002-summary.json').read_text())
+          assert [case['case_id'] for case in summary['cases']] == ['C002']
+          assert summary['cases'][0]['status'] == 'complete', summary
+          before = summary['cases'][0]['before']
+          after = summary['cases'][0]['after']
+          assert len(before['closure_sha256']) == 64
+          assert len(after['closure_sha256']) == 64
+          assert before['closure']
+          assert after['closure']
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cf10-c002-targeted-evidence
+          path: |
+            /tmp/cf10-c002-summary.json
+            /tmp/cf10-c002-work/summary.json
+            /tmp/cf10-c002-work/evidence
+          if-no-files-found: warn
+          retention-days: 1
