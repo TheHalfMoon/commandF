@@ -116,6 +116,13 @@ impl TerminologyClosure {
     fn insert(&mut self, resource: TerminologyResource) -> Result<(), TerminologyError> {
         let exact = exact_identity(&resource.url, resource.version.as_deref());
         if let Some(first) = self.exact.get(&exact) {
+            // Multi-version package graphs and companion packages can contain byte-distinct
+            // archives that repeat the exact same ValueSet resource. serde_json::Value equality
+            // is semantic with respect to object-key order, so identical FHIR JSON carries no
+            // binding-resolution ambiguity. Conflicting duplicates remain fail-closed.
+            if first.value == resource.value {
+                return Ok(());
+            }
             return Err(TerminologyError::DuplicateCanonical {
                 canonical: exact,
                 first: location(first),
@@ -337,15 +344,27 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_value_set_canonical_still_fails_closed() {
+    fn identical_value_set_canonical_is_deduplicated() {
+        let body = r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"active"}"#;
+        let closure = closure_for(&[("ValueSet-a.json", body), ("ValueSet-b.json", body)]).unwrap();
+
+        let resolved = closure
+            .resolve_value_set("http://example.org/ValueSet/test|1")
+            .unwrap()
+            .expect("identical ValueSet should resolve once");
+        assert_eq!(resolved.url, "http://example.org/ValueSet/test");
+    }
+
+    #[test]
+    fn conflicting_value_set_canonical_still_fails_closed() {
         let result = closure_for(&[
             (
                 "ValueSet-a.json",
-                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"active"}"#,
             ),
             (
                 "ValueSet-b.json",
-                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"draft"}"#,
             ),
         ]);
 
