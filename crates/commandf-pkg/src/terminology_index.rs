@@ -70,11 +70,13 @@ impl TerminologyClosure {
                         source,
                     }
                 })?;
-                let object = value.as_object().ok_or_else(|| TerminologyError::InvalidField {
-                    resource: filename.clone(),
-                    field: "resourceType".to_owned(),
-                    message: "FHIR package resource must be a JSON object".to_owned(),
-                })?;
+                let object = value
+                    .as_object()
+                    .ok_or_else(|| TerminologyError::InvalidField {
+                        resource: filename.clone(),
+                        field: "resourceType".to_owned(),
+                        message: "FHIR package resource must be a JSON object".to_owned(),
+                    })?;
                 let resource_type = required_string(object, "resourceType", &filename)?;
 
                 if !TERMINOLOGY_TYPES.contains(&resource_type.as_str()) {
