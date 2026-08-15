@@ -3,7 +3,7 @@ use crate::{
     diff_package_archives, CompatibilityDirection, CompatibilityReport, CompatibilitySeverity,
     CorpusCaseStatus, CorpusCaseSummary, CorpusCompatibilitySummary, CorpusError,
     CorpusOracleSummary, CorpusPackageSide, CorpusStructuralSummary, CorpusSummaryPackageState,
-    CorpusTerminologySummary, Hl7OracleReport, Lockfile, OracleDivergenceReport, OracleIdentity,
+    CorpusTerminologySummary, Lockfile, OracleDivergenceReport, OracleIdentity,
     OracleResourceStatus, PackageCache, RealIgCase, StructuralDiffReport, TerminologyDiffReport,
     TerminologyPackageState,
 };
@@ -240,7 +240,8 @@ fn validate_report_identity(
         return Err(identity(case, "terminology"));
     }
 
-    if oracle.schema != OracleDivergenceReport::SCHEMA_V1 || oracle.oracle != OracleIdentity::pinned_hl7()
+    if oracle.schema != OracleDivergenceReport::SCHEMA_V1
+        || oracle.oracle != OracleIdentity::pinned_hl7()
     {
         return Err(unsupported(case, "oracle"));
     }
@@ -283,6 +284,3 @@ fn serialization_error(
         message: error.to_string(),
     }
 }
-
-#[allow(dead_code)]
-fn _assert_oracle_report_type(_: &Hl7OracleReport) {}
