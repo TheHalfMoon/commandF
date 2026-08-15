@@ -8,8 +8,6 @@ use crate::{
     PackageError, TerminologyError,
 };
 
-const TERMINOLOGY_TYPES: [&str; 2] = ["CodeSystem", "ValueSet"];
-
 #[derive(Clone, Debug)]
 pub(crate) struct TerminologyResource {
     pub package_name: String,
@@ -79,7 +77,11 @@ impl TerminologyClosure {
                     })?;
                 let resource_type = required_string(object, "resourceType", &filename)?;
 
-                if !TERMINOLOGY_TYPES.contains(&resource_type.as_str()) {
+                // The lock-closure index exists only to resolve StructureDefinition binding
+                // references. Direct root CodeSystem/ValueSet deltas are handled by CF-03
+                // matched-resource authority, so dependency CodeSystem canonicals must not create
+                // unrelated ambiguity here.
+                if resource_type != "ValueSet" {
                     continue;
                 }
 
@@ -302,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn unrelated_duplicate_canonicals_do_not_block_terminology_closure() {
+    fn non_binding_canonical_collisions_do_not_block_value_set_closure() {
         let closure = closure_for(&[
             (
                 "CapabilityStatement-example.json",
@@ -311,6 +313,14 @@ mod tests {
             (
                 "TerminologyCapabilities-example.json",
                 r#"{"resourceType":"TerminologyCapabilities","url":"urn:uuid:shared","version":"1"}"#,
+            ),
+            (
+                "CodeSystem-a.json",
+                r#"{"resourceType":"CodeSystem","url":"http://example.org/CodeSystem/shared","version":"1"}"#,
+            ),
+            (
+                "CodeSystem-b.json",
+                r#"{"resourceType":"CodeSystem","url":"http://example.org/CodeSystem/shared","version":"1"}"#,
             ),
             (
                 "ValueSet-test.json",
@@ -327,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_terminology_canonical_still_fails_closed() {
+    fn duplicate_value_set_canonical_still_fails_closed() {
         let result = closure_for(&[
             (
                 "ValueSet-a.json",
