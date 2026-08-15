@@ -8,8 +8,12 @@ use crate::{model::PackageManifest, PackageError};
 
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MIN_MANIFEST_SCAN_DECOMPRESSED_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES: u64 = 1024 * 1024 * 1024;
-const MANIFEST_SCAN_EXPANSION_RATIO: u64 = 16;
+// The official us.nlm.vsac@0.24.0 fallback tarball was measured at 78,238,082
+// compressed bytes and requires 905,712,128 decompressed bytes to reach
+// package/package.json. A 12x budget gives that immutable version ~33 MiB of
+// headroom, while this 896 MiB absolute cap keeps worst-case work below 1 GiB.
+const MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES: u64 = 896 * 1024 * 1024;
+const MANIFEST_SCAN_EXPANSION_RATIO: u64 = 12;
 const MAX_ARCHIVE_ENTRIES: usize = 50_000;
 
 struct BoundedReader<R> {
@@ -144,12 +148,15 @@ mod tests {
         );
         assert_eq!(
             manifest_scan_decompressed_limit(40 * 1024 * 1024),
-            640 * 1024 * 1024
+            MIN_MANIFEST_SCAN_DECOMPRESSED_BYTES
         );
         assert_eq!(
-            manifest_scan_decompressed_limit(78_238_082),
-            MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES
+            manifest_scan_decompressed_limit(50 * 1024 * 1024),
+            600 * 1024 * 1024
         );
+        let vsac_budget = manifest_scan_decompressed_limit(78_238_082);
+        assert_eq!(vsac_budget, 938_856_984);
+        assert!(vsac_budget > 905_712_128);
         assert_eq!(
             manifest_scan_decompressed_limit(usize::MAX),
             MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES
