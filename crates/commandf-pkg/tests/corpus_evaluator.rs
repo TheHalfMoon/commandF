@@ -4,8 +4,8 @@ use std::io::Cursor;
 use commandf_pkg::{
     evaluate_corpus_case, failed_corpus_case_summary, summarize_corpus_case, CorpusCaseStatus,
     CorpusError, CorpusOracleMode, CorpusPackageState, CorpusPackageStateInput, CorpusRightsMode,
-    CorpusRunSummary, LockedPackage, Lockfile, OracleDivergenceReport, OracleIdentity, PackageCache,
-    RealIgCase,
+    CorpusRunSummary, LockedPackage, Lockfile, OracleDivergenceReport, OracleIdentity,
+    PackageCache, RealIgCase,
 };
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -13,9 +13,7 @@ use tar::{Builder, Header};
 use tempfile::TempDir;
 
 fn archive(name: &str, version: &str, patient: &[u8]) -> Vec<u8> {
-    let manifest = format!(
-        r#"{{"name":"{name}","version":"{version}","dependencies":{{}}}}"#
-    );
+    let manifest = format!(r#"{{"name":"{name}","version":"{version}","dependencies":{{}}}}"#);
     let entries = [
         ("package/package.json", manifest.as_bytes()),
         ("package/Patient-example.json", patient),
