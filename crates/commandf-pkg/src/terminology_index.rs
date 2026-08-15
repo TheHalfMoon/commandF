@@ -5,8 +5,9 @@ use serde_json::{Map, Value};
 
 use crate::{
     archive::read_manifest, artifact_scan::scan_package_resources_with_limit,
-    compare_value_set_expansions, Lockfile, PackageCache, PackageError, ResourceKey,
-    ResourceKeyKind, TerminologyError, TerminologyProofMode, TerminologyRelation,
+    compare_value_set_expansions, LockedPackage, Lockfile, PackageCache, PackageError,
+    PackageRequest, ResourceKey, ResourceKeyKind, TerminologyError, TerminologyProofMode,
+    TerminologyRelation, VersionConstraint,
 };
 
 // CF-03 keeps its 512 MiB decompressed root-package scan limit unchanged. Binding resolution has
@@ -32,14 +33,37 @@ pub(crate) struct TerminologyClosure {
 }
 
 impl TerminologyClosure {
+    pub(crate) fn load_for_root(
+        lockfile: &Lockfile,
+        cache: &PackageCache,
+        root: &LockedPackage,
+    ) -> Result<Self, TerminologyError> {
+        let target_core = root_core_family(root)?;
+        Self::load_scoped(lockfile, cache, target_core)
+    }
+
+    #[cfg(test)]
     pub(crate) fn load(
         lockfile: &Lockfile,
         cache: &PackageCache,
+    ) -> Result<Self, TerminologyError> {
+        Self::load_scoped(lockfile, cache, None)
+    }
+
+    fn load_scoped(
+        lockfile: &Lockfile,
+        cache: &PackageCache,
+        target_core: Option<&str>,
     ) -> Result<Self, TerminologyError> {
         lockfile.verify_cache(cache)?;
         let mut closure = Self::default();
 
         for package in &lockfile.packages {
+            if let Some(target_core) = target_core {
+                if !package_matches_core_family(lockfile, package, target_core)? {
+                    continue;
+                }
+            }
             let path = cache
                 .root()
                 .join("sha256")
@@ -202,6 +226,140 @@ fn value_set_binding_evidence_equivalent(
     }
 }
 
+fn root_core_family(root: &LockedPackage) -> Result<Option<&str>, TerminologyError> {
+    let cores = root
+        .dependencies
+        .keys()
+        .filter(|name| is_fhir_core_package(name))
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    match cores.as_slice() {
+        [single] => Ok(Some(*single)),
+        [] => Ok(None),
+        _ => Err(lock_graph_error(
+            root,
+            "root package declares more than one FHIR core dependency",
+        )),
+    }
+}
+
+fn package_matches_core_family(
+    lockfile: &Lockfile,
+    package: &LockedPackage,
+    target_core: &str,
+) -> Result<bool, TerminologyError> {
+    let mut visiting = BTreeSet::new();
+    package_matches_core_family_inner(lockfile, package, target_core, &mut visiting)
+}
+
+fn package_matches_core_family_inner(
+    lockfile: &Lockfile,
+    package: &LockedPackage,
+    target_core: &str,
+    visiting: &mut BTreeSet<String>,
+) -> Result<bool, TerminologyError> {
+    if package.name == target_core {
+        return Ok(true);
+    }
+    if is_fhir_core_package(&package.name) {
+        return Ok(false);
+    }
+    if package.dependencies.contains_key(target_core) {
+        return Ok(true);
+    }
+    if package
+        .dependencies
+        .keys()
+        .any(|name| is_fhir_core_package(name))
+    {
+        return Ok(false);
+    }
+
+    let identity = format!("{}@{}", package.name, package.version);
+    if !visiting.insert(identity.clone()) {
+        return Err(lock_graph_error(
+            package,
+            "dependency cycle while scoping FHIR core family",
+        ));
+    }
+
+    for (dependency_name, constraint) in &package.dependencies {
+        let dependency = select_locked_dependency(lockfile, package, dependency_name, constraint)?;
+        if package_matches_core_family_inner(lockfile, dependency, target_core, visiting)? {
+            visiting.remove(&identity);
+            return Ok(true);
+        }
+    }
+    visiting.remove(&identity);
+    Ok(false)
+}
+
+fn select_locked_dependency<'a>(
+    lockfile: &'a Lockfile,
+    parent: &LockedPackage,
+    dependency_name: &str,
+    constraint: &str,
+) -> Result<&'a LockedPackage, TerminologyError> {
+    let raw = format!("{dependency_name}@{constraint}");
+    let request = PackageRequest::parse(&raw).map_err(|error| TerminologyError::InvalidField {
+        resource: format!("{}@{}", parent.name, parent.version),
+        field: "lockfile".to_owned(),
+        message: format!("invalid dependency request {raw}: {error}"),
+    })?;
+
+    let mut matches = Vec::new();
+    for candidate in &lockfile.packages {
+        if candidate.name != request.name.as_str() {
+            continue;
+        }
+        let candidate_raw = format!("{}@{}", candidate.name, candidate.version);
+        let candidate_request = PackageRequest::parse(&candidate_raw).map_err(|error| {
+            TerminologyError::InvalidField {
+                resource: candidate_raw.clone(),
+                field: "lockfile".to_owned(),
+                message: format!("invalid locked package identity: {error}"),
+            }
+        })?;
+        let VersionConstraint::Exact(candidate_version) = candidate_request.constraint else {
+            return Err(TerminologyError::InvalidField {
+                resource: candidate_raw,
+                field: "lockfile".to_owned(),
+                message: "locked package version is not exact".to_owned(),
+            });
+        };
+        if request.constraint.matches(&candidate_version) {
+            matches.push(candidate);
+        }
+    }
+
+    match matches.as_slice() {
+        [single] => Ok(*single),
+        [] => Err(lock_graph_error(
+            parent,
+            &format!("dependency request {raw} has no matching locked package"),
+        )),
+        _ => Err(lock_graph_error(
+            parent,
+            &format!(
+                "dependency request {raw} matches {} locked packages",
+                matches.len()
+            ),
+        )),
+    }
+}
+
+fn is_fhir_core_package(name: &str) -> bool {
+    name.starts_with("hl7.fhir.r") && name.ends_with(".core")
+}
+
+fn lock_graph_error(package: &LockedPackage, message: &str) -> TerminologyError {
+    TerminologyError::InvalidField {
+        resource: format!("{}@{}", package.name, package.version),
+        field: "lockfile".to_owned(),
+        message: message.to_owned(),
+    }
+}
+
 fn required_string(
     object: &Map<String, Value>,
     field: &str,
@@ -324,6 +482,56 @@ mod tests {
             }],
         );
         TerminologyClosure::load(&lockfile, &cache)
+    }
+
+    fn locked(name: &str, version: &str, dependencies: &[(&str, &str)]) -> LockedPackage {
+        LockedPackage {
+            name: name.to_owned(),
+            version: version.to_owned(),
+            sha256: format!("{name}-{version}"),
+            source: format!("https://example.test/{name}/{version}"),
+            dependencies: dependencies
+                .iter()
+                .map(|(name, version)| ((*name).to_owned(), (*version).to_owned()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn fhir_core_family_scope_excludes_cross_version_dependency_branch() {
+        let root = locked(
+            "example.root",
+            "1.0.0",
+            &[("hl7.fhir.r4.core", "4.0.1"), ("example.mixed", "1.0.0")],
+        );
+        let mixed = locked(
+            "example.mixed",
+            "1.0.0",
+            &[("hl7.fhir.r4.core", "4.0.1"), ("example.r5", "1.0.0")],
+        );
+        let r5 = locked("example.r5", "1.0.0", &[("hl7.fhir.r5.core", "5.0.0")]);
+        let lockfile = Lockfile::new(
+            vec!["example.root@1.0.0".to_owned()],
+            vec![
+                root.clone(),
+                mixed.clone(),
+                r5.clone(),
+                locked("hl7.fhir.r4.core", "4.0.1", &[]),
+                locked("hl7.fhir.r5.core", "5.0.0", &[]),
+            ],
+        );
+
+        assert_eq!(root_core_family(&root).unwrap(), Some("hl7.fhir.r4.core"));
+        let synthetic = locked("example.synthetic", "1.0.0", &[]);
+        assert_eq!(root_core_family(&synthetic).unwrap(), None);
+        assert!(package_matches_core_family(&lockfile, &mixed, "hl7.fhir.r4.core").unwrap());
+        assert!(!package_matches_core_family(&lockfile, &r5, "hl7.fhir.r4.core").unwrap());
+        let r5_core = lockfile
+            .packages
+            .iter()
+            .find(|package| package.name == "hl7.fhir.r5.core")
+            .unwrap();
+        assert!(!package_matches_core_family(&lockfile, r5_core, "hl7.fhir.r4.core").unwrap());
     }
 
     #[test]

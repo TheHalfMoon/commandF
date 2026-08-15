@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -231,33 +230,16 @@ fn dependency_context_packages<'a>(
     lockfile: &'a Lockfile,
     root: &'a LockedPackage,
 ) -> Result<Vec<&'a LockedPackage>, io::Error> {
-    let mut visited = BTreeSet::new();
-    visited.insert(package_identity(root));
     let mut packages = Vec::new();
-    collect_dependency_context_packages(lockfile, root, &mut visited, &mut packages)?;
-    Ok(packages)
-}
-
-fn collect_dependency_context_packages<'a>(
-    lockfile: &'a Lockfile,
-    parent: &'a LockedPackage,
-    visited: &mut BTreeSet<String>,
-    output: &mut Vec<&'a LockedPackage>,
-) -> Result<(), io::Error> {
-    for (dependency_name, constraint) in &parent.dependencies {
+    for (dependency_name, constraint) in &root.dependencies {
         let request = parse_package_request(&format!("{dependency_name}@{constraint}"))?;
         let dependency = select_matching_locked_package(lockfile, &request, "dependency")?;
-        let identity = package_identity(dependency);
-        if !visited.insert(identity) {
-            continue;
-        }
         if dependency.name == ORACLE_CORE_PACKAGE && dependency.version == ORACLE_CORE_VERSION {
             continue;
         }
-        collect_dependency_context_packages(lockfile, dependency, visited, output)?;
-        output.push(dependency);
+        packages.push(dependency);
     }
-    Ok(())
+    Ok(packages)
 }
 
 fn select_matching_locked_package<'a>(
@@ -315,6 +297,7 @@ fn parse_package_request(raw: &str) -> Result<PackageRequest, io::Error> {
     })
 }
 
+#[cfg(test)]
 fn package_identity(package: &LockedPackage) -> String {
     format!("{}@{}", package.name, package.version)
 }
@@ -382,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn dependency_context_is_deterministic_leaf_first_and_excludes_core() {
+    fn dependency_context_is_direct_deterministic_and_excludes_core() {
         let root = locked(
             "example.root",
             "1.0.0",
@@ -407,7 +390,7 @@ mod tests {
                 .iter()
                 .map(|package| package_identity(package))
                 .collect::<Vec<_>>(),
-            vec!["example.b@2.0.3", "example.a@1.0.0"]
+            vec!["example.a@1.0.0"]
         );
     }
 

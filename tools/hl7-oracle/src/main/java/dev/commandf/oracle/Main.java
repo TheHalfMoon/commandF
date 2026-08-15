@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 
 public final class Main {
@@ -136,6 +137,7 @@ public final class Main {
         continue;
       }
       IContextResourceLoader dependencyLoader = ValidatorUtils.loaderForVersion(dependency.fhirVersion());
+      dependencyLoader.getTypes().retainAll(Set.of("StructureDefinition"));
       context.loadFromPackage(dependency, dependencyLoader, false);
     }
     if (!samePackage(core, side)) {
