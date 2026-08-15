@@ -76,13 +76,8 @@ fn fixture() -> (TempDir, PackageCache, RealIgCase, Lockfile) {
 fn matching_before_and_after_states_attest() {
     let (_temp, cache, case, lockfile) = fixture();
 
-    let before = attest_corpus_package_state(
-        &case,
-        CorpusPackageSide::Before,
-        &lockfile,
-        &cache,
-    )
-    .expect("before should attest");
+    let before = attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache)
+        .expect("before should attest");
     assert_eq!(before.case_id, "C001");
     assert_eq!(before.package, "acme.root");
     assert_eq!(before.side, CorpusPackageSide::Before);
@@ -90,13 +85,8 @@ fn matching_before_and_after_states_attest() {
     assert_eq!(before.sha256, case.before.archive_sha256);
     assert_eq!(before.archive_bytes, case.before.archive_bytes);
 
-    let after = attest_corpus_package_state(
-        &case,
-        CorpusPackageSide::After,
-        &lockfile,
-        &cache,
-    )
-    .expect("after should attest");
+    let after = attest_corpus_package_state(&case, CorpusPackageSide::After, &lockfile, &cache)
+        .expect("after should attest");
     assert_eq!(after.side, CorpusPackageSide::After);
     assert_eq!(after.version, "2.0.0");
     assert_eq!(after.sha256, case.after.archive_sha256);
@@ -109,12 +99,7 @@ fn manifest_digest_mismatch_fails_closed() {
     case.before.archive_sha256 = "0".repeat(64);
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::LockedPackageDigestMismatch { .. })
     ));
 }
@@ -125,12 +110,7 @@ fn manifest_size_mismatch_fails_closed() {
     case.before.archive_bytes += 1;
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::ArchiveSizeMismatch { .. })
     ));
 }
@@ -145,12 +125,7 @@ fn corrupted_target_cache_fails_during_mandatory_cf01_verification() {
     fs::write(path, b"corrupted").expect("corrupt cache object");
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::CacheVerification { .. })
     ));
 }
@@ -163,12 +138,7 @@ fn missing_exact_locked_state_fails_closed() {
         .retain(|package| package.version != case.before.version);
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::LockedPackageMissing { .. })
     ));
 }
@@ -185,12 +155,7 @@ fn duplicate_exact_locked_state_fails_closed() {
     lockfile.packages.push(duplicate);
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::LockedPackageAmbiguous { .. })
     ));
 }
@@ -198,19 +163,12 @@ fn duplicate_exact_locked_state_fails_closed() {
 #[test]
 fn unrelated_unverified_lock_entry_blocks_attestation() {
     let (_temp, cache, case, mut lockfile) = fixture();
-    lockfile.packages.push(locked(
-        "acme.unrelated",
-        "1.0.0",
-        &"f".repeat(64),
-    ));
+    lockfile
+        .packages
+        .push(locked("acme.unrelated", "1.0.0", &"f".repeat(64)));
 
     assert!(matches!(
-        attest_corpus_package_state(
-            &case,
-            CorpusPackageSide::Before,
-            &lockfile,
-            &cache
-        ),
+        attest_corpus_package_state(&case, CorpusPackageSide::Before, &lockfile, &cache),
         Err(CorpusError::CacheVerification { .. })
     ));
 }
