@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use semver::Version;
 use serde::Deserialize;
@@ -28,12 +28,8 @@ pub struct FhirRegistrySource {
 
 impl Default for FhirRegistrySource {
     fn default() -> Self {
-        let config = Agent::config_builder()
-            .timeout_global(Some(REQUEST_TIMEOUT))
-            .max_redirects(0)
-            .build();
         Self {
-            agent: config.into(),
+            agent: agent_with_timeout(REQUEST_TIMEOUT),
         }
     }
 }
@@ -73,6 +69,7 @@ impl FhirRegistrySource {
         name: &PackageName,
         version: &Version,
     ) -> Result<PackageArchive, String> {
+        let started = Instant::now();
         let url = format!("{endpoint}/{name}/{version}");
         let mut response = self
             .agent
@@ -90,7 +87,8 @@ impl FhirRegistrySource {
                     format!("registry redirect from {url} omitted a valid Location header")
                 })?;
             let target = validated_secondary_redirect(endpoint, status, name, version, location)?;
-            return self.direct_archive_from_url(&target);
+            let remaining = remaining_request_timeout(started.elapsed())?;
+            return direct_archive_from_url(&target, remaining);
         }
 
         if !(200..300).contains(&status) {
@@ -103,26 +101,46 @@ impl FhirRegistrySource {
         validate_gzip_archive(&bytes, &url)?;
         Ok(PackageArchive { bytes, source: url })
     }
+}
 
-    fn direct_archive_from_url(&self, url: &str) -> Result<PackageArchive, String> {
-        let mut response = self
-            .agent
-            .get(url)
-            .call()
-            .map_err(|error| error.to_string())?;
-        let status = response.status().as_u16();
-        if !(200..300).contains(&status) {
-            return Err(format!(
-                "registry tarball download from {url} returned HTTP {status}; redirects are not followed recursively"
-            ));
-        }
-        let bytes = read_archive_body(&mut response, url)?;
-        validate_gzip_archive(&bytes, url)?;
-        Ok(PackageArchive {
-            bytes,
-            source: url.to_owned(),
+fn agent_with_timeout(timeout: Duration) -> Agent {
+    Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .max_redirects(0)
+        .build()
+        .into()
+}
+
+fn remaining_request_timeout(elapsed: Duration) -> Result<Duration, String> {
+    REQUEST_TIMEOUT
+        .checked_sub(elapsed)
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| {
+            format!(
+                "registry secondary redirect exhausted the {} second acquisition timeout",
+                REQUEST_TIMEOUT.as_secs()
+            )
         })
+}
+
+fn direct_archive_from_url(url: &str, timeout: Duration) -> Result<PackageArchive, String> {
+    let agent = agent_with_timeout(timeout);
+    let mut response = agent
+        .get(url)
+        .call()
+        .map_err(|error| error.to_string())?;
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(format!(
+            "registry tarball download from {url} returned HTTP {status}; redirects are not followed recursively"
+        ));
     }
+    let bytes = read_archive_body(&mut response, url)?;
+    validate_gzip_archive(&bytes, url)?;
+    Ok(PackageArchive {
+        bytes,
+        source: url.to_owned(),
+    })
 }
 
 fn read_archive_body(
@@ -298,6 +316,16 @@ mod tests {
     #[test]
     fn accepts_gzip_magic() {
         validate_gzip_archive(&[0x1f, 0x8b, 0x08, 0x00], "https://example.test/package").unwrap();
+    }
+
+    #[test]
+    fn secondary_redirect_reuses_remaining_timeout_budget() {
+        assert_eq!(
+            remaining_request_timeout(Duration::from_secs(29)).unwrap(),
+            Duration::from_secs(1)
+        );
+        assert!(remaining_request_timeout(REQUEST_TIMEOUT).is_err());
+        assert!(remaining_request_timeout(REQUEST_TIMEOUT + Duration::from_millis(1)).is_err());
     }
 
     #[test]
