@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/cf11-multi-version-proof.yml
-      - crates/commandf-pkg/src/resolver.rs
-      - crates/commandf-pkg/tests/resolution.rs
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
       - specs/011-cf-11-multi-version-package-graph/**
       - donors/cf-11-multi-version-package-graph.yaml
   push:
@@ -13,8 +15,10 @@ on:
       - fix/cf-11-multi-version-package-graph
     paths:
       - .github/workflows/cf11-multi-version-proof.yml
-      - crates/commandf-pkg/src/resolver.rs
-      - crates/commandf-pkg/tests/resolution.rs
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
       - specs/011-cf-11-multi-version-package-graph/**
       - donors/cf-11-multi-version-package-graph.yaml
   workflow_dispatch:
@@ -22,16 +26,27 @@ on:
 permissions:
   contents: read
 
+env:
+  CF11_PROOF_CONTAINER: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+
 jobs:
   real-package-graph:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      # Docker Official Image rust:1.97.1-trixie, pinned to the linux/amd64 manifest.
+      image: rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Assert pinned execution toolchain
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          test "$(rustc --version | awk '{print $2}')" = "1.97.1"
 
       - name: Build commandF resolver
         run: cargo build --locked -p commandf
@@ -59,24 +74,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          python - <<'PY'
+          python3 - <<'PY'
           import json
+          import os
+          import platform
+          import subprocess
           from pathlib import Path
 
           first = json.loads(Path('/tmp/cf11-multiversion/a/commandf.lock').read_text())
           second = json.loads(Path('/tmp/cf11-multiversion/b/commandf.lock').read_text())
 
+          def package_evidence(package):
+              source = package.get('source')
+              assert isinstance(source, str) and source, package
+              return {
+                  'name': package['name'],
+                  'version': package['version'],
+                  'source': source,
+                  'sha256': package['sha256'],
+                  'dependencies': dict(sorted(package.get('dependencies', {}).items())),
+              }
+
           def semantic_identity(lock):
               packages = []
               for package in lock['packages']:
-                  source = package.get('source')
-                  assert isinstance(source, str) and source, package
-                  packages.append({
-                      'name': package['name'],
-                      'version': package['version'],
-                      'sha256': package['sha256'],
-                      'dependencies': dict(sorted(package.get('dependencies', {}).items())),
-                  })
+                  item = package_evidence(package)
+                  item.pop('source')
+                  packages.append(item)
               return {
                   'schema': lock['schema'],
                   'roots': sorted(lock['roots']),
@@ -109,24 +133,40 @@ jobs:
           terminology = by_name.get('hl7.terminology.r4', set())
           assert {'7.1.0', '7.2.0'} <= terminology, terminology
 
-          first_sources = sorted(
-              (package['name'], package['version'], package['source'])
-              for package in first['packages']
+          first_packages = sorted(
+              (package_evidence(package) for package in first['packages']),
+              key=lambda package: (package['name'], package['version']),
           )
-          second_sources = sorted(
-              (package['name'], package['version'], package['source'])
-              for package in second['packages']
+          second_packages = sorted(
+              (package_evidence(package) for package in second['packages']),
+              key=lambda package: (package['name'], package['version']),
           )
+          first_sources = [(p['name'], p['version'], p['source']) for p in first_packages]
+          second_sources = [(p['name'], p['version'], p['source']) for p in second_packages]
 
           evidence = {
-              'schema': 2,
+              'schema': 3,
               'frozen_state': 'C002-ips-after',
               'package': 'hl7.fhir.uv.ips',
               'version': '2.0.1',
               'independent_resolutions': 2,
               'semantic_lock_identity_identical': True,
               'transport_provenance_identical': first_sources == second_sources,
+              'execution_environment': {
+                  'container': os.environ['CF11_PROOF_CONTAINER'],
+                  'machine': platform.machine(),
+                  'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),
+                  'cargo': subprocess.check_output(['cargo', '--version'], text=True).strip(),
+              },
               'multi_version_packages': multi,
+              'resolution_a': {
+                  'roots': sorted(first['roots']),
+                  'packages': first_packages,
+              },
+              'resolution_b': {
+                  'roots': sorted(second['roots']),
+                  'packages': second_packages,
+              },
           }
           out = Path('/tmp/cf11-multiversion/evidence.json')
           out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
