@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::{
-    archive::read_manifest, artifact_scan::scan_package_resources, inspect_package, Lockfile,
-    PackageCache, PackageError, TerminologyError,
+    archive::read_manifest, artifact_scan::scan_package_resources, Lockfile, PackageCache,
+    PackageError, TerminologyError,
 };
 
 const TERMINOLOGY_TYPES: [&str; 2] = ["CodeSystem", "ValueSet"];
@@ -53,48 +53,45 @@ impl TerminologyClosure {
                 });
             }
 
-            let inspection =
-                inspect_package(&package.name, &package.version, &package.sha256, &bytes)?;
-            let mut raw = BTreeMap::new();
-            for resource in scan_package_resources(&bytes)? {
-                let filename = resource.filename;
-                let value = serde_json::from_slice(&resource.bytes).map_err(|source| {
-                    TerminologyError::Json {
-                        file: filename.clone(),
-                        source,
-                    }
-                })?;
-                if raw.insert(filename.clone(), value).is_some() {
+            let mut seen_filenames = BTreeSet::new();
+            for scanned in scan_package_resources(&bytes)? {
+                let filename = scanned.filename;
+                if !seen_filenames.insert(filename.clone()) {
                     return Err(TerminologyError::InvalidField {
                         resource: format!("{}@{}", package.name, package.version),
                         field: filename,
                         message: "duplicate package resource filename".to_owned(),
                     });
                 }
-            }
 
-            for resource in inspection.resources {
-                if !TERMINOLOGY_TYPES.contains(&resource.resource_type.as_str()) {
-                    continue;
-                }
-                let Some(url) = resource.canonical_url else {
-                    continue;
-                };
-                let value = raw.get(&resource.filename).cloned().ok_or_else(|| {
-                    TerminologyError::InvalidField {
-                        resource: resource.filename.clone(),
-                        field: "resource".to_owned(),
-                        message: "inspected terminology resource is missing from scanned archive"
-                            .to_owned(),
+                let value: Value = serde_json::from_slice(&scanned.bytes).map_err(|source| {
+                    TerminologyError::Json {
+                        file: filename.clone(),
+                        source,
                     }
                 })?;
+                let object = value.as_object().ok_or_else(|| TerminologyError::InvalidField {
+                    resource: filename.clone(),
+                    field: "resourceType".to_owned(),
+                    message: "FHIR package resource must be a JSON object".to_owned(),
+                })?;
+                let resource_type = required_string(object, "resourceType", &filename)?;
+
+                if !TERMINOLOGY_TYPES.contains(&resource_type.as_str()) {
+                    continue;
+                }
+
+                let Some(url) = optional_string(object, "url", &filename)? else {
+                    continue;
+                };
+                let version = optional_string(object, "version", &filename)?;
                 closure.insert(TerminologyResource {
                     package_name: package.name.clone(),
                     package_version: package.version.clone(),
-                    filename: resource.filename,
-                    resource_type: resource.resource_type,
+                    filename,
+                    resource_type,
                     url,
-                    version: resource.canonical_version,
+                    version,
                     value,
                 })?;
             }
@@ -160,6 +157,38 @@ impl TerminologyClosure {
     }
 }
 
+fn required_string(
+    object: &Map<String, Value>,
+    field: &str,
+    filename: &str,
+) -> Result<String, TerminologyError> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| TerminologyError::InvalidField {
+            resource: filename.to_owned(),
+            field: field.to_owned(),
+            message: "must be a string".to_owned(),
+        })
+}
+
+fn optional_string(
+    object: &Map<String, Value>,
+    field: &str,
+    filename: &str,
+) -> Result<Option<String>, TerminologyError> {
+    match object.get(field) {
+        None => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(TerminologyError::InvalidField {
+            resource: filename.to_owned(),
+            field: field.to_owned(),
+            message: "must be a string when present".to_owned(),
+        }),
+    }
+}
+
 fn exact_identity(url: &str, version: Option<&str>) -> String {
     match version {
         Some(version) => format!("{url}|{version}"),
@@ -196,7 +225,61 @@ fn location(resource: &TerminologyResource) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::io::Cursor;
+
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use tar::{Builder, Header};
+    use tempfile::TempDir;
+
     use super::*;
+    use crate::LockedPackage;
+
+    fn package_archive(resources: &[(&str, &str)]) -> Vec<u8> {
+        let manifest = br#"{"name":"example.pkg","version":"1.0.0","dependencies":{}}"#;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        {
+            let mut builder = Builder::new(&mut encoder);
+            append(&mut builder, "package/package.json", manifest);
+            for (filename, body) in resources {
+                append(
+                    &mut builder,
+                    &format!("package/{filename}"),
+                    body.as_bytes(),
+                );
+            }
+            builder.finish().unwrap();
+        }
+        encoder.finish().unwrap()
+    }
+
+    fn append(builder: &mut Builder<&mut GzEncoder<Vec<u8>>>, path: &str, body: &[u8]) {
+        let mut header = Header::new_gnu();
+        header.set_path(path).unwrap();
+        header.set_size(body.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append(&header, Cursor::new(body)).unwrap();
+    }
+
+    fn closure_for(resources: &[(&str, &str)]) -> Result<TerminologyClosure, TerminologyError> {
+        let temp = TempDir::new().unwrap();
+        let cache = PackageCache::new(temp.path());
+        let bytes = package_archive(resources);
+        let sha256 = cache.put(&bytes).unwrap();
+        let lockfile = Lockfile::new(
+            vec!["example.pkg@1.0.0".to_owned()],
+            vec![LockedPackage {
+                name: "example.pkg".to_owned(),
+                version: "1.0.0".to_owned(),
+                sha256,
+                source: "https://packages.example.org/example.pkg/1.0.0".to_owned(),
+                dependencies: BTreeMap::new(),
+            }],
+        );
+        TerminologyClosure::load(&lockfile, &cache)
+    }
 
     #[test]
     fn canonical_reference_parser_is_exact_and_fail_closed() {
@@ -214,5 +297,49 @@ mod tests {
                 Err(TerminologyError::MalformedCanonical { .. })
             ));
         }
+    }
+
+    #[test]
+    fn unrelated_duplicate_canonicals_do_not_block_terminology_closure() {
+        let closure = closure_for(&[
+            (
+                "CapabilityStatement-example.json",
+                r#"{"resourceType":"CapabilityStatement","url":"urn:uuid:shared","version":"1"}"#,
+            ),
+            (
+                "TerminologyCapabilities-example.json",
+                r#"{"resourceType":"TerminologyCapabilities","url":"urn:uuid:shared","version":"1"}"#,
+            ),
+            (
+                "ValueSet-test.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+            ),
+        ])
+        .unwrap();
+
+        let resolved = closure
+            .resolve_value_set("http://example.org/ValueSet/test|1")
+            .unwrap()
+            .expect("ValueSet should resolve");
+        assert_eq!(resolved.filename, "ValueSet-test.json");
+    }
+
+    #[test]
+    fn duplicate_terminology_canonical_still_fails_closed() {
+        let result = closure_for(&[
+            (
+                "ValueSet-a.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+            ),
+            (
+                "ValueSet-b.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+            ),
+        ]);
+
+        assert!(matches!(
+            result,
+            Err(TerminologyError::DuplicateCanonical { .. })
+        ));
     }
 }
