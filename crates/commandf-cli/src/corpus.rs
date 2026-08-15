@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 
 use commandf_pkg::{
     evaluate_corpus_case, failed_corpus_case_summary, parse_corpus_manifest, summarize_corpus_case,
-    CorpusCaseStatus, CorpusError, CorpusPackageStateInput, CorpusRunSummary, FhirRegistrySource,
-    Lockfile, PackageCache, PackageRequest, RealIgCase, Resolver, MAX_CORPUS_MANIFEST_BYTES,
+    CorpusCaseStatus, CorpusCaseSummary, CorpusError, CorpusPackageStateInput, CorpusRunSummary,
+    FhirRegistrySource, Lockfile, PackageCache, PackageRequest, RealIgCase, Resolver,
+    MAX_CORPUS_MANIFEST_BYTES,
 };
 
 use crate::oracle;
@@ -153,11 +154,11 @@ pub fn run(
             Ok(report) => report,
             Err(error) => {
                 failed = true;
-                write_failure(&evidence_dir, "oracle-failure.txt", error.as_ref())?;
-                summaries.push(failed_corpus_case_summary(
+                summaries.push(record_oracle_failure(
                     case,
-                    CorpusCaseStatus::OracleFailed,
-                ));
+                    &evidence_dir,
+                    error.as_ref(),
+                )?);
                 continue;
             }
         };
@@ -301,6 +302,18 @@ fn evaluation_status(error: &CorpusError) -> CorpusCaseStatus {
     }
 }
 
+fn record_oracle_failure(
+    case: &RealIgCase,
+    evidence_dir: &Path,
+    error: &dyn std::fmt::Display,
+) -> io::Result<CorpusCaseSummary> {
+    write_failure(evidence_dir, "oracle-failure.txt", error)?;
+    Ok(failed_corpus_case_summary(
+        case,
+        CorpusCaseStatus::OracleFailed,
+    ))
+}
+
 fn write_resolution_failures(
     evidence_dir: &Path,
     before: Option<Box<dyn std::error::Error>>,
@@ -348,4 +361,63 @@ fn bounded_text(text: &str) -> String {
         output.push_str("… [diagnostic truncated]");
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use commandf_pkg::{CorpusOracleMode, CorpusPackageState, CorpusRightsMode};
+
+    use super::*;
+
+    fn test_case() -> RealIgCase {
+        RealIgCase {
+            id: "C001".to_owned(),
+            package: "example.package".to_owned(),
+            before: CorpusPackageState {
+                version: "1.0.0".to_owned(),
+                archive_sha256: "a".repeat(64),
+                archive_bytes: 1,
+                publication_url: "https://example.org/before".to_owned(),
+            },
+            after: CorpusPackageState {
+                version: "2.0.0".to_owned(),
+                archive_sha256: "b".repeat(64),
+                archive_bytes: 1,
+                publication_url: "https://example.org/after".to_owned(),
+            },
+            fhir_version: "4.0.1".to_owned(),
+            publisher: "Example Publisher".to_owned(),
+            change_evidence_url: "https://example.org/changes".to_owned(),
+            rights_evidence_url: "https://example.org/rights".to_owned(),
+            rights_mode: CorpusRightsMode::MetadataOnlyNoRedistribution,
+            oracle_mode: CorpusOracleMode::ChangedStructureDefinitionsOnly,
+        }
+    }
+
+    #[test]
+    fn oracle_failure_records_typed_status_and_bounded_evidence() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let evidence_dir = std::env::temp_dir().join(format!(
+            "commandf-corpus-oracle-failure-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&evidence_dir).unwrap();
+
+        let error = io::Error::other("deterministic oracle failure");
+        let summary = record_oracle_failure(&test_case(), &evidence_dir, &error).unwrap();
+        assert_eq!(summary.status, CorpusCaseStatus::OracleFailed);
+        assert!(summary.structural.is_none());
+        assert!(summary.compatibility.is_none());
+        assert!(summary.terminology.is_none());
+        assert!(summary.oracle.is_none());
+
+        let evidence = fs::read_to_string(evidence_dir.join("oracle-failure.txt")).unwrap();
+        assert_eq!(evidence, "deterministic oracle failure\n");
+        fs::remove_dir_all(evidence_dir).unwrap();
+    }
 }
