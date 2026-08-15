@@ -58,8 +58,7 @@ impl TerminologyClosure {
             }
 
             let mut seen_filenames = BTreeSet::new();
-            for scanned in
-                scan_package_resources_with_limit(&bytes, MAX_TERMINOLOGY_ARCHIVE_BYTES)?
+            for scanned in scan_package_resources_with_limit(&bytes, MAX_TERMINOLOGY_ARCHIVE_BYTES)?
             {
                 let filename = scanned.filename;
                 if !seen_filenames.insert(filename.clone()) {
