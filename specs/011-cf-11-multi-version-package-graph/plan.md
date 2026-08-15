@@ -54,7 +54,7 @@ CF-11 does not claim schema-v1 records resolved dependency edges. A future expli
 
 ### 4. Downstream guard
 
-Do not weaken name-only ambiguity checks in diff/check/terminology/oracle. These commands may continue rejecting a lock where the requested package name maps to more than one version unless the caller already supplies an exact identity (`inspect`).
+Do not weaken name-only ambiguity checks in diff/check/terminology/oracle. These commands MUST reject a lock where the requested package name maps to more than one version unless the caller already supplies an exact identity (`inspect`).
 
 ### 5. Tests
 
@@ -72,12 +72,17 @@ Preserve all previous exact identity/manifest/cache tests.
 Add a bounded real-network workflow dedicated to this correction. It must:
 
 - use immutable action SHAs and `persist-credentials: false`;
+- run the proof inside a digest-pinned execution container and record that identity in evidence;
 - resolve + verify one previously failing frozen CF-10 state from clean cache;
 - assert the lock contains at least one package name at multiple concrete versions;
 - assert the exact root package/version is present;
+- keep package name, exact version, acquisition provenance, and content digest explicit in uploaded evidence;
+- compare deterministic semantic lock identity independently of transport URL variance;
 - remain evidence-only for CF-11 and not execute CF-10 semantic diff/classification.
 
 Preferred proof state: `hl7.fhir.us.core@8.0.1`, because the prior frozen sweep recorded its exact old-resolver conflict in both A/B runs.
+
+Actual proof state used by the convergence workflow: `hl7.fhir.uv.ips@2.0.1` (`C002-ips-after`). It was selected from the same frozen CF-10 set and had a repeatable old-resolver same-name version conflict; no case was changed based on semantic benchmark output.
 
 ## Review focus
 
