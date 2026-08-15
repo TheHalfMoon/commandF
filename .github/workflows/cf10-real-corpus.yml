@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/cf10-real-corpus.yml
+      - .github/scripts/cf10-closure-evidence/**
       - corpus/real-ig/v1/**
       - donors/cf-10-real-ig-delta-corpus.yaml
       - specs/010-cf-10-real-ig-delta-corpus/**
@@ -17,6 +18,7 @@ on:
       - main
     paths:
       - .github/workflows/cf10-real-corpus.yml
+      - .github/scripts/cf10-closure-evidence/**
       - corpus/real-ig/v1/**
       - donors/cf-10-real-ig-delta-corpus.yaml
       - specs/010-cf-10-real-ig-delta-corpus/**
@@ -45,6 +47,9 @@ jobs:
           java-version: '17'
 
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Test closure evidence verifier
+        run: python -B -m unittest discover -s .github/scripts/cf10-closure-evidence -p 'test_*.py'
 
       - name: Build pinned HL7 oracle adapter
         run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
@@ -127,6 +132,23 @@ jobs:
           PY
           printf '%s\n' "$parse_status" > /tmp/cf10-summary-parse-status
 
+      - name: Bind retained lockfiles to summary closure evidence
+        if: always()
+        run: |
+          set -u
+          closure_a=0
+          closure_b=0
+          python -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-summary-a.json \
+            --evidence-root /tmp/cf10-real-a/evidence \
+            || closure_a=$?
+          python -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-summary-b.json \
+            --evidence-root /tmp/cf10-real-b/evidence \
+            || closure_b=$?
+          printf '%s\n' "$closure_a" > /tmp/cf10-closure-binding-status-a
+          printf '%s\n' "$closure_b" > /tmp/cf10-closure-binding-status-b
+
       - name: Assert metadata-only repository boundary
         if: always()
         run: |
@@ -152,6 +174,8 @@ jobs:
             /tmp/cf10-internal-match-b
             /tmp/cf10-summary-comparison-status
             /tmp/cf10-summary-parse-status
+            /tmp/cf10-closure-binding-status-a
+            /tmp/cf10-closure-binding-status-b
             /tmp/cf10-real-a/summary.json
             /tmp/cf10-real-b/summary.json
             /tmp/cf10-real-a/evidence
@@ -169,12 +193,15 @@ jobs:
           internal_b="$(cat /tmp/cf10-internal-match-b 2>/dev/null || printf '1')"
           comparison="$(cat /tmp/cf10-summary-comparison-status 2>/dev/null || printf '1')"
           parsed="$(cat /tmp/cf10-summary-parse-status 2>/dev/null || printf '1')"
+          closure_a="$(cat /tmp/cf10-closure-binding-status-a 2>/dev/null || printf '1')"
+          closure_b="$(cat /tmp/cf10-closure-binding-status-b 2>/dev/null || printf '1')"
 
-          printf 'runner_a=%s runner_b=%s internal_a=%s internal_b=%s comparison=%s parsed=%s\n' \
-            "$status_a" "$status_b" "$internal_a" "$internal_b" "$comparison" "$parsed"
+          printf 'runner_a=%s runner_b=%s internal_a=%s internal_b=%s comparison=%s parsed=%s closure_a=%s closure_b=%s\n' \
+            "$status_a" "$status_b" "$internal_a" "$internal_b" "$comparison" "$parsed" "$closure_a" "$closure_b"
 
           if [[ "$status_a" != 0 || "$status_b" != 0 || \
                 "$internal_a" != 0 || "$internal_b" != 0 || \
-                "$comparison" != 0 || "$parsed" != 0 ]]; then
+                "$comparison" != 0 || "$parsed" != 0 || \
+                "$closure_a" != 0 || "$closure_b" != 0 ]]; then
             exit 1
           fi
