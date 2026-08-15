@@ -1,0 +1,34 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-15
+
+standards:
+  - id: hl7-fhir-npm-packages
+    reference: https://hl7.org/fhir/packages.html
+    mode: PROTOCOL_STANDARD
+    adopted_patterns:
+      - FHIR implementation-guide dependencies are NPM package dependencies
+      - dependency identity includes package id and version constraint
+      - production package dependencies should use explicit versions or supported patch wildcards
+
+  - id: npm-dependency-tree
+    reference: https://docs.npmjs.com/cli/v11/commands/npm-dedupe
+    mode: STUDY
+    adopted_patterns:
+      - a dependency tree can legitimately contain multiple concrete versions of the same package name
+      - deduplication is valid only when one concrete version satisfies the relevant dependency requirements
+    exclusions:
+      - no npm hoisting algorithm copied
+      - no npm source code copied
+      - no arbitrary npm semver/range semantics imported into CF-11
+
+commandf_constraints:
+  - resolver identity is exact package name plus concrete version
+  - exact identity dedup only
+  - request-local exact and patch-wildcard selection remain deterministic
+  - no last-writer-wins or silent global version coercion
+  - schema-v1 lockfile remains an ordered package closure, not an explicit resolved-edge graph
+  - downstream name-only ambiguity remains fail-closed
+
+rules:
+  - standards and public behavior are STUDY/PROTOCOL inputs, not code-copy authority
+  - CF-10 frozen corpus is not modified to fit the pre-CF-11 resolver
