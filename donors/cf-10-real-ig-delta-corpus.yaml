@@ -1,12 +1,32 @@
 schema: commandf.donor-manifest/v1
 updated: 2026-08-15
 
+discovery_evidence:
+  head: d8cb88ba2bb3696f44322eb302957c8c50e1c8f4
+  workflow: cf10-digest-discovery
+  run: 31890014888
+  artifact_id: 9248341586
+  artifact_digest: sha256:02f08bced4c30665a40c7967611057753bf56330a5e7e10e85081619b433dd8c
+  independent_resolutions_per_state: 2
+  selection_frozen_before_results: true
+  eligibility_sweep_complete: true
+  eligible_states: 6
+  selected_states: 6
+
 sources:
   - id: us-core-real-delta
     project: HL7 US Core Implementation Guide
     package: hl7.fhir.us.core
     before_version: 8.0.1
     after_version: 9.0.0
+    before_attestation:
+      sha256: 3c02eef48ef10617021bee95e58cbc66d596ceda8cada24b72000d33ad67c464
+      archive_bytes: 2713046
+      byte_identical_across_independent_resolutions: true
+    after_attestation:
+      sha256: d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059
+      archive_bytes: 2749959
+      byte_identical_across_independent_resolutions: true
     before_publication: https://hl7.org/fhir/us/core/STU8.0.1/
     after_publication: https://hl7.org/fhir/us/core/STU9/
     change_evidence: https://hl7.org/fhir/us/core/STU9/changes.html
@@ -34,6 +54,14 @@ sources:
     package: hl7.fhir.uv.ips
     before_version: 1.1.0
     after_version: 2.0.1
+    before_attestation:
+      sha256: 403c4141101810e924f2928287985084819d8a5cc3a62e2b3840a557129840ef
+      archive_bytes: 1065103
+      byte_identical_across_independent_resolutions: true
+    after_attestation:
+      sha256: 7183242b70fb2a9058aa3701fb607517a3c2fd0e3100d1d8c538d744c2adf799
+      archive_bytes: 725312
+      byte_identical_across_independent_resolutions: true
     before_publication: https://hl7.org/fhir/uv/ips/STU1.1/
     after_publication: https://hl7.org/fhir/uv/ips/en/
     change_evidence: https://hl7.org/fhir/uv/ips/en/changes.html
@@ -62,6 +90,14 @@ sources:
     package: hl7.fhir.us.mcode
     before_version: 3.0.0
     after_version: 4.0.0
+    before_attestation:
+      sha256: c94c91971747efeae760aa037d168e4df992cefb6dacece08217c464b9d39214
+      archive_bytes: 1014084
+      byte_identical_across_independent_resolutions: true
+    after_attestation:
+      sha256: e603283bafa508a3705ad022bce95bba1fbd0b8b3b87b978e7412813b7bc1778
+      archive_bytes: 1003918
+      byte_identical_across_independent_resolutions: true
     before_publication: https://hl7.org/fhir/us/mcode/STU3/
     after_publication: https://hl7.org/fhir/us/mcode/STU4/
     change_evidence: https://hl7.org/fhir/us/mcode/STU4/changes.html
