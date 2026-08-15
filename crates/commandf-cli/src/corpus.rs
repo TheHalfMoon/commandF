@@ -3,10 +3,9 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use commandf_pkg::{
-    evaluate_corpus_case, failed_corpus_case_summary, parse_corpus_manifest,
-    summarize_corpus_case, CorpusCaseStatus, CorpusError, CorpusPackageStateInput,
-    CorpusRunSummary, FhirRegistrySource, Lockfile, PackageCache, PackageRequest, RealIgCase,
-    Resolver, MAX_CORPUS_MANIFEST_BYTES,
+    evaluate_corpus_case, failed_corpus_case_summary, parse_corpus_manifest, summarize_corpus_case,
+    CorpusCaseStatus, CorpusError, CorpusPackageStateInput, CorpusRunSummary, FhirRegistrySource,
+    Lockfile, PackageCache, PackageRequest, RealIgCase, Resolver, MAX_CORPUS_MANIFEST_BYTES,
 };
 
 use crate::oracle;
