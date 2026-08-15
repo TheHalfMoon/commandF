@@ -21,6 +21,7 @@ mod compatibility_model;
 mod compatibility_validate;
 mod corpus;
 mod corpus_error;
+mod corpus_evaluate;
 mod corpus_model;
 mod error;
 mod lock;
@@ -72,9 +73,15 @@ pub use corpus::{
     MAX_CORPUS_MANIFEST_BYTES,
 };
 pub use corpus_error::CorpusError;
+pub use corpus_evaluate::{
+    evaluate_corpus_case, failed_corpus_case_summary, summarize_corpus_case, CorpusCaseReports,
+    CorpusPackageStateInput,
+};
 pub use corpus_model::{
-    CorpusOracleMode, CorpusPackageAttestation, CorpusPackageSide, CorpusPackageState,
-    CorpusRightsMode, CorpusSelectionPolicy, RealIgCase, RealIgCorpus,
+    CorpusCaseStatus, CorpusCaseSummary, CorpusCompatibilitySummary, CorpusOracleMode,
+    CorpusOracleSummary, CorpusPackageAttestation, CorpusPackageSide, CorpusPackageState,
+    CorpusRightsMode, CorpusRunSummary, CorpusSelectionPolicy, CorpusStructuralSummary,
+    CorpusSummaryPackageState, CorpusTerminologySummary, RealIgCase, RealIgCorpus,
 };
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
