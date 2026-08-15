@@ -11,6 +11,8 @@ use commandf_pkg::{
 use crate::oracle;
 
 const MAX_FAILURE_DIAGNOSTIC_CHARS: usize = 16_384;
+const MAX_CORPUS_RAW_REPORT_BYTES: usize = 64 * 1024 * 1024;
+const MAX_CORPUS_SUMMARY_BYTES: usize = 1024 * 1024;
 
 pub struct CorpusExecution {
     pub summary: CorpusRunSummary,
@@ -81,17 +83,17 @@ pub fn run(
             }
         };
 
-        fs::write(
-            evidence_dir.join("structural.json"),
-            reports.structural.to_json_bytes()?,
+        write_bounded_report(
+            &evidence_dir.join("structural.json"),
+            &reports.structural.to_json_bytes()?,
         )?;
-        fs::write(
-            evidence_dir.join("compatibility.json"),
-            reports.compatibility.to_json_bytes()?,
+        write_bounded_report(
+            &evidence_dir.join("compatibility.json"),
+            &reports.compatibility.to_json_bytes()?,
         )?;
-        fs::write(
-            evidence_dir.join("terminology.json"),
-            reports.terminology.to_json_bytes()?,
+        write_bounded_report(
+            &evidence_dir.join("terminology.json"),
+            &reports.terminology.to_json_bytes()?,
         )?;
 
         let oracle_report = match oracle::run_changed_report(
@@ -114,9 +116,9 @@ pub fn run(
                 continue;
             }
         };
-        fs::write(
-            evidence_dir.join("oracle.json"),
-            oracle_report.to_json_bytes()?,
+        write_bounded_report(
+            &evidence_dir.join("oracle.json"),
+            &oracle_report.to_json_bytes()?,
         )?;
 
         match summarize_corpus_case(case, &reports, &oracle_report) {
@@ -137,7 +139,19 @@ pub fn run(
         manifest_sha256,
         cases: summaries,
     };
-    fs::write(work_root.join("summary.json"), summary.to_json_bytes()?)?;
+    let summary_bytes = summary.to_json_bytes()?;
+    if summary_bytes.len() > MAX_CORPUS_SUMMARY_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "corpus summary is {} bytes; maximum is {}",
+                summary_bytes.len(),
+                MAX_CORPUS_SUMMARY_BYTES
+            ),
+        )
+        .into());
+    }
+    fs::write(work_root.join("summary.json"), summary_bytes)?;
 
     Ok(CorpusExecution { summary, failed })
 }
@@ -195,6 +209,21 @@ fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
         ));
     }
     Ok(bytes)
+}
+
+fn write_bounded_report(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    if bytes.len() > MAX_CORPUS_RAW_REPORT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "corpus report is {} bytes; maximum is {}: {}",
+                bytes.len(),
+                MAX_CORPUS_RAW_REPORT_BYTES,
+                path.display()
+            ),
+        ));
+    }
+    fs::write(path, bytes)
 }
 
 fn evaluation_status(error: &CorpusError) -> CorpusCaseStatus {
