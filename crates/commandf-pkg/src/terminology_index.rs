@@ -190,7 +190,9 @@ fn value_set_binding_evidence_equivalent(
             Ok(cross.relation == TerminologyRelation::Equal)
         }
         Some(_) => Ok(false),
-        None => Ok(cross.relation == TerminologyRelation::Indeterminate),
+        None => Ok(first_self.proof_mode.is_none()
+            && cross.relation == TerminologyRelation::Indeterminate
+            && cross.reason == first_self.reason),
     }
 }
 
@@ -431,6 +433,25 @@ mod tests {
             (
                 "ValueSet-b.json",
                 r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"total":1,"contains":[{"system":"http://example.org/system","code":"B"}]}}"#,
+            ),
+        ]);
+
+        assert!(matches!(
+            result,
+            Err(TerminologyError::DuplicateCanonical { .. })
+        ));
+    }
+
+    #[test]
+    fn conflicting_expansion_context_still_fails_closed() {
+        let result = closure_for(&[
+            (
+                "ValueSet-a.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"total":1,"parameter":[{"name":"includeDesignations","valueBoolean":false}],"contains":[{"system":"http://example.org/system","code":"A"}]}}"#,
+            ),
+            (
+                "ValueSet-b.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"total":1,"parameter":[{"name":"includeDesignations","valueBoolean":true}],"contains":[{"system":"http://example.org/system","code":"A"}]}}"#,
             ),
         ]);
 
