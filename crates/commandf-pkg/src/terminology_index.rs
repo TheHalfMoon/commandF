@@ -4,8 +4,9 @@ use std::fs;
 use serde_json::{Map, Value};
 
 use crate::{
-    archive::read_manifest, artifact_scan::scan_package_resources, Lockfile, PackageCache,
-    PackageError, TerminologyError,
+    archive::read_manifest, artifact_scan::scan_package_resources, compare_value_set_expansions,
+    Lockfile, PackageCache, PackageError, ResourceKey, ResourceKeyKind, TerminologyError,
+    TerminologyProofMode, TerminologyRelation,
 };
 
 #[derive(Clone, Debug)]
@@ -116,11 +117,12 @@ impl TerminologyClosure {
     fn insert(&mut self, resource: TerminologyResource) -> Result<(), TerminologyError> {
         let exact = exact_identity(&resource.url, resource.version.as_deref());
         if let Some(first) = self.exact.get(&exact) {
-            // Multi-version package graphs and companion packages can contain byte-distinct
-            // archives that repeat the exact same ValueSet resource. serde_json::Value equality
-            // is semantic with respect to object-key order, so identical FHIR JSON carries no
-            // binding-resolution ambiguity. Conflicting duplicates remain fail-closed.
-            if first.value == resource.value {
+            // Multi-version package graphs and companion packages may repeat the same canonical
+            // ValueSet with byte/JSON differences in metadata that CF-07 never uses for binding
+            // proof. Reuse CF-07's own normalized ValueSet-expansion comparison as the authority:
+            // only identical binding evidence is safely deduplicated. Conflicting evidence remains
+            // fail-closed.
+            if value_set_binding_evidence_equivalent(first, &resource)? {
                 return Ok(());
             }
             return Err(TerminologyError::DuplicateCanonical {
@@ -165,6 +167,38 @@ impl TerminologyClosure {
                 matches: matches.len(),
             }),
         }
+    }
+}
+
+fn value_set_binding_evidence_equivalent(
+    first: &TerminologyResource,
+    second: &TerminologyResource,
+) -> Result<bool, TerminologyError> {
+    let resource = ResourceKey {
+        kind: ResourceKeyKind::Canonical,
+        value: exact_identity(&first.url, first.version.as_deref()),
+    };
+    let first_self = compare_value_set_expansions(
+        resource.clone(),
+        &first.value,
+        &first.value,
+    )?;
+    let second_self = compare_value_set_expansions(
+        resource.clone(),
+        &second.value,
+        &second.value,
+    )?;
+    if first_self != second_self {
+        return Ok(false);
+    }
+
+    let cross = compare_value_set_expansions(resource, &first.value, &second.value)?;
+    match cross.proof_mode {
+        Some(TerminologyProofMode::ValueSetExpansion) => {
+            Ok(cross.relation == TerminologyRelation::Equal)
+        }
+        Some(_) => Ok(false),
+        None => Ok(cross.relation == TerminologyRelation::Indeterminate),
     }
 }
 
@@ -356,15 +390,74 @@ mod tests {
     }
 
     #[test]
-    fn conflicting_value_set_canonical_still_fails_closed() {
-        let result = closure_for(&[
+    fn equivalent_indeterminate_binding_evidence_is_deduplicated() {
+        let closure = closure_for(&[
             (
                 "ValueSet-a.json",
-                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"active"}"#,
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"active","name":"First"}"#,
             ),
             (
                 "ValueSet-b.json",
-                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"draft"}"#,
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"draft","name":"Second"}"#,
+            ),
+        ])
+        .unwrap();
+
+        assert!(closure
+            .resolve_value_set("http://example.org/ValueSet/test|1")
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn equivalent_finite_binding_evidence_is_deduplicated() {
+        let closure = closure_for(&[
+            (
+                "ValueSet-a.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"active","expansion":{"total":1,"parameter":[{"name":"includeDesignations","valueBoolean":false}],"contains":[{"system":"http://example.org/system","code":"A"}]}}"#,
+            ),
+            (
+                "ValueSet-b.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","status":"draft","title":"Different metadata","expansion":{"contains":[{"code":"A","system":"http://example.org/system"}],"parameter":[{"valueBoolean":false,"name":"includeDesignations"}],"total":1}}"#,
+            ),
+        ])
+        .unwrap();
+
+        assert!(closure
+            .resolve_value_set("http://example.org/ValueSet/test|1")
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn conflicting_value_set_binding_evidence_still_fails_closed() {
+        let result = closure_for(&[
+            (
+                "ValueSet-a.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"total":1,"contains":[{"system":"http://example.org/system","code":"A"}]}}"#,
+            ),
+            (
+                "ValueSet-b.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"total":1,"contains":[{"system":"http://example.org/system","code":"B"}]}}"#,
+            ),
+        ]);
+
+        assert!(matches!(
+            result,
+            Err(TerminologyError::DuplicateCanonical { .. })
+        ));
+    }
+
+    #[test]
+    fn different_indeterminate_binding_evidence_still_fails_closed() {
+        let result = closure_for(&[
+            (
+                "ValueSet-a.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1"}"#,
+            ),
+            (
+                "ValueSet-b.json",
+                r#"{"resourceType":"ValueSet","url":"http://example.org/ValueSet/test","version":"1","expansion":{"offset":1,"total":0}}"#,
             ),
         ]);
 
