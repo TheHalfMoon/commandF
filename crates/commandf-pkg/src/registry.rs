@@ -296,4 +296,30 @@ mod tests {
         validate_gzip_archive(&[0x1f, 0x8b, 0x08, 0x00], "https://example.test/package")
             .unwrap();
     }
+
+    #[test]
+    #[ignore = "requires public packages.fhir.org network access"]
+    fn real_primary_us_core_is_direct_gzip() {
+        let archive = FhirRegistrySource::new()
+            .archive_from(PRIMARY, &package(), &version())
+            .unwrap();
+        assert!(archive.bytes.starts_with(&GZIP_MAGIC));
+        assert_eq!(
+            archive.source,
+            "https://packages.fhir.org/hl7.fhir.us.core/8.0.1"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires public packages2.fhir.org network access"]
+    fn real_secondary_us_core_follows_only_expected_tarball() {
+        let archive = FhirRegistrySource::new()
+            .archive_from(SECONDARY, &package(), &version())
+            .unwrap();
+        assert!(archive.bytes.starts_with(&GZIP_MAGIC));
+        assert_eq!(
+            archive.source,
+            "https://packages2.fhir.org/web/hl7.fhir.us.core-8.0.1.tgz"
+        );
+    }
 }
