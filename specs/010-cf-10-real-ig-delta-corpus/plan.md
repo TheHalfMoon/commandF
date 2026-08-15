@@ -1,23 +1,21 @@
 # CF-10 Implementation Plan — Public Real-IG Delta Corpus
 
-Status: planned / selection rules frozen
+Status: implementation in progress / eligibility and digest freeze complete
 
 ## Architecture decision
 
 CF-10 is a benchmark/evidence layer above existing commandF authorities. It does not add a new semantic engine.
 
-The implementation is split into four boundaries:
+The implementation is split into four hard boundaries:
 
 1. **Corpus manifest model** — validates frozen case metadata, digests, rights/provenance evidence, ordering, and v1 R4 constraints.
-2. **Acquisition/attestation** — uses CF-01 resolver/cache verification in isolated state; package bytes are ephemeral and never committed.
-3. **Case evaluation** — invokes the existing CF-03/04/07 evidence stack and CF-06 oracle adapter without modifying their rules.
+2. **Acquisition/attestation** — uses CF-01 resolver/cache verification in isolated state and refuses semantic work until digest/size attestation succeeds.
+3. **Case evaluation** — invokes existing CF-03/04/07 evidence and CF-06 oracle behavior without changing their rules.
 4. **Deterministic summary** — emits compact commandF-owned benchmark evidence and explicit operational failure states.
 
-The first executable gate is digest discovery. Result counts/severities are deliberately unknown until after the cases and package identities are frozen.
+## Phase A — Frozen selection and provenance — COMPLETE
 
-## Phase A — Freeze selection and provenance
-
-Canonical v1 cases are fixed before result discovery:
+Canonical v1 cases remain fixed:
 
 ```text
 C001 hl7.fhir.us.core  8.0.1 -> 9.0.0
@@ -25,95 +23,94 @@ C002 hl7.fhir.uv.ips   1.1.0 -> 2.0.1
 C003 hl7.fhir.us.mcode 3.0.0 -> 4.0.0
 ```
 
-Selection is based on published/stable R4 status, public package identity, explicit version/change evidence, and domain diversity. commandF output is not a selection input.
+Selection was frozen before commandF semantic result discovery. No case or version has been replaced.
 
-The donor/provenance record must distinguish:
+The donor/provenance record distinguishes publication/change/rights evidence and keeps repository mode metadata-only. No upstream package payload is committed.
 
-- publication metadata rights;
-- package/runtime access;
-- terminology/IP statements inside the IG;
-- repository redistribution rights.
+## Phase B — Foundation reconciliation and digest discovery — COMPLETE
 
-CF-10 repository mode is metadata-only. No upstream NPM tarball is checked in.
+CF-11 multi-version graph support is canonical at merge commit:
 
-## Phase B — Digest discovery
+```text
+5cb1a4c3445c0ebd86654cfb467a5e008e801c3e
+```
 
-Add a one-shot/guarded GitHub Actions discovery workflow or equivalent isolated execution tool that:
+It was reconciled into the frozen CF-10 branch by:
 
-1. checks out the exact CF-10 planning head;
-2. resolves every selected exact package version into cache A;
-3. verifies cache A;
-4. resolves the same package/version into independent cache B;
-5. verifies cache B;
-6. requires archive bytes and SHA-256 to match A == B;
-7. records byte size and digest in a machine-readable artifact;
-8. fails if any selected version is unavailable or non-reproducible.
+```text
+5ec463f0ae53b76f9c2c151335d98598b53e5abc
+```
 
-The discovery artifact is reviewed before digest metadata is copied into the canonical corpus manifest.
+The same six frozen package states were then resolved twice from independent clean caches and verified through CF-01. `cf10-digest-discovery` run `31890014888` succeeded and artifact `9248341586` was reviewed before digest/size metadata was frozen in `corpus/real-ig/v1/corpus.json`. Later exact-head rerun `31890859039` also succeeded.
 
-No expected commandF semantic result is generated or frozen in this phase.
+No expected semantic result was generated or frozen in this phase.
 
-## Phase C — Manifest model
+## Phase C — Manifest model — COMPLETE
 
-Preferred ownership: `commandf-pkg` typed model and validation, not ad-hoc shell parsing.
-
-Proposed modules:
+Ownership is `commandf-pkg` typed code:
 
 ```text
 crates/commandf-pkg/src/corpus_model.rs
 crates/commandf-pkg/src/corpus_error.rs
 crates/commandf-pkg/src/corpus.rs
+crates/commandf-pkg/tests/corpus_manifest.rs
 ```
 
-Public model concepts:
-
-```text
-RealIgCorpus
-CorpusSelectionPolicy
-RealIgCase
-CorpusPackageState
-CorpusRightsEvidence
-CorpusOracleMode
-```
-
-Validation requirements:
+Implemented validation includes:
 
 - schema exactly 1;
-- bounded input bytes and case count;
-- stable unique case ids;
-- canonical lexicographic case ordering;
-- exact package names/versions;
+- bounded pre-decode input bytes and bounded case count;
+- stable unique lexicographically ordered case ids;
+- exact package names and semver versions;
 - R4 `4.0.1` only in v1;
-- SHA-256 lowercase/64-hex;
+- lowercase 64-hex SHA-256;
 - positive bounded archive size;
 - before != after version;
-- publication/change/rights evidence URLs required;
-- `metadata_only_no_redistribution` only in v1;
-- `changed_structure_definitions_only` oracle mode only in v1;
-- unknown enum/schema values fail closed.
+- publication/change/rights evidence required;
+- closed rights/oracle enums;
+- unknown fields fail closed;
+- deterministic canonical JSON round trip;
+- canonical manifest assertions against the reviewed frozen digests/sizes.
 
-The model does not fetch the network.
+The manifest parser performs no network access.
 
-## Phase D — Deterministic evaluator
+## Phase D — Package attestation — COMPLETE
 
-Add a thin evaluator that consumes an already validated manifest and explicit package state.
+Reusable package-state attestation is owned by `commandf-pkg` and enforces this order:
 
-Do not introduce another matcher/classifier/terminology engine/oracle implementation.
+```text
+Lockfile::verify_cache(whole graph)
+-> exact (package, version) selection
+-> locked digest == manifest digest
+-> verified target archive read
+-> archive bytes and SHA-256 == manifest
+```
+
+Regression tests cover matching states, manifest digest mismatch, size mismatch, corrupted target cache, missing/ambiguous exact lock identity, and an unrelated unverified lock entry blocking the target attestation.
+
+This makes CF-01 verification a mandatory authority rather than a caller convention.
+
+## Phase E — Deterministic evaluator — NEXT
+
+Add a thin evaluator that consumes a validated `RealIgCase` plus already resolved/attested package states.
 
 For each case:
 
-1. require attested before/after archive bytes matching manifest digest/size;
-2. call `diff_package_archives`;
-3. call canonical compatibility classification;
-4. call canonical terminology diff against the same verified states;
-5. call the CF-06 oracle path only for changed matched StructureDefinitions;
-6. reduce those reports into deterministic aggregate counts without losing the underlying report identities/hashes.
+1. obtain attested before/after root bytes from verified state;
+2. call `diff_package_archives` (CF-03);
+3. call canonical compatibility classification (CF-04);
+4. call canonical terminology evidence against the same verified lock/cache states (CF-07);
+5. call the CF-06 oracle boundary only for changed matched StructureDefinitions;
+6. reduce canonical sub-reports into deterministic aggregate counts without changing their semantic rules;
+7. retain raw sub-report bytes/hashes as evidence for CI artifacts.
 
-Raw detailed reports remain CI artifacts; the committed/public corpus summary remains compact commandF-owned evidence.
+Do not introduce another matcher, classifier, terminology engine, or oracle implementation.
 
-## Phase E — User-visible execution surface
+Unit tests use synthetic/local package fixtures. Ordinary tests must not require public network, Java, or Maven.
 
-Prefer one narrow CLI rather than benchmark shell glue:
+## Phase F — Execution surface — DECIDED
+
+CF-10 v1 exposes exactly one corpus execution surface:
 
 ```text
 commandf corpus run \
@@ -124,13 +121,21 @@ commandf corpus run \
   --format json
 ```
 
-The command may perform acquisition because corpus execution is explicitly an integration/benchmark operation, but acquisition and evaluation remain internally separated so digest verification happens before semantic analysis.
+Do not add a second public repository harness.
 
-Alternative if implementation pressure reveals the CLI is unnecessary: keep the typed evaluator public in `commandf-pkg` and use a repository-owned executable harness. This decision must be made before implementation and reflected in `spec.md`; do not silently create both.
+The CLI may acquire packages because this is an explicit integration/benchmark operation, but acquisition and semantic evaluation remain separated internally:
 
-## Phase F — Summary schema
+```text
+acquire -> CF-01 verify -> manifest attest -> evaluate
+```
 
-Proposed deterministic v1 summary:
+A selected case must never be silently skipped. Operational failure is represented explicitly and causes the real-corpus gate to fail while preserving evidence.
+
+## Phase G — Deterministic summary
+
+V1 summary reuses existing vocabulary where possible and contains no timestamps/absolute paths/random ids/network timing/temp paths.
+
+Logical shape:
 
 ```text
 schema
@@ -140,132 +145,78 @@ cases[]
   package
   before { version, sha256 }
   after { version, sha256 }
-  structural
-    changes
-  compatibility
-    findings
-    breaking
-    risky
-    additive
-    producer
-    consumer
-    both
-  terminology
-    code_system_changes
-    value_set_changes
-    binding_refinements
-  oracle
-    compared
-    agreement
-    commandf_only
-    authority_only
-    both_changed
-    uncomparable
+  structural { changes }
+  compatibility { findings, breaking, risky, additive, producer, consumer, both }
+  terminology { code_system_changes, value_set_changes, binding_refinements }
+  oracle { compared, agreement, commandf_only, authority_only, both_changed, uncomparable }
   status
 ```
 
-Exact field vocabulary must reuse existing public enum names where possible rather than invent parallel terms.
+Exact counting rules must be direct reductions over canonical report fields, not new compatibility policy.
 
-The summary does not claim clinical safety, semantic equivalence, or universal benchmark coverage.
+## Phase H — Real corpus workflow and first-result freeze
 
-## Phase G — First-result freeze
-
-After implementation and digest lock:
-
-1. run the entire v1 corpus from a clean environment;
-2. preserve raw reports as CI artifact;
-3. repeat from another clean cache;
-4. require byte-identical deterministic summary;
-5. review disagreements/unsupported evidence as findings, not failures to hide;
-6. only then freeze exact summary digest/counts as a regression baseline in corpus v1 metadata or a separate expected-results file.
-
-Any future upstream-package byte change at the same version is a hard attestation failure, not an automatic baseline update.
-
-## CI layout
-
-Preserve current `ci` and `cf06-oracle` workflows.
-
-Add a dedicated corpus job/workflow with explicit resource/time bounds because three public IG pairs plus the Java oracle are heavier than ordinary unit tests.
-
-Recommended stages:
+Add one bounded dedicated workflow for the three frozen cases. Required stages:
 
 ```text
 manifest-validation
-package-attestation
+acquisition-and-attestation
 structural-classification-terminology
 oracle-evidence
-repeat-determinism
-summary-verification
+repeat-clean-run
+deterministic-summary-equality
+artifact-upload
+repository-payload-scan
 ```
 
-CI must upload raw reports and the deterministic summary as short-retention review artifacts. Artifacts are evidence, not repository-vendored benchmark data.
+The workflow must:
+
+1. run all three cases from a clean work root;
+2. upload raw structural/compatibility/terminology/oracle reports plus deterministic summary as short-retention artifacts;
+3. run the full corpus a second time from another clean work root/cache;
+4. require byte-identical deterministic summary output;
+5. preserve failures/divergences as evidence rather than removing cases;
+6. verify no upstream IG tarball/terminology payload enters git history;
+7. only after two-run equality, freeze observed summary hash/count regression evidence.
+
+Any upstream byte change at the same package/version is a hard attestation failure, not an automatic baseline update.
 
 ## Test strategy
 
-### Manifest tests
+Manifest tests and attestation tests are already implemented as described above.
 
-- wrong schema;
-- empty corpus;
-- too many cases;
-- duplicate/out-of-order ids;
-- malformed package/version;
-- same before/after version;
-- non-R4 FHIR version;
-- malformed digest/size;
-- missing publication/change/rights metadata;
-- unsupported rights/oracle mode;
-- deterministic JSON round trip.
+Evaluator tests must use small synthetic packages and prove aggregation equals canonical underlying reports. Add explicit failure-path tests for malformed/unsupported sub-reports and no silent case removal.
 
-### Attestation tests
-
-Use synthetic/local package fixtures for unit tests:
-
-- matching digest/size passes;
-- digest mismatch fails;
-- size mismatch fails;
-- corrupted cache fails;
-- before/after state cannot alias unexpectedly.
-
-### Evaluation tests
-
-Use small synthetic packages to verify aggregation equals canonical underlying reports. Do not make ordinary unit tests depend on public network or Java/Maven.
-
-### Real integration tests
-
-The dedicated CF-10 job uses the three frozen public cases and the pinned CF-06 adapter.
+Real integration testing belongs only in the dedicated CF-10 workflow.
 
 ## Rights controls
 
 No package bytes enter git history.
 
-The corpus manifest records upstream legal/IP evidence but does not collapse mixed terminology rights into a single permissive license label. In particular, IPS contains terminology with separate upstream licensing statements; metadata-only benchmarking avoids redistribution and does not grant downstream terminology rights.
-
-Any future proposal to publish/download-bundle the source packages as a commandF benchmark dataset is a separate founder/legal authorization gate and is not CF-10.
+The corpus manifest records upstream legal/IP evidence conservatively and does not collapse mixed terminology rights into one permissive license label. Publishing or bundling source packages as a dataset is outside CF-10 and requires a separate founder/legal authorization gate.
 
 ## Reviewer priorities
 
 1. no benchmark cherry-picking after result discovery;
-2. no semantic leakage from benchmark expectations into CF-03/04/07/06;
+2. no semantic leakage into CF-03/04/07/06;
 3. no package-content redistribution;
 4. exact digest attestation before analysis;
 5. no silent skipped cases;
 6. deterministic result bytes;
 7. bounded untrusted manifest/package metadata;
-8. rights evidence remains conservative and source-specific;
+8. source-specific rights evidence;
 9. real integration failures remain visible evidence;
-10. no golden expected result authored before first verified run.
+10. no golden expected result authored before first verified two-run proof.
 
 ## Convergence condition
 
 CF-10 converges only after:
 
-- selection policy and case set remain unchanged from the pre-result spec unless an eligibility/right fact is proven false;
-- exact digests/sizes are independently discovered and frozen;
-- all three cases resolve and attest;
-- typed manifest/evaluator tests pass;
-- real corpus run completes without silent case removal;
-- two clean runs produce byte-identical summary;
-- current `ci` and `cf06-oracle` remain green;
-- dedicated corpus workflow is green on the exact final head;
+- frozen selection remains unchanged;
+- exact digests/sizes remain frozen from reviewed independent discovery;
+- typed manifest/attestation/evaluator tests pass;
+- all three real cases execute without silent removal;
+- two clean runs produce byte-identical deterministic summary;
+- `ci`, `cf06-oracle`, CF-11 proof, and dedicated corpus workflow are green on the exact final head;
 - substantive reviewer findings are fixed or explicitly rejected with evidence;
-- `spec.md`, `plan.md`, `tasks.md`, donor record, corpus manifest, and `convergence.md` agree on the final truth.
+- `spec.md`, `plan.md`, `tasks.md`, donor record, corpus manifest, implementation, and `convergence.md` agree on final truth.
