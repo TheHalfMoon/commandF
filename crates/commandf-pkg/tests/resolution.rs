@@ -104,7 +104,7 @@ fn resolves_transitive_dependency_and_highest_stable_patch() {
 }
 
 #[test]
-fn incompatible_versions_fail_closed() {
+fn resolves_branch_local_concrete_versions_of_same_package() {
     let mut source = MemorySource::default();
     source.add("acme.left", "1.0.0", &[("acme.dep", "1.0.0")]);
     source.add("acme.right", "1.0.0", &[("acme.dep", "2.0.0")]);
@@ -113,14 +113,96 @@ fn incompatible_versions_fail_closed() {
     let dir = tempdir().unwrap();
     let cache = PackageCache::new(dir.path());
 
-    let error = Resolver::new(&source, &cache)
+    let lock = Resolver::new(&source, &cache)
         .resolve(vec![
             PackageRequest::parse("acme.left@1.0.0").unwrap(),
             PackageRequest::parse("acme.right@1.0.0").unwrap(),
         ])
-        .unwrap_err();
+        .unwrap();
 
-    assert!(matches!(error, PackageError::VersionConflict { .. }));
+    let versions = lock
+        .packages
+        .iter()
+        .filter(|package| package.name == "acme.dep")
+        .map(|package| package.version.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(versions, vec!["1.0.0", "2.0.0"]);
+    lock.verify_cache(&cache).unwrap();
+}
+
+#[test]
+fn deduplicates_the_same_concrete_identity_across_branches() {
+    let mut source = MemorySource::default();
+    source.add("acme.left", "1.0.0", &[("acme.dep", "1.0.0")]);
+    source.add("acme.right", "1.0.0", &[("acme.dep", "1.0.0")]);
+    source.add("acme.dep", "1.0.0", &[]);
+    let dir = tempdir().unwrap();
+
+    let lock = Resolver::new(&source, &PackageCache::new(dir.path()))
+        .resolve(vec![
+            PackageRequest::parse("acme.left@1.0.0").unwrap(),
+            PackageRequest::parse("acme.right@1.0.0").unwrap(),
+        ])
+        .unwrap();
+
+    assert_eq!(
+        lock.packages
+            .iter()
+            .filter(|package| package.name == "acme.dep" && package.version == "1.0.0")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn exact_and_patch_wildcard_requests_can_resolve_to_distinct_versions_deterministically() {
+    let mut source = MemorySource::default();
+    source.add("acme.dep", "1.2.0", &[]);
+    source.add("acme.dep", "1.2.3", &[]);
+    source.add("acme.dep", "1.2.4-beta.1", &[]);
+    let first_dir = tempdir().unwrap();
+    let second_dir = tempdir().unwrap();
+
+    let first = Resolver::new(&source, &PackageCache::new(first_dir.path()))
+        .resolve(vec![
+            PackageRequest::parse("acme.dep@1.2.0").unwrap(),
+            PackageRequest::parse("acme.dep@1.2.x").unwrap(),
+        ])
+        .unwrap();
+    let second = Resolver::new(&source, &PackageCache::new(second_dir.path()))
+        .resolve(vec![
+            PackageRequest::parse("acme.dep@1.2.x").unwrap(),
+            PackageRequest::parse("acme.dep@1.2.0").unwrap(),
+        ])
+        .unwrap();
+
+    assert_eq!(
+        first
+            .packages
+            .iter()
+            .map(|package| (package.name.as_str(), package.version.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("acme.dep", "1.2.0"), ("acme.dep", "1.2.3")]
+    );
+    assert_eq!(first.to_bytes().unwrap(), second.to_bytes().unwrap());
+}
+
+#[test]
+fn exact_identity_cycle_terminates_by_deduplication() {
+    let mut source = MemorySource::default();
+    source.add("acme.a", "1.0.0", &[("acme.b", "1.0.0")]);
+    source.add("acme.b", "1.0.0", &[("acme.a", "1.0.0")]);
+    let dir = tempdir().unwrap();
+    let cache = PackageCache::new(dir.path());
+
+    let lock = Resolver::new(&source, &cache)
+        .resolve(vec![PackageRequest::parse("acme.a@1.0.0").unwrap()])
+        .unwrap();
+
+    assert_eq!(lock.packages.len(), 2);
+    assert_eq!(lock.packages[0].name, "acme.a");
+    assert_eq!(lock.packages[1].name, "acme.b");
+    lock.verify_cache(&cache).unwrap();
 }
 
 #[test]
