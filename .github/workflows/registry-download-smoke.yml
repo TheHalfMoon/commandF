@@ -38,7 +38,7 @@ jobs:
       - name: Real secondary redirect-to-tarball response
         run: cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact
 
-      - name: Diagnostic US Core archive layout
+      - name: Diagnostic dependency manifest layout
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -48,54 +48,90 @@ jobs:
           import tarfile
           import urllib.request
 
-          LIMIT = 128 * 1024 * 1024
-          url = 'https://packages.fhir.org/hl7.fhir.us.core/8.0.1'
-          with urllib.request.urlopen(url, timeout=30) as response:
-              data = response.read(LIMIT + 1)
-          if len(data) > LIMIT:
-              raise SystemExit('compressed archive exceeds 128 MiB probe bound')
-          if not data.startswith(b'\x1f\x8b'):
-              raise SystemExit('not gzip')
+          COMPRESSED_LIMIT = 128 * 1024 * 1024
+          DIAGNOSTIC_DECOMPRESSED_LIMIT = 768 * 1024 * 1024
+
+          def read_url(url, limit=COMPRESSED_LIMIT):
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = response.read(limit + 1)
+              if len(data) > limit:
+                  raise RuntimeError(f'compressed response exceeds diagnostic bound: {url}')
+              return data
 
           class CountingReader:
               def __init__(self, inner):
                   self.inner = inner
                   self.read_bytes = 0
               def read(self, size=-1):
+                  remaining = DIAGNOSTIC_DECOMPRESSED_LIMIT - self.read_bytes
+                  if remaining <= 0:
+                      raise RuntimeError('diagnostic decompressed bound exceeded before manifest')
+                  if size < 0 or size > remaining:
+                      size = remaining
                   chunk = self.inner.read(size)
                   self.read_bytes += len(chunk)
                   return chunk
 
-          gz = gzip.GzipFile(fileobj=io.BytesIO(data), mode='rb')
-          counted = CountingReader(gz)
-          entries_before = 0
-          payload_before = 0
-          max_entry = ('', 0)
-          manifest = None
-          with tarfile.open(fileobj=counted, mode='r|') as tf:
-              for member in tf:
-                  normalized = member.name[2:] if member.name.startswith('./') else member.name
-                  if member.size > max_entry[1]:
-                      max_entry = (member.name, member.size)
-                  if normalized == 'package/package.json':
-                      manifest = {
-                          'index': entries_before,
-                          'size': member.size,
-                          'decompressed_bytes_read_to_header': counted.read_bytes,
-                      }
-                      break
-                  entries_before += 1
-                  payload_before += member.size
-          if manifest is None:
-              raise SystemExit('package/package.json not found')
-          print(json.dumps({
-              'compressed_bytes': len(data),
-              'entries_before_package_json': entries_before,
-              'payload_bytes_before_package_json': payload_before,
-              'manifest': manifest,
-              'largest_entry_seen': {'name': max_entry[0], 'bytes': max_entry[1]},
-              'read_to_manifest_ratio': round(manifest['decompressed_bytes_read_to_header'] / len(data), 3),
-          }, indent=2))
+          def parse_version(text):
+              core = text.split('-', 1)[0].split('+', 1)[0]
+              parts = core.split('.')
+              if len(parts) != 3 or not all(p.isdigit() for p in parts):
+                  return None
+              if '-' in text:
+                  return None
+              return tuple(map(int, parts))
+
+          def select_version(name, constraint):
+              if not constraint.endswith('.x'):
+                  return constraint
+              major, minor, _ = constraint.split('.')
+              metadata = json.loads(read_url(f'https://packages.fhir.org/{name}', 4 * 1024 * 1024))
+              matches = []
+              for raw in metadata.get('versions', {}):
+                  parsed = parse_version(raw)
+                  if parsed and parsed[0] == int(major) and parsed[1] == int(minor):
+                      matches.append((parsed, raw))
+              if not matches:
+                  raise RuntimeError(f'no patch wildcard match for {name}@{constraint}')
+              return max(matches)[1]
+
+          def inspect(name, version):
+              url = f'https://packages.fhir.org/{name}/{version}'
+              data = read_url(url)
+              if not data.startswith(b'\x1f\x8b'):
+                  raise RuntimeError(f'not gzip: {name}@{version}')
+              counted = CountingReader(gzip.GzipFile(fileobj=io.BytesIO(data), mode='rb'))
+              entries_before = 0
+              payload_before = 0
+              with tarfile.open(fileobj=counted, mode='r|') as tf:
+                  for member in tf:
+                      normalized = member.name[2:] if member.name.startswith('./') else member.name
+                      if normalized == 'package/package.json':
+                          body = tf.extractfile(member).read()
+                          manifest = json.loads(body)
+                          return {
+                              'name': name,
+                              'version': version,
+                              'compressed_bytes': len(data),
+                              'entries_before_manifest': entries_before,
+                              'payload_bytes_before_manifest': payload_before,
+                              'decompressed_bytes_read_to_manifest': counted.read_bytes,
+                              'manifest_bytes': member.size,
+                              'dependencies': manifest.get('dependencies', {}),
+                          }
+                      entries_before += 1
+                      payload_before += member.size
+              raise RuntimeError(f'manifest not found: {name}@{version}')
+
+          root = inspect('hl7.fhir.us.core', '8.0.1')
+          print('ROOT')
+          print(json.dumps(root, indent=2, sort_keys=True))
+          print('DIRECT DEPENDENCIES')
+          for name, constraint in sorted(root['dependencies'].items()):
+              version = select_version(name, constraint)
+              result = inspect(name, version)
+              result['constraint'] = constraint
+              print(json.dumps(result, indent=2, sort_keys=True))
           PY
 
       - name: End-to-end exact US Core resolve and verify
