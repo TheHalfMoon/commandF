@@ -178,16 +178,8 @@ fn value_set_binding_evidence_equivalent(
         kind: ResourceKeyKind::Canonical,
         value: exact_identity(&first.url, first.version.as_deref()),
     };
-    let first_self = compare_value_set_expansions(
-        resource.clone(),
-        &first.value,
-        &first.value,
-    )?;
-    let second_self = compare_value_set_expansions(
-        resource.clone(),
-        &second.value,
-        &second.value,
-    )?;
+    let first_self = compare_value_set_expansions(resource.clone(), &first.value, &first.value)?;
+    let second_self = compare_value_set_expansions(resource.clone(), &second.value, &second.value)?;
     if first_self != second_self {
         return Ok(false);
     }
