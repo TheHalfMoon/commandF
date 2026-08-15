@@ -30,7 +30,10 @@ jobs:
       - name: Apply bounded oracle-context correction
         run: python3 .github/scripts/apply-cf10-oracle-context-fix.py
 
-      - name: Format
+      - name: Apply rustfmt
+        run: cargo fmt --all
+
+      - name: Verify format
         run: cargo fmt --all -- --check
 
       - name: Clippy
