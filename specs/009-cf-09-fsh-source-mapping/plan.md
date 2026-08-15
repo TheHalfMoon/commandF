@@ -1,15 +1,15 @@
 # CF-09 Implementation Plan — FSH Source Mapping
 
-Status: implemented / convergence candidate
+Status: converged / final review
 
 ## Stack
 
 ```text
-base: feat/cf-08-github-action-annotations
-base SHA: 03dbdc956847b9edd2eedd58058894118e338beb
-implementation candidate: 3819f35116a5bf18070cc00453f34176b549688a
-implementation tree: 3d80d4a76d29611a6cde771fc4d343d58e44435b
-implementation CI: 31840014291 — SUCCESS
+canonical base: main
+canonical main used for reconciliation: f2c331b3f832407b6834aaaa3b5b03ef73b770c9
+reconciled implementation tree: b633e2a1d46419614801d0bb3f9671a422df30bd
+Qodo/reviewer-fix tree before final CodeRabbit correction: d36b0042289c3a8c8cad270892a49a251802b89e
+current merge-candidate head and exact ci/cf06-oracle run ids: PR #10 metadata
 ```
 
 ## Implemented design

@@ -1,11 +1,11 @@
 # CF-09 Convergence — FSH Source Mapping
 
-Status: reconciled with canonical main; implementation exact-head gates green; final documentation-head revalidation required before merge.
+Status: converged / final review; exact current-head CI evidence is maintained in PR #10 metadata.
 
 ## Decision
 
 ```text
-CF-09_RECONCILED_READY_FOR_FINAL_REVIEW_AFTER_DOCS_HEAD_CI
+CF-09_CONVERGED_READY_FOR_FINAL_REVIEW
 ```
 
 CF-09 adds source attribution only. It does not reinterpret structural evidence, compatibility severity, policy, pass/fail decisions, terminology semantics, HL7-oracle evidence, or GitHub Action trust boundaries.
@@ -21,6 +21,8 @@ implementation branch: feat/cf-09-fsh-source-mapping
 pre-reconciliation CF-09 head: 4966f645becfa38cdbd3a94a9f5c201952222ce1
 reconciled implementation head: 9907531264227be0c63293d1d1c478ad51b107e2
 reconciled implementation tree: b633e2a1d46419614801d0bb3f9671a422df30bd
+Qodo/reviewer-fix tree before final CodeRabbit correction: d36b0042289c3a8c8cad270892a49a251802b89e
+current merge-candidate head and exact ci/cf06-oracle run ids: PR #10 metadata
 ```
 
 The reconciled commit has the pre-reconciliation CF-09 head as first parent and canonical main as second parent. The final tree was reconstructed from tested Git blob identities and matched the independently tested reconciliation tree byte-for-byte before the CF-09 branch moved.
@@ -191,17 +193,17 @@ Passed on the same exact CF-09 head:
 
 ## Reviewer truth
 
-### CodeRabbit
-
-Historical CF-09 review requests encountered the reviewer PR/rate limit and did not return a substantive final-head review. No CodeRabbit PASS is claimed. A fresh final-head review may be requested after the PR is marked ready.
-
 ### Qodo
 
-No substantive Qodo result has been observed. No Qodo PASS is claimed.
+Qodo produced four substantive findings. Three were fixed/corrected (repeated source rescans, producer/consumer mapped-report size mismatch, and overbroad stale-range wording). The fourth — render-time rebuilding of persisted mapping evidence — is retained as an intentional security tradeoff and mitigated by the per-artifact cache. All four Qodo threads are resolved. No separate Qodo approval state is invented.
+
+### CodeRabbit
+
+The final reviewer sweep after Qodo remediation produced two actionable findings: the public persisted-map decoder needed the same 80 MiB bound **before** JSON deserialization, and the Spec Kit status files needed one synchronized convergence state. Both findings are addressed in the current authority state. Current exact-head CodeRabbit status and any later incremental findings are recorded in PR #10 metadata/review threads; no unstated PASS is claimed here.
 
 ### Codex Code Review / Codex Security
 
-No Codex Code Review result has been observed for the final reconciled head. The installed Codex Security methodology informed the manual security audit, but the Codex Security product scan executor was not run in this host. No Codex review or Codex Security PASS is claimed.
+Historical Codex review found no major issues after earlier CF-09 security corrections, but final-current-head Codex evidence is tracked in PR #10 rather than inferred from historical heads. The Codex Security methodology informed the manual security audit; the Codex Security product scan executor was not run in this host. No Codex Security PASS is claimed.
 
 ### Ponytail / independent reviewer
 
@@ -213,13 +215,15 @@ Reviewer unavailability is recorded rather than substituted with invented certif
 
 CF-09 does not implement a custom FSH parser, unsupported exact rule-line mapping, live SUSHI execution/download, non-FSH source mapping, SARIF physical-location rewriting in V1, CF-10 corpus work, graph/blast radius, baselines/suppression, AutoFix, mapping execution, or AI semantic authority.
 
-## Final documentation-head rule
+## Exact-head evidence rule
 
-This convergence update changes documentation only. Its resulting repository head must pass both configured workflows again:
+CF-09's authority state is **converged / final review**. The exact current branch SHA and its `ci` / `cf06-oracle` run ids are maintained in PR #10 metadata so this document does not create an endless self-referential SHA chain.
+
+Every repository head proposed for merge must independently pass both configured workflows:
 
 ```text
 ci
 cf06-oracle
 ```
 
-The final documentation head and both final run ids are recorded in PR #10 metadata/body after those workflows settle. A failure reopens convergence. The convergence document intentionally does not self-reference its own future commit SHA/run ids, avoiding an endless documentation-commit chain.
+A failure on the current merge-candidate head reopens convergence. Historical successful runs are evidence for their recorded heads only.

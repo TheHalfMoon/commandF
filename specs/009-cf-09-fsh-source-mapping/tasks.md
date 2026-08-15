@@ -1,6 +1,6 @@
 # CF-09 Tasks — FSH Source Mapping
 
-Status: converged
+Status: converged / final review
 
 - [x] T001 — Record pinned SUSHI donor/source-index provenance and no-copy boundary.
 - [x] T002 — Add typed schema-v1 source-map model and deterministic JSON serialization.
