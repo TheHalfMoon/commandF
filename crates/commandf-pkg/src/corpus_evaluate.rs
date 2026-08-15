@@ -25,7 +25,12 @@ pub fn evaluate_corpus_case(
     before: CorpusPackageStateInput<'_>,
     after: CorpusPackageStateInput<'_>,
 ) -> Result<CorpusCaseReports, CorpusError> {
-    attest_corpus_package_state(case, CorpusPackageSide::Before, before.lockfile, before.cache)?;
+    attest_corpus_package_state(
+        case,
+        CorpusPackageSide::Before,
+        before.lockfile,
+        before.cache,
+    )?;
     attest_corpus_package_state(case, CorpusPackageSide::After, after.lockfile, after.cache)?;
 
     let before_bytes = before
@@ -184,7 +189,10 @@ pub fn summarize_corpus_case(
     })
 }
 
-pub fn failed_corpus_case_summary(case: &RealIgCase, status: CorpusCaseStatus) -> CorpusCaseSummary {
+pub fn failed_corpus_case_summary(
+    case: &RealIgCase,
+    status: CorpusCaseStatus,
+) -> CorpusCaseSummary {
     CorpusCaseSummary {
         case_id: case.id.clone(),
         package: case.package.clone(),
