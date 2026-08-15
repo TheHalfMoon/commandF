@@ -48,6 +48,42 @@ pub enum CorpusError {
         case_id: String,
         field: &'static str,
     },
+    #[error("case {case_id} failed mandatory CF-01 cache verification: {message}")]
+    CacheVerification { case_id: String, message: String },
+    #[error("case {case_id} lock is missing exact package {package}@{version}")]
+    LockedPackageMissing {
+        case_id: String,
+        package: String,
+        version: String,
+    },
+    #[error("case {case_id} lock contains duplicate exact package {package}@{version}")]
+    LockedPackageAmbiguous {
+        case_id: String,
+        package: String,
+        version: String,
+    },
+    #[error("case {case_id} lock digest mismatch for {package}@{version}: expected {expected}, found {found}")]
+    LockedPackageDigestMismatch {
+        case_id: String,
+        package: String,
+        version: String,
+        expected: String,
+        found: String,
+    },
+    #[error("case {case_id} {side} archive size mismatch: expected {expected}, found {found}")]
+    ArchiveSizeMismatch {
+        case_id: String,
+        side: &'static str,
+        expected: u64,
+        found: u64,
+    },
+    #[error("case {case_id} {side} archive digest mismatch: expected {expected}, found {found}")]
+    ArchiveDigestMismatch {
+        case_id: String,
+        side: &'static str,
+        expected: String,
+        found: String,
+    },
     #[error("canonical corpus serialization failed: {0}")]
     Serialization(String),
 }
