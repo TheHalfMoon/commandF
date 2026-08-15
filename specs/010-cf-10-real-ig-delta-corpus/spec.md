@@ -1,6 +1,6 @@
 # CF-10 — Public Real-IG Delta Corpus
 
-Status: planned / selection rules frozen before digest discovery
+Status: implementation authorized / six frozen package states eligible and digest-frozen
 
 ## Purpose
 
@@ -35,7 +35,7 @@ Once a case passes this gate, later unfavorable output cannot remove it from cor
 
 ## Corpus v1 families
 
-The initial frozen candidate set deliberately spans three distinct interoperability contexts:
+The frozen corpus remains exactly:
 
 ### C001 — US Core annual national-core delta
 
@@ -49,8 +49,6 @@ FHIR: 4.0.1
 realm/context: US national/base core
 ```
 
-Rationale: US Core is an annually revised base IG and publishes explicit cross-version/change guidance. The pair is adjacent published annual releases and is not chosen from commandF output.
-
 ### C002 — International Patient Summary major-generation delta
 
 ```text
@@ -62,8 +60,6 @@ after publication: https://hl7.org/fhir/uv/ips/en/
 FHIR: 4.0.1
 realm/context: international patient summary
 ```
-
-Rationale: IPS 2 documents explicit non-compatible and compatible substantive changes relative to the previous generation. This gives the corpus an international, terminology-rich document/profile family rather than another US-only base guide.
 
 ### C003 — mCODE specialty-oncology major delta
 
@@ -77,7 +73,27 @@ FHIR: 4.0.1
 realm/context: oncology specialty IG
 ```
 
-Rationale: mCODE publishes stable R4 generations and has explicit version-differential/change material. It exercises specialty profiles and terminology rather than general core/document-only content.
+No case or version was replaced after discovery.
+
+## Foundation reconciliation and eligibility truth
+
+CF-11 multi-version package-graph support is canonical on `main` at merge commit:
+
+```text
+5cb1a4c3445c0ebd86654cfb467a5e008e801c3e
+```
+
+It was reconciled into the frozen CF-10 branch by merge commit:
+
+```text
+5ec463f0ae53b76f9c2c151335d98598b53e5abc
+```
+
+The original frozen CF-10 files remained byte-identical across that reconciliation.
+
+The same six package states were then rerun without changing the corpus. `cf10-digest-discovery` run `31890014888` succeeded and produced reviewed artifact `9248341586`; a later exact-head rerun `31890859039` also succeeded. Every frozen state resolved twice into independent clean caches, passed CF-01 verification, and produced identical archive bytes/digests across the two resolutions.
+
+The canonical manifest freezes only those observed digest/size facts. No semantic result counts were used to select or replace cases.
 
 ## Rights and redistribution boundary
 
@@ -90,7 +106,7 @@ The corpus manifest stores only:
 - package/version identity;
 - commandF-observed content digest after public resolution;
 - publication/provenance URLs;
-- upstream rights/IP evidence URLs and a conservative rights note;
+- upstream rights/IP evidence URLs and conservative source-specific metadata;
 - deterministic commandF result metadata/hashes that contain no redistributed source package bytes.
 
 Package bytes are ephemeral runtime inputs acquired through the existing public package resolver and verified against the locked digest. Mixed upstream terminology/IP statements remain upstream obligations; commandF's repository license MUST NOT be interpreted as relicensing them.
@@ -99,16 +115,16 @@ Package bytes are ephemeral runtime inputs acquired through the existing public 
 
 The package SHA-256 values are not copied from web pages or manually invented.
 
-For each frozen case, an isolated discovery gate MUST:
+For each frozen state, discovery MUST:
 
 1. resolve the exact package version through commandF CF-01;
 2. record the resolver-produced content SHA-256 and byte size;
 3. independently resolve the same exact version into a second clean cache;
 4. require identical digest and archive bytes between the two resolutions;
-5. verify the package through CF-01 cache verification;
-6. persist only the digest/size metadata into the corpus manifest.
+5. verify both package graphs through CF-01 cache verification;
+6. persist only reviewed digest/size metadata into the corpus manifest.
 
-After the digest is frozen, ordinary corpus runs MUST fail closed if a public resolution produces different bytes for the same package/version.
+After a digest is frozen, ordinary corpus runs MUST fail closed if resolution produces different bytes for the same package/version.
 
 ## Manifest contract
 
@@ -146,33 +162,73 @@ cases[]
 
 Rules:
 
-- case ids are unique and stable;
-- package names/versions are exact, never ranges/wildcards;
+- schema is exactly `1`;
+- manifest bytes and case count are bounded before/after decode as applicable;
+- case ids are unique, stable, and lexicographically ordered;
+- package names/versions are exact, never ranges/wildcards or path-like identities;
 - archive digests are lowercase SHA-256 hex;
 - archive sizes are positive and bounded;
 - `fhir_version` is exactly `4.0.1` in CF-10 v1;
 - publication/change/rights evidence is explicit per case;
 - `rights_mode` for v1 is `metadata_only_no_redistribution`;
 - `oracle_mode` is `changed_structure_definitions_only`;
-- unknown schema versions fail closed;
-- malformed/duplicate/unsorted cases fail closed.
+- unknown schema, fields, or enum values fail closed;
+- malformed/duplicate/unsorted cases fail closed;
+- canonical JSON round-trip bytes are deterministic.
+
+The manifest parser does not fetch the network.
+
+## Package attestation contract
+
+Before any semantic analysis of a case side, commandF MUST:
+
+1. verify the complete supplied lockfile cache through the canonical CF-01 `Lockfile::verify_cache` authority;
+2. require exactly one locked package matching the manifest `(package, version)` identity;
+3. require the locked digest to equal the manifest digest;
+4. read the target archive only through verified cache access;
+5. require the observed archive byte length and SHA-256 to equal the manifest state.
+
+A corrupt or missing dependency anywhere in the supplied lock graph blocks attestation even if the root archive itself is present.
+
+## Authorized execution surface
+
+CF-10 v1 authorizes exactly one user-visible execution surface:
+
+```text
+commandf corpus run \
+  --manifest corpus/real-ig/v1/corpus.json \
+  --work-root <path> \
+  --oracle-adapter <path> \
+  --oracle-java <path> \
+  --format json
+```
+
+There is no second repository-owned public corpus harness in v1.
+
+The command is an integration/benchmark operation and MAY acquire exact packages from the public FHIR package ecosystem, but it MUST preserve a hard internal boundary:
+
+```text
+acquire -> CF-01 verify -> manifest digest/size attest -> semantic evaluation
+```
+
+Semantic evaluation MUST NOT begin for a case until both before/after states attest successfully.
 
 ## Runner contract
 
-CF-10 MAY introduce a thin deterministic corpus orchestrator, but it MUST call existing commandF authorities rather than reimplement their semantics.
+A corpus run processes every frozen case in canonical case-id order. For one case it performs:
 
-A corpus run for one case performs:
+1. exact before/after package resolution into isolated state roots;
+2. full CF-01 cache verification for each state;
+3. manifest digest and archive-size attestation for both roots;
+4. CF-03 structural diff using the attested root bytes;
+5. CF-04 compatibility classification of that exact structural report;
+6. CF-07 terminology evidence using those same verified package graphs;
+7. CF-06 oracle comparison only for changed matched StructureDefinitions and only through the pinned adapter boundary;
+8. deterministic case-summary emission plus raw sub-report evidence.
 
-1. exact before/after package resolution into isolated caches;
-2. digest and archive-size attestation against the frozen manifest;
-3. CF-01 cache verification;
-4. CF-03 structural diff;
-5. CF-04 classification;
-6. CF-07 terminology diff;
-7. CF-06 oracle comparison for changed comparable StructureDefinition pairs using the pinned local adapter;
-8. deterministic case-summary emission.
+The runner MUST reuse those canonical authorities rather than reimplementing their semantics.
 
-A case failure is represented explicitly. The runner MUST NOT skip a selected case because of unsupported content, a commandF/oracle disagreement, a network/package failure, or an unexpected finding count.
+A case failure is represented explicitly. The runner MUST NOT silently skip a selected case because of unsupported content, a commandF/oracle disagreement, network/package failure, attestation failure, or unexpected finding count.
 
 ## Result contract
 
@@ -195,7 +251,7 @@ case_status
 
 `case_status` is operational/evidence state only and MUST NOT rewrite CF-04/05 compatibility truth.
 
-V1 summary output MUST be deterministic for the same manifest, pinned packages, commandF build, and pinned oracle.
+V1 summary output MUST be deterministic for the same canonical manifest, pinned packages, commandF build, and pinned oracle. It MUST NOT serialize timestamps, host-absolute paths, random ids, network timing, temporary cache paths, or unordered-map iteration.
 
 ## No golden-answer fabrication
 
@@ -203,9 +259,9 @@ Before the first real corpus execution, CF-10 MUST NOT hard-code expected struct
 
 After the first independently verified run, exact result hashes/counts MAY be frozen as regression evidence only if:
 
-- the raw commandF outputs are preserved in CI artifacts for review;
-- a second clean run is byte-identical;
-- the expected values are derived from the observed deterministic run, not edited to make tests pass;
+- raw commandF sub-reports are preserved in CI artifacts for review;
+- a second clean run is byte-identical at the deterministic summary layer;
+- expected values are derived from the observed deterministic run, not edited to make tests pass;
 - future differences fail visibly and require explicit corpus-version reconciliation.
 
 ## Failure semantics
@@ -225,19 +281,6 @@ CF-10 fails closed on:
 
 Failures are never silently converted to corpus exclusion or pass.
 
-## Determinism and reproducibility
-
-The corpus must not serialize:
-
-- timestamps;
-- host-absolute paths;
-- random ids;
-- network timing;
-- temporary cache paths;
-- unordered map iteration.
-
-Case order is lexicographic by stable case id. Aggregate maps are canonically ordered.
-
 ## Security boundary
 
 Corpus metadata is untrusted input. The implementation must bound manifest/result sizes and counts, reject path-like package/version tricks where a package identity is expected, use explicit subprocess paths for the oracle boundary, and inherit CF-01/CF-06 process/cache hardening rather than bypass it.
@@ -251,7 +294,8 @@ A converged CF-10 candidate requires:
 - frozen selection methodology before result discovery;
 - exact package digest discovery using two independent clean resolutions;
 - provenance/rights evidence for every case;
-- schema and failure-path tests;
+- typed manifest and failure-path tests;
+- mandatory package attestation before semantic execution;
 - deterministic two-run corpus equality;
 - `cargo fmt --all -- --check`;
 - locked workspace Clippy with `-D warnings`;
