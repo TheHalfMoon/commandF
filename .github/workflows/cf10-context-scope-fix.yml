@@ -32,10 +32,12 @@ jobs:
         run: |
           set -euo pipefail
           cp .github/scripts/apply-cf10-context-scope-fix.py /tmp/apply-cf10-context-scope-fix.py
+          cp .github/scripts/apply-cf10-context-scope-fix-v2.py /tmp/apply-cf10-context-scope-fix-v2.py
           git fetch origin feat/cf-10-real-ig-delta-corpus
           git checkout -B cf10-target origin/feat/cf-10-real-ig-delta-corpus
           test "$(git rev-parse HEAD)" = "e5391d8ce968d001e1f9e3434b9e310acce248f8"
           python /tmp/apply-cf10-context-scope-fix.py
+          python /tmp/apply-cf10-context-scope-fix-v2.py
           cargo fmt --all
           changed="$(git diff --name-only | sort)"
           printf '%s\n' "$changed"
