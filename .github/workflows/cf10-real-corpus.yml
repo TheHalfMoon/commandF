@@ -1,0 +1,120 @@
+name: cf10-real-corpus
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf10-real-corpus.yml
+      - corpus/real-ig/v1/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - tools/hl7-oracle/**
+      - Cargo.toml
+      - Cargo.lock
+  push:
+    branches:
+      - feat/cf-10-real-ig-delta-corpus
+    paths:
+      - .github/workflows/cf10-real-corpus.yml
+      - corpus/real-ig/v1/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - tools/hl7-oracle/**
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Build pinned HL7 oracle adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+
+      - name: Build commandF corpus runner
+        run: cargo build --locked -p commandf
+
+      - name: Run frozen corpus from clean state A
+        run: |
+          set -euo pipefail
+          test ! -e /tmp/cf10-real-a
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-real-a \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-summary-a.json
+          cmp /tmp/cf10-summary-a.json /tmp/cf10-real-a/summary.json
+
+      - name: Run frozen corpus from independent clean state B
+        run: |
+          set -euo pipefail
+          test ! -e /tmp/cf10-real-b
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-real-b \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-summary-b.json
+          cmp /tmp/cf10-summary-b.json /tmp/cf10-real-b/summary.json
+
+      - name: Require byte-identical deterministic summaries
+        run: |
+          set -euo pipefail
+          cmp /tmp/cf10-summary-a.json /tmp/cf10-summary-b.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path('/tmp/cf10-summary-a.json').read_text())
+          assert summary['schema'] == 1
+          assert [case['case_id'] for case in summary['cases']] == ['C001', 'C002', 'C003']
+          assert all(case['status'] == 'complete' for case in summary['cases'])
+          assert len(summary['manifest_sha256']) == 64
+          print(Path('/tmp/cf10-summary-a.json').read_text())
+          PY
+
+      - name: Assert metadata-only repository boundary
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
+            echo 'unexpected upstream archive tracked in repository' >&2
+            exit 1
+          fi
+          test -z "$(find corpus donors specs -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print)"
+
+      - name: Upload short-retention corpus evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf10-real-corpus-evidence
+          path: |
+            /tmp/cf10-summary-a.json
+            /tmp/cf10-summary-b.json
+            /tmp/cf10-real-a/summary.json
+            /tmp/cf10-real-b/summary.json
+            /tmp/cf10-real-a/evidence
+            /tmp/cf10-real-b/evidence
+          if-no-files-found: warn
+          retention-days: 3
