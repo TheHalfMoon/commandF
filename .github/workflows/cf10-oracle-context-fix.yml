@@ -1,0 +1,54 @@
+name: cf10-oracle-context-fix
+
+on:
+  push:
+    branches:
+      - ops/cf10-oracle-context-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          components: rustfmt, clippy
+
+      - name: Apply bounded oracle-context correction
+        run: python3 .github/scripts/apply-cf10-oracle-context-fix.py
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Full workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Build pinned HL7 oracle adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+
+      - name: Commit tested tree without ops tooling
+        run: |
+          set -euo pipefail
+          rm -f .github/scripts/apply-cf10-oracle-context-fix.py
+          rm -f .github/workflows/cf10-oracle-context-fix.yml
+          git add -A
+          git config user.name 'commandF ops'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(cf06): load verified dependency contexts for oracle'
+          git push origin HEAD:ops/cf10-oracle-context-fix
