@@ -1,0 +1,57 @@
+name: hl7-upstream-patch-export
+
+on:
+  push:
+    branches:
+      - exp/hl7-comparator-fix-qualification
+    paths:
+      - .github/workflows/hl7-upstream-patch-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commandF experiment
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact pinned HL7 source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          repository: hapifhir/org.hl7.fhir.core
+          ref: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          path: hl7-core
+          persist-credentials: false
+
+      - name: Export combined candidate patch
+        run: |
+          set -euo pipefail
+          test "$(git -C hl7-core rev-parse HEAD)" = "d06577dbc5c62c74a2a8823fbc4830a3024d5b0b"
+          test -z "$(git -C hl7-core status --porcelain)"
+
+          python3 .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            hl7-core --variant combined
+          git -C hl7-core diff --check
+          git -C hl7-core diff --binary > "$GITHUB_WORKSPACE/hl7-comparator-fix.patch"
+          test -s "$GITHUB_WORKSPACE/hl7-comparator-fix.patch"
+
+          git -C hl7-core reset --hard d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          git -C hl7-core clean -fd
+          git -C hl7-core apply --check "$GITHUB_WORKSPACE/hl7-comparator-fix.patch"
+          sha256sum "$GITHUB_WORKSPACE/hl7-comparator-fix.patch" \
+            > "$GITHUB_WORKSPACE/hl7-comparator-fix.patch.sha256"
+
+      - name: Upload upstream patch
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hl7-comparator-fix-upstream-patch
+          path: |
+            hl7-comparator-fix.patch
+            hl7-comparator-fix.patch.sha256
+          if-no-files-found: error
+          retention-days: 7
