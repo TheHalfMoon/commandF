@@ -1,0 +1,267 @@
+name: hl7-upstream-fix-qualification
+
+on:
+  push:
+    branches:
+      - exp/hl7-comparator-fix-qualification
+    paths:
+      - .github/scripts/hl7-upstream-fix/**
+      - .github/workflows/hl7-upstream-fix-qualification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prove-candidate-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout commandF experiment
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact pinned HL7 source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          repository: hapifhir/org.hl7.fhir.core
+          ref: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          path: hl7-core
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Verify exact experimental baselines
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/exp/hl7-comparator-fix-qualification)"
+          test "$(git -C hl7-core rev-parse HEAD)" = "d06577dbc5c62c74a2a8823fbc4830a3024d5b0b"
+          git -C hl7-core diff --exit-code
+          git -C hl7-core status --porcelain
+
+      - name: Test commandF qualification helpers
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover \
+            -s .github/scripts/cf10-oracle-qualification \
+            -p 'test_*.py'
+          python3 -m py_compile \
+            .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            .github/scripts/hl7-upstream-fix/prove_candidate_fix.py
+
+      - name: Build exact commandF and baseline oracle adapter
+        run: |
+          set -euo pipefail
+          cargo build --locked -p commandf
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
+          mkdir -p /tmp/cf10-probe-classes
+          javac \
+            -cp tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            -d /tmp/cf10-probe-classes \
+            .github/scripts/cf10-oracle-qualification/QualificationProbe.java
+
+      - name: Acquire exact C001 and C002 states once
+        run: |
+          set -euo pipefail
+          test ! -e /tmp/cf10-hl7-fix-states
+          python3 .github/scripts/cf10-oracle-qualification/qualify_cf10_oracle.py \
+            acquire \
+            --commandf ./target/debug/commandf \
+            --work-root /tmp/cf10-hl7-fix-states \
+            --output /tmp/cf10-hl7-fix-acquisition.json
+
+      - name: Build and prove isolated inherited-slicing fix
+        run: |
+          set -euo pipefail
+          git -C hl7-core reset --hard d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          git -C hl7-core clean -fd
+          python3 .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            hl7-core --variant inherited
+          git -C hl7-core diff --check
+          git -C hl7-core diff > /tmp/hl7-inherited.patch
+
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -Dtest=DefinitionNavigatorTests \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            test
+
+          rm -rf "$HOME/.m2/repository/ca/uhn/hapi/fhir/org.hl7.fhir.r5/6.10.2"
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -DskipTests -Dcheckstyle.skip=true install
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
+          cp tools/hl7-oracle/target/commandf-hl7-oracle.jar /tmp/oracle-inherited.jar
+          unzip -p /tmp/oracle-inherited.jar \
+            org/hl7/fhir/r5/utils/DefinitionNavigator.class | sha256sum \
+            | tee /tmp/oracle-inherited-definition-navigator.sha256
+
+          sudo unshare --net -- \
+            python3 .github/scripts/hl7-upstream-fix/prove_candidate_fix.py \
+              --variant inherited \
+              --java "$JAVA_HOME/bin/java" \
+              --probe-classes /tmp/cf10-probe-classes \
+              --oracle-jar /tmp/oracle-inherited.jar \
+              --work-root /tmp/cf10-hl7-fix-states \
+              --output /tmp/hl7-inherited-proof.json
+
+      - name: Build and prove isolated contentReference fix
+        run: |
+          set -euo pipefail
+          git -C hl7-core reset --hard d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          git -C hl7-core clean -fd
+          python3 .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            hl7-core --variant content-reference
+          git -C hl7-core diff --check
+          git -C hl7-core diff > /tmp/hl7-content-reference.patch
+
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -Dtest=DefinitionNavigatorTests \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            test
+
+          rm -rf "$HOME/.m2/repository/ca/uhn/hapi/fhir/org.hl7.fhir.r5/6.10.2"
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -DskipTests -Dcheckstyle.skip=true install
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
+          cp tools/hl7-oracle/target/commandf-hl7-oracle.jar /tmp/oracle-content-reference.jar
+          unzip -p /tmp/oracle-content-reference.jar \
+            org/hl7/fhir/r5/utils/DefinitionNavigator.class | sha256sum \
+            | tee /tmp/oracle-content-reference-definition-navigator.sha256
+
+          sudo unshare --net -- \
+            python3 .github/scripts/hl7-upstream-fix/prove_candidate_fix.py \
+              --variant content-reference \
+              --java "$JAVA_HOME/bin/java" \
+              --probe-classes /tmp/cf10-probe-classes \
+              --oracle-jar /tmp/oracle-content-reference.jar \
+              --work-root /tmp/cf10-hl7-fix-states \
+              --output /tmp/hl7-content-reference-proof.json
+
+      - name: Build and prove combined candidate fix
+        run: |
+          set -euo pipefail
+          git -C hl7-core reset --hard d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          git -C hl7-core clean -fd
+          python3 .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            hl7-core --variant combined
+          git -C hl7-core diff --check
+          git -C hl7-core diff > /tmp/hl7-combined.patch
+
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -Dtest=DefinitionNavigatorTests \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            test
+
+          rm -rf "$HOME/.m2/repository/ca/uhn/hapi/fhir/org.hl7.fhir.r5/6.10.2"
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -DskipTests -Dcheckstyle.skip=true install
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
+          cp tools/hl7-oracle/target/commandf-hl7-oracle.jar /tmp/oracle-combined.jar
+          unzip -p /tmp/oracle-combined.jar \
+            org/hl7/fhir/r5/utils/DefinitionNavigator.class | sha256sum \
+            | tee /tmp/oracle-combined-definition-navigator.sha256
+
+          sudo unshare --net -- \
+            python3 .github/scripts/hl7-upstream-fix/prove_candidate_fix.py \
+              --variant combined \
+              --java "$JAVA_HOME/bin/java" \
+              --probe-classes /tmp/cf10-probe-classes \
+              --oracle-jar /tmp/oracle-combined.jar \
+              --work-root /tmp/cf10-hl7-fix-states \
+              --output /tmp/hl7-combined-proof.json
+
+      - name: Run frozen CF-10 corpus twice with combined candidate
+        run: |
+          set -u
+          rm -rf /tmp/cf10-hl7-fixed-a /tmp/cf10-hl7-fixed-b
+
+          status_a=0
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-hl7-fixed-a \
+            --oracle-adapter /tmp/oracle-combined.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-hl7-fixed-summary-a.json \
+            || status_a=$?
+
+          status_b=0
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-hl7-fixed-b \
+            --oracle-adapter /tmp/oracle-combined.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-hl7-fixed-summary-b.json \
+            || status_b=$?
+
+          comparison=0
+          cmp /tmp/cf10-hl7-fixed-summary-a.json /tmp/cf10-hl7-fixed-summary-b.json \
+            || comparison=$?
+
+          printf '%s\n' "$status_a" > /tmp/cf10-hl7-fixed-status-a
+          printf '%s\n' "$status_b" > /tmp/cf10-hl7-fixed-status-b
+          printf '%s\n' "$comparison" > /tmp/cf10-hl7-fixed-comparison
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for side in ('a', 'b'):
+              report = json.loads(Path(f'/tmp/cf10-hl7-fixed-summary-{side}.json').read_text())
+              print('SIDE', side)
+              for case in report['cases']:
+                  print(
+                      case['case_id'],
+                      case['status'],
+                      (case.get('oracle') or {}).get('status'),
+                  )
+          PY
+
+      - name: Upload candidate-fix evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hl7-upstream-fix-qualification-evidence
+          path: |
+            /tmp/cf10-hl7-fix-acquisition.json
+            /tmp/hl7-inherited.patch
+            /tmp/hl7-content-reference.patch
+            /tmp/hl7-combined.patch
+            /tmp/hl7-inherited-proof.json
+            /tmp/hl7-content-reference-proof.json
+            /tmp/hl7-combined-proof.json
+            /tmp/oracle-inherited-definition-navigator.sha256
+            /tmp/oracle-content-reference-definition-navigator.sha256
+            /tmp/oracle-combined-definition-navigator.sha256
+            /tmp/cf10-hl7-fixed-summary-a.json
+            /tmp/cf10-hl7-fixed-summary-b.json
+            /tmp/cf10-hl7-fixed-status-a
+            /tmp/cf10-hl7-fixed-status-b
+            /tmp/cf10-hl7-fixed-comparison
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce combined candidate proof
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f /tmp/hl7-combined-proof.json
+          status_a="$(cat /tmp/cf10-hl7-fixed-status-a 2>/dev/null || printf '1')"
+          status_b="$(cat /tmp/cf10-hl7-fixed-status-b 2>/dev/null || printf '1')"
+          comparison="$(cat /tmp/cf10-hl7-fixed-comparison 2>/dev/null || printf '1')"
+          printf 'patched_runner_a=%s patched_runner_b=%s patched_comparison=%s\n' \
+            "$status_a" "$status_b" "$comparison"
+          test "$status_a" = 0
+          test "$status_b" = 0
+          test "$comparison" = 0
