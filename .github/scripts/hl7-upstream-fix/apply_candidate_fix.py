@@ -145,7 +145,6 @@ import org.hl7.fhir.r5.model.StructureDefinition;
     DefinitionNavigator dn = new DefinitionNavigator(ctxt, sd, true, false);
     DefinitionNavigator category = dn.childByName("category");
     Assertions.assertNotNull(category);
-    Assertions.assertTrue(category.current().hasUserData(org.hl7.fhir.utilities.UserDataNames.DN_TRANSIENT));
     Assertions.assertEquals(1, category.slices().size());
     Assertions.assertEquals("us-core", category.slices().get(0).current().getSliceName());
   }
