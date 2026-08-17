@@ -46,18 +46,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # intentionally invalid guard; replaced below
-        if: ${{ false }}
-
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
       - name: Verify exact experimental identities
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_COMMAND_F_BASE"
+          git merge-base --is-ancestor "$EXPECTED_COMMAND_F_BASE" HEAD
+          unexpected="$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD | grep -v '^.github/workflows/cf06-oracle-runtime-h0.yml$' || true)"
+          test -z "$unexpected"
           test "$(git -C hl7-core rev-parse HEAD)" = "$EXPECTED_HL7_BASE"
           git -C hl7-core diff --exit-code
-          git -C hl7-core status --porcelain
+          test -z "$(git -C hl7-core status --porcelain)"
 
       - name: Test H0 prerequisites
         run: |
