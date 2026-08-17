@@ -1,0 +1,305 @@
+name: cf06-oracle-runtime-h0
+
+on:
+  push:
+    branches:
+      - exp/cf06-oracle-runtime-h0-parallel-ab
+    paths:
+      - .github/workflows/cf06-oracle-runtime-h0.yml
+      - .github/scripts/hl7-upstream-fix/**
+      - .github/scripts/cf10-closure-evidence/**
+      - corpus/real-ig/v1/**
+      - crates/commandf-cli/**
+      - crates/commandf-pkg/**
+      - tools/hl7-oracle/**
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parallel-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      EXPECTED_COMMAND_F_BASE: c95cc7665b0dce6b91d2dcff31791361215abe82
+      EXPECTED_HL7_BASE: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+      EXPECTED_SERIAL_SUMMARY_SHA256: 074594e630c02f10c4bec9bcb903e153edaeb88a04c65636ff11c11301547409
+    steps:
+      - name: Checkout commandF H0 experiment
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact pinned HL7 source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          repository: hapifhir/org.hl7.fhir.core
+          ref: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+          path: hl7-core
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # intentionally invalid guard; replaced below
+        if: ${{ false }}
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Verify exact experimental identities
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_COMMAND_F_BASE"
+          test "$(git -C hl7-core rev-parse HEAD)" = "$EXPECTED_HL7_BASE"
+          git -C hl7-core diff --exit-code
+          git -C hl7-core status --porcelain
+
+      - name: Test H0 prerequisites
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover \
+            -s .github/scripts/cf10-closure-evidence \
+            -p 'test_*.py'
+          python3 -m py_compile \
+            .github/scripts/hl7-upstream-fix/apply_candidate_fix.py
+
+      - name: Build exact commandF and combined candidate oracle
+        run: |
+          set -euo pipefail
+          cargo build --locked -p commandf
+
+          git -C hl7-core reset --hard "$EXPECTED_HL7_BASE"
+          git -C hl7-core clean -fd
+          python3 .github/scripts/hl7-upstream-fix/apply_candidate_fix.py \
+            hl7-core --variant combined
+          git -C hl7-core diff --check
+          git -C hl7-core diff > /tmp/hl7-h0-combined.patch
+          sha256sum /tmp/hl7-h0-combined.patch | tee /tmp/hl7-h0-combined.patch.sha256
+
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -Dtest=DefinitionNavigatorTests \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            test
+
+          rm -rf "$HOME/.m2/repository/ca/uhn/hapi/fhir/org.hl7.fhir.r5/6.10.2"
+          mvn -B -ntp -f hl7-core/pom.xml \
+            -pl org.hl7.fhir.r5 -am \
+            -DskipTests -Dcheckstyle.skip=true install
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
+          cp tools/hl7-oracle/target/commandf-hl7-oracle.jar /tmp/oracle-h0-combined.jar
+          sha256sum /tmp/oracle-h0-combined.jar | tee /tmp/oracle-h0-combined.jar.sha256
+          unzip -p /tmp/oracle-h0-combined.jar \
+            org/hl7/fhir/r5/utils/DefinitionNavigator.class | sha256sum \
+            | tee /tmp/oracle-h0-definition-navigator.sha256
+
+      - name: Run frozen CF-10 A/B concurrently
+        run: |
+          set -euo pipefail
+          test ! -e /tmp/cf10-h0-a
+          test ! -e /tmp/cf10-h0-b
+
+          wall_start="$(date +%s)"
+          printf '%s\n' "$wall_start" > /tmp/cf10-h0-wall-start
+
+          (
+            set -u
+            start="$(date +%s)"
+            status=0
+            ./target/debug/commandf corpus run \
+              --manifest corpus/real-ig/v1/corpus.json \
+              --work-root /tmp/cf10-h0-a \
+              --oracle-adapter /tmp/oracle-h0-combined.jar \
+              --oracle-java "$JAVA_HOME/bin/java" \
+              --format json \
+              > /tmp/cf10-h0-summary-a.json \
+              || status=$?
+            end="$(date +%s)"
+            printf '%s\n' "$status" > /tmp/cf10-h0-status-a
+            printf '%s\n' "$start" > /tmp/cf10-h0-start-a
+            printf '%s\n' "$end" > /tmp/cf10-h0-end-a
+            printf '%s\n' "$((end - start))" > /tmp/cf10-h0-seconds-a
+          ) &
+          pid_a=$!
+
+          (
+            set -u
+            start="$(date +%s)"
+            status=0
+            ./target/debug/commandf corpus run \
+              --manifest corpus/real-ig/v1/corpus.json \
+              --work-root /tmp/cf10-h0-b \
+              --oracle-adapter /tmp/oracle-h0-combined.jar \
+              --oracle-java "$JAVA_HOME/bin/java" \
+              --format json \
+              > /tmp/cf10-h0-summary-b.json \
+              || status=$?
+            end="$(date +%s)"
+            printf '%s\n' "$status" > /tmp/cf10-h0-status-b
+            printf '%s\n' "$start" > /tmp/cf10-h0-start-b
+            printf '%s\n' "$end" > /tmp/cf10-h0-end-b
+            printf '%s\n' "$((end - start))" > /tmp/cf10-h0-seconds-b
+          ) &
+          pid_b=$!
+
+          wait "$pid_a"
+          wait "$pid_b"
+
+          wall_end="$(date +%s)"
+          printf '%s\n' "$wall_end" > /tmp/cf10-h0-wall-end
+          printf '%s\n' "$((wall_end - wall_start))" > /tmp/cf10-h0-wall-seconds
+
+      - name: Verify H0 deterministic evidence
+        if: always()
+        run: |
+          set -u
+
+          internal_a=0
+          internal_b=0
+          comparison=0
+          baseline_a=0
+          baseline_b=0
+          parse_status=0
+          closure_a=0
+          closure_b=0
+
+          if [[ -f /tmp/cf10-h0-summary-a.json && -f /tmp/cf10-h0-a/summary.json ]]; then
+            cmp /tmp/cf10-h0-summary-a.json /tmp/cf10-h0-a/summary.json || internal_a=$?
+          else
+            internal_a=1
+          fi
+          if [[ -f /tmp/cf10-h0-summary-b.json && -f /tmp/cf10-h0-b/summary.json ]]; then
+            cmp /tmp/cf10-h0-summary-b.json /tmp/cf10-h0-b/summary.json || internal_b=$?
+          else
+            internal_b=1
+          fi
+          if [[ -f /tmp/cf10-h0-summary-a.json && -f /tmp/cf10-h0-summary-b.json ]]; then
+            cmp /tmp/cf10-h0-summary-a.json /tmp/cf10-h0-summary-b.json || comparison=$?
+            sha256sum /tmp/cf10-h0-summary-a.json | tee /tmp/cf10-h0-summary-a.sha256
+            sha256sum /tmp/cf10-h0-summary-b.json | tee /tmp/cf10-h0-summary-b.sha256
+            test "$(sha256sum /tmp/cf10-h0-summary-a.json | cut -d' ' -f1)" = "$EXPECTED_SERIAL_SUMMARY_SHA256" || baseline_a=$?
+            test "$(sha256sum /tmp/cf10-h0-summary-b.json | cut -d' ' -f1)" = "$EXPECTED_SERIAL_SUMMARY_SHA256" || baseline_b=$?
+          else
+            comparison=1
+            baseline_a=1
+            baseline_b=1
+          fi
+
+          python3 - <<'PY' || parse_status=$?
+          import json
+          from pathlib import Path
+
+          for side in ('a', 'b'):
+              report = json.loads(Path(f'/tmp/cf10-h0-summary-{side}.json').read_text())
+              assert report['schema'] == 1
+              assert [case['case_id'] for case in report['cases']] == ['C001', 'C002', 'C003']
+              assert all(case['status'] == 'complete' for case in report['cases'])
+              print('SIDE', side)
+              for case in report['cases']:
+                  print(case['case_id'], case['status'], (case.get('oracle') or {}).get('status'))
+          PY
+
+          python3 -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-h0-summary-a.json \
+            --evidence-root /tmp/cf10-h0-a/evidence \
+            || closure_a=$?
+          python3 -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-h0-summary-b.json \
+            --evidence-root /tmp/cf10-h0-b/evidence \
+            || closure_b=$?
+
+          printf '%s\n' "$internal_a" > /tmp/cf10-h0-internal-a
+          printf '%s\n' "$internal_b" > /tmp/cf10-h0-internal-b
+          printf '%s\n' "$comparison" > /tmp/cf10-h0-comparison
+          printf '%s\n' "$baseline_a" > /tmp/cf10-h0-baseline-a
+          printf '%s\n' "$baseline_b" > /tmp/cf10-h0-baseline-b
+          printf '%s\n' "$parse_status" > /tmp/cf10-h0-parse-status
+          printf '%s\n' "$closure_a" > /tmp/cf10-h0-closure-a
+          printf '%s\n' "$closure_b" > /tmp/cf10-h0-closure-b
+
+      - name: Assert metadata-only repository boundary
+        if: always()
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=no)"
+          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
+            echo 'unexpected upstream archive tracked in repository' >&2
+            exit 1
+          fi
+          test -z "$(find corpus donors specs -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print)"
+
+      - name: Upload H0 runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf06-oracle-runtime-h0-evidence
+          path: |
+            /tmp/hl7-h0-combined.patch
+            /tmp/hl7-h0-combined.patch.sha256
+            /tmp/oracle-h0-combined.jar.sha256
+            /tmp/oracle-h0-definition-navigator.sha256
+            /tmp/cf10-h0-summary-a.json
+            /tmp/cf10-h0-summary-b.json
+            /tmp/cf10-h0-summary-a.sha256
+            /tmp/cf10-h0-summary-b.sha256
+            /tmp/cf10-h0-status-a
+            /tmp/cf10-h0-status-b
+            /tmp/cf10-h0-internal-a
+            /tmp/cf10-h0-internal-b
+            /tmp/cf10-h0-comparison
+            /tmp/cf10-h0-baseline-a
+            /tmp/cf10-h0-baseline-b
+            /tmp/cf10-h0-parse-status
+            /tmp/cf10-h0-closure-a
+            /tmp/cf10-h0-closure-b
+            /tmp/cf10-h0-start-a
+            /tmp/cf10-h0-end-a
+            /tmp/cf10-h0-seconds-a
+            /tmp/cf10-h0-start-b
+            /tmp/cf10-h0-end-b
+            /tmp/cf10-h0-seconds-b
+            /tmp/cf10-h0-wall-start
+            /tmp/cf10-h0-wall-end
+            /tmp/cf10-h0-wall-seconds
+            /tmp/cf10-h0-a/summary.json
+            /tmp/cf10-h0-b/summary.json
+            /tmp/cf10-h0-a/evidence
+            /tmp/cf10-h0-b/evidence
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Enforce H0 proof
+        if: always()
+        run: |
+          set -euo pipefail
+          status_a="$(cat /tmp/cf10-h0-status-a 2>/dev/null || printf '1')"
+          status_b="$(cat /tmp/cf10-h0-status-b 2>/dev/null || printf '1')"
+          internal_a="$(cat /tmp/cf10-h0-internal-a 2>/dev/null || printf '1')"
+          internal_b="$(cat /tmp/cf10-h0-internal-b 2>/dev/null || printf '1')"
+          comparison="$(cat /tmp/cf10-h0-comparison 2>/dev/null || printf '1')"
+          baseline_a="$(cat /tmp/cf10-h0-baseline-a 2>/dev/null || printf '1')"
+          baseline_b="$(cat /tmp/cf10-h0-baseline-b 2>/dev/null || printf '1')"
+          parsed="$(cat /tmp/cf10-h0-parse-status 2>/dev/null || printf '1')"
+          closure_a="$(cat /tmp/cf10-h0-closure-a 2>/dev/null || printf '1')"
+          closure_b="$(cat /tmp/cf10-h0-closure-b 2>/dev/null || printf '1')"
+          wall_seconds="$(cat /tmp/cf10-h0-wall-seconds 2>/dev/null || printf '0')"
+
+          printf 'status_a=%s status_b=%s internal_a=%s internal_b=%s comparison=%s baseline_a=%s baseline_b=%s parsed=%s closure_a=%s closure_b=%s wall_seconds=%s\n' \
+            "$status_a" "$status_b" "$internal_a" "$internal_b" "$comparison" "$baseline_a" "$baseline_b" "$parsed" "$closure_a" "$closure_b" "$wall_seconds"
+
+          test "$status_a" = 0
+          test "$status_b" = 0
+          test "$internal_a" = 0
+          test "$internal_b" = 0
+          test "$comparison" = 0
+          test "$baseline_a" = 0
+          test "$baseline_b" = 0
+          test "$parsed" = 0
+          test "$closure_a" = 0
+          test "$closure_b" = 0
+          test "$wall_seconds" -gt 0
