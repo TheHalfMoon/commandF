@@ -1,5 +1,19 @@
 name: cf06-oracle-runtime-h0
 
+# H0 runtime-hardening experiment.
+#
+# Hypothesis under test: the frozen CF-10 A/B determinism proof can be executed
+# concurrently instead of serially without weakening any semantic gate.
+#
+# Topology: side A and side B run as two independent GitHub-hosted jobs. A single
+# runner cannot host two concurrent frozen-corpus executions reliably; run
+# 32050152005 lost runner communication mid-execution under that load. Each side
+# therefore establishes its own exact identities, executes one frozen corpus run,
+# and uploads a bounded deterministic evidence artifact. The verify job treats
+# both artifacts as untrusted input, re-proves every semantic gate from repository
+# code, and derives concurrent wall time from timestamps rather than from any sum
+# of per-side runtimes.
+
 on:
   push:
     branches:
@@ -19,14 +33,88 @@ on:
 permissions:
   contents: read
 
+env:
+  EXPECTED_COMMAND_F_BASE: c95cc7665b0dce6b91d2dcff31791361215abe82
+  EXPECTED_HL7_BASE: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
+  EXPECTED_SERIAL_SUMMARY_SHA256: 074594e630c02f10c4bec9bcb903e153edaeb88a04c65636ff11c11301547409
+  SERIAL_BASELINE_SECONDS: '5792'
+  SERIAL_BASELINE_RUN_ID: '31918255417'
+  H0_WORKFLOW_PATH: .github/workflows/cf06-oracle-runtime-h0.yml
+
 jobs:
-  parallel-ab:
+  identity:
+    name: identity
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
+    outputs:
+      commandf_head: ${{ steps.record.outputs.commandf_head }}
+      workflow_sha256: ${{ steps.record.outputs.workflow_sha256 }}
+      corpus_manifest_sha256: ${{ steps.record.outputs.corpus_manifest_sha256 }}
+    steps:
+      - name: Checkout commandF H0 experiment
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify exact commandF experimental identity
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_COMMAND_F_BASE" HEAD
+          unexpected="$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD \
+            | grep -vxF "$H0_WORKFLOW_PATH" || true)"
+          test -z "$unexpected"
+          test -z "$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD -- corpus)"
+
+      - name: Test H0 prerequisites
+        run: |
+          set -euo pipefail
+          python3 -B -m unittest discover \
+            -s .github/scripts/cf10-closure-evidence \
+            -p 'test_*.py'
+          python3 -m py_compile \
+            .github/scripts/hl7-upstream-fix/apply_candidate_fix.py
+
+      - name: Assert metadata-only repository boundary
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=no)"
+          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
+            echo 'unexpected upstream archive tracked in repository' >&2
+            exit 1
+          fi
+          test -z "$(find corpus donors specs -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print)"
+
+      - name: Record shared exact identities
+        id: record
+        run: |
+          set -euo pipefail
+          {
+            printf 'commandf_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'workflow_sha256=%s\n' "$(sha256sum "$H0_WORKFLOW_PATH" | cut -d' ' -f1)"
+            printf 'corpus_manifest_sha256=%s\n' \
+              "$(sha256sum corpus/real-ig/v1/corpus.json | cut -d' ' -f1)"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  runner:
+    name: runner-${{ matrix.side }}
+    needs: identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      # Both sides must survive independently; a failing side must still publish
+      # its evidence so the verifier can name the exact failing gate.
+      fail-fast: false
+      matrix:
+        side:
+          - a
+          - b
     env:
-      EXPECTED_COMMAND_F_BASE: c95cc7665b0dce6b91d2dcff31791361215abe82
-      EXPECTED_HL7_BASE: d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
-      EXPECTED_SERIAL_SUMMARY_SHA256: 074594e630c02f10c4bec9bcb903e153edaeb88a04c65636ff11c11301547409
+      H0_SIDE: ${{ matrix.side }}
+      H0_JOB_NAME: runner-${{ matrix.side }}
+      H0_STAGE: /tmp/h0-side
+      H0_WORK: /tmp/h0-work
+      H0_WORK_ROOT: /tmp/cf10-h0-${{ matrix.side }}
     steps:
       - name: Checkout commandF H0 experiment
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
@@ -49,28 +137,36 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
 
+      - name: Prepare bounded evidence staging
+        run: |
+          set -euo pipefail
+          test ! -e "$H0_STAGE"
+          test ! -e "$H0_WORK"
+          mkdir -p "$H0_STAGE/locks" "$H0_WORK"
+
       - name: Verify exact experimental identities
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$EXPECTED_COMMAND_F_BASE" HEAD
-          unexpected="$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD | grep -v '^.github/workflows/cf06-oracle-runtime-h0.yml$' || true)"
+          unexpected="$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD \
+            | grep -vxF "$H0_WORKFLOW_PATH" || true)"
           test -z "$unexpected"
+          test -z "$(git diff --name-only "$EXPECTED_COMMAND_F_BASE"...HEAD -- corpus)"
           test "$(git -C hl7-core rev-parse HEAD)" = "$EXPECTED_HL7_BASE"
           git -C hl7-core diff --exit-code
           test -z "$(git -C hl7-core status --porcelain)"
 
-      - name: Test H0 prerequisites
-        run: |
-          set -euo pipefail
-          python3 -B -m unittest discover \
-            -s .github/scripts/cf10-closure-evidence \
-            -p 'test_*.py'
-          python3 -m py_compile \
-            .github/scripts/hl7-upstream-fix/apply_candidate_fix.py
+          git rev-parse HEAD > "$H0_WORK/commandf-head"
+          git -C hl7-core rev-parse HEAD > "$H0_WORK/hl7-head"
+          sha256sum "$H0_WORKFLOW_PATH" | cut -d' ' -f1 > "$H0_WORK/workflow-sha256"
+          sha256sum corpus/real-ig/v1/corpus.json | cut -d' ' -f1 \
+            > "$H0_WORK/corpus-manifest-sha256"
 
       - name: Build exact commandF and combined candidate oracle
         run: |
           set -euo pipefail
+          date +%s > "$H0_WORK/build-start"
+
           cargo build --locked -p commandf
 
           git -C hl7-core reset --hard "$EXPECTED_HL7_BASE"
@@ -79,7 +175,8 @@ jobs:
             hl7-core --variant combined
           git -C hl7-core diff --check
           git -C hl7-core diff > /tmp/hl7-h0-combined.patch
-          sha256sum /tmp/hl7-h0-combined.patch | tee /tmp/hl7-h0-combined.patch.sha256
+          sha256sum /tmp/hl7-h0-combined.patch | cut -d' ' -f1 \
+            > "$H0_WORK/patch-sha256"
 
           mvn -B -ntp -f hl7-core/pom.xml \
             -pl org.hl7.fhir.r5 -am \
@@ -93,213 +190,1031 @@ jobs:
             -DskipTests -Dcheckstyle.skip=true install
           mvn -B -ntp -f tools/hl7-oracle/pom.xml clean package
           cp tools/hl7-oracle/target/commandf-hl7-oracle.jar /tmp/oracle-h0-combined.jar
-          sha256sum /tmp/oracle-h0-combined.jar | tee /tmp/oracle-h0-combined.jar.sha256
           unzip -p /tmp/oracle-h0-combined.jar \
-            org/hl7/fhir/r5/utils/DefinitionNavigator.class | sha256sum \
-            | tee /tmp/oracle-h0-definition-navigator.sha256
+            org/hl7/fhir/r5/utils/DefinitionNavigator.class \
+            | sha256sum | cut -d' ' -f1 > "$H0_WORK/definition-navigator-sha256"
 
-      - name: Run frozen CF-10 A/B concurrently
+          date +%s > "$H0_WORK/build-end"
+          cat "$H0_WORK/patch-sha256" "$H0_WORK/definition-navigator-sha256"
+
+      - name: Execute frozen corpus side
         run: |
-          set -euo pipefail
-          test ! -e /tmp/cf10-h0-a
-          test ! -e /tmp/cf10-h0-b
+          set -u
+          test ! -e "$H0_WORK_ROOT"
 
-          wall_start="$(date +%s)"
-          printf '%s\n' "$wall_start" > /tmp/cf10-h0-wall-start
+          run_start="$(date +%s)"
+          status=0
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root "$H0_WORK_ROOT" \
+            --oracle-adapter /tmp/oracle-h0-combined.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > "$H0_STAGE/summary.stdout.json" \
+            || status=$?
+          run_end="$(date +%s)"
 
-          (
-            set -u
-            start="$(date +%s)"
-            status=0
-            ./target/debug/commandf corpus run \
-              --manifest corpus/real-ig/v1/corpus.json \
-              --work-root /tmp/cf10-h0-a \
-              --oracle-adapter /tmp/oracle-h0-combined.jar \
-              --oracle-java "$JAVA_HOME/bin/java" \
-              --format json \
-              > /tmp/cf10-h0-summary-a.json \
-              || status=$?
-            end="$(date +%s)"
-            printf '%s\n' "$status" > /tmp/cf10-h0-status-a
-            printf '%s\n' "$start" > /tmp/cf10-h0-start-a
-            printf '%s\n' "$end" > /tmp/cf10-h0-end-a
-            printf '%s\n' "$((end - start))" > /tmp/cf10-h0-seconds-a
-          ) &
-          pid_a=$!
+          printf '%s\n' "$status" > "$H0_WORK/exit-status"
+          printf '%s\n' "$run_start" > "$H0_WORK/run-start"
+          printf '%s\n' "$run_end" > "$H0_WORK/run-end"
+          date -u -d "@$run_start" +%Y-%m-%dT%H:%M:%SZ > "$H0_WORK/run-start-utc"
+          date -u -d "@$run_end" +%Y-%m-%dT%H:%M:%SZ > "$H0_WORK/run-end-utc"
+          printf 'side=%s status=%s start=%s end=%s seconds=%s\n' \
+            "$H0_SIDE" "$status" "$run_start" "$run_end" "$((run_end - run_start))"
 
-          (
-            set -u
-            start="$(date +%s)"
-            status=0
-            ./target/debug/commandf corpus run \
-              --manifest corpus/real-ig/v1/corpus.json \
-              --work-root /tmp/cf10-h0-b \
-              --oracle-adapter /tmp/oracle-h0-combined.jar \
-              --oracle-java "$JAVA_HOME/bin/java" \
-              --format json \
-              > /tmp/cf10-h0-summary-b.json \
-              || status=$?
-            end="$(date +%s)"
-            printf '%s\n' "$status" > /tmp/cf10-h0-status-b
-            printf '%s\n' "$start" > /tmp/cf10-h0-start-b
-            printf '%s\n' "$end" > /tmp/cf10-h0-end-b
-            printf '%s\n' "$((end - start))" > /tmp/cf10-h0-seconds-b
-          ) &
-          pid_b=$!
-
-          wait "$pid_a"
-          wait "$pid_b"
-
-          wall_end="$(date +%s)"
-          printf '%s\n' "$wall_end" > /tmp/cf10-h0-wall-end
-          printf '%s\n' "$((wall_end - wall_start))" > /tmp/cf10-h0-wall-seconds
-
-      - name: Verify H0 deterministic evidence
+      - name: Assemble bounded side evidence
         if: always()
         run: |
           set -u
+          mkdir -p "$H0_STAGE/locks"
 
-          internal_a=0
-          internal_b=0
-          comparison=0
-          baseline_a=0
-          baseline_b=0
-          parse_status=0
-          closure_a=0
-          closure_b=0
+          # Internal self-consistency: streamed canonical summary against the
+          # summary the runner durably wrote inside its own work root.
+          internal=1
+          if [[ -f "$H0_WORK_ROOT/summary.json" ]]; then
+            cp "$H0_WORK_ROOT/summary.json" "$H0_STAGE/summary.workroot.json"
+            if [[ -f "$H0_STAGE/summary.stdout.json" ]]; then
+              internal=0
+              cmp "$H0_STAGE/summary.stdout.json" "$H0_STAGE/summary.workroot.json" \
+                || internal=$?
+            fi
+          fi
+          printf '%s\n' "$internal" > "$H0_WORK/internal-match"
 
-          if [[ -f /tmp/cf10-h0-summary-a.json && -f /tmp/cf10-h0-a/summary.json ]]; then
-            cmp /tmp/cf10-h0-summary-a.json /tmp/cf10-h0-a/summary.json || internal_a=$?
-          else
-            internal_a=1
-          fi
-          if [[ -f /tmp/cf10-h0-summary-b.json && -f /tmp/cf10-h0-b/summary.json ]]; then
-            cmp /tmp/cf10-h0-summary-b.json /tmp/cf10-h0-b/summary.json || internal_b=$?
-          else
-            internal_b=1
-          fi
-          if [[ -f /tmp/cf10-h0-summary-a.json && -f /tmp/cf10-h0-summary-b.json ]]; then
-            cmp /tmp/cf10-h0-summary-a.json /tmp/cf10-h0-summary-b.json || comparison=$?
-            sha256sum /tmp/cf10-h0-summary-a.json | tee /tmp/cf10-h0-summary-a.sha256
-            sha256sum /tmp/cf10-h0-summary-b.json | tee /tmp/cf10-h0-summary-b.sha256
-            test "$(sha256sum /tmp/cf10-h0-summary-a.json | cut -d' ' -f1)" = "$EXPECTED_SERIAL_SUMMARY_SHA256" || baseline_a=$?
-            test "$(sha256sum /tmp/cf10-h0-summary-b.json | cut -d' ' -f1)" = "$EXPECTED_SERIAL_SUMMARY_SHA256" || baseline_b=$?
-          else
-            comparison=1
-            baseline_a=1
-            baseline_b=1
-          fi
+          # Only the closure lockfiles cross the job boundary; the full evidence
+          # tree stays on the runner.
+          for case_id in C001 C002 C003; do
+            mkdir -p "$H0_STAGE/locks/$case_id"
+            for lock_side in before after; do
+              lock="$H0_WORK_ROOT/evidence/$case_id/$lock_side.commandf.lock"
+              if [[ -f "$lock" ]]; then
+                cp "$lock" "$H0_STAGE/locks/$case_id/$lock_side.commandf.lock"
+              fi
+            done
+          done
 
-          python3 - <<'PY' || parse_status=$?
+          # Bind the exported lockfiles, not the work-root tree, so the bounded
+          # artifact is proven sufficient on its own.
+          closure=1
+          if [[ -f "$H0_STAGE/summary.stdout.json" ]]; then
+            closure=0
+            python3 -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+              --summary "$H0_STAGE/summary.stdout.json" \
+              --evidence-root "$H0_STAGE/locks" \
+              || closure=$?
+          fi
+          printf '%s\n' "$closure" > "$H0_WORK/closure-binding"
+
+          boundary=0
+          if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            boundary=1
+          fi
+          if git ls-files | grep -qE '\.(tgz|tar\.gz)$'; then
+            boundary=1
+          fi
+          if [[ -n "$(find corpus donors specs -type f \
+              \( -name '*.tgz' -o -name '*.tar.gz' \) -print)" ]]; then
+            boundary=1
+          fi
+          printf '%s\n' "$boundary" > "$H0_WORK/repository-boundary"
+
+          nproc > "$H0_WORK/cpu-count" 2>/dev/null || printf '0\n' > "$H0_WORK/cpu-count"
+          awk '/^MemTotal:/ {print $2}' /proc/meminfo > "$H0_WORK/mem-total-kb" \
+            2>/dev/null || printf '0\n' > "$H0_WORK/mem-total-kb"
+          df -Pk /tmp | awk 'NR==2 {print $4}' > "$H0_WORK/disk-avail-kb" \
+            2>/dev/null || printf '0\n' > "$H0_WORK/disk-avail-kb"
+          "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1 > "$H0_WORK/java-version" \
+            || printf 'unknown\n' > "$H0_WORK/java-version"
+
+          python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          for side in ('a', 'b'):
-              report = json.loads(Path(f'/tmp/cf10-h0-summary-{side}.json').read_text())
-              assert report['schema'] == 1
-              assert [case['case_id'] for case in report['cases']] == ['C001', 'C002', 'C003']
-              assert all(case['status'] == 'complete' for case in report['cases'])
-              print('SIDE', side)
-              for case in report['cases']:
-                  print(case['case_id'], case['status'], (case.get('oracle') or {}).get('status'))
+          work = Path(os.environ['H0_WORK'])
+          stage = Path(os.environ['H0_STAGE'])
+
+
+          def text(name):
+              path = work / name
+              if not path.is_file():
+                  return None
+              value = path.read_text(encoding='utf-8', errors='replace').strip()
+              return value or None
+
+
+          def number(name):
+              value = text(name)
+              if value is None:
+                  return None
+              try:
+                  return int(value)
+              except ValueError:
+                  return None
+
+
+          def digest(path):
+              import hashlib
+
+              if not path.is_file():
+                  return None
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+          run_start = number('run-start')
+          run_end = number('run-end')
+          seconds = None
+          if run_start is not None and run_end is not None:
+              seconds = run_end - run_start
+
+          side = {
+              'schema': 1,
+              'experiment': 'cf06-oracle-runtime-h0',
+              'side': os.environ['H0_SIDE'],
+              'job_name': os.environ['H0_JOB_NAME'],
+              'exit_status': number('exit-status'),
+              'identity': {
+                  'commandf_head': text('commandf-head'),
+                  'commandf_base': os.environ['EXPECTED_COMMAND_F_BASE'],
+                  'hl7_head': text('hl7-head'),
+                  'hl7_combined_patch_sha256': text('patch-sha256'),
+                  'oracle_definition_navigator_sha256': text(
+                      'definition-navigator-sha256'
+                  ),
+                  'corpus_manifest_sha256': text('corpus-manifest-sha256'),
+                  'workflow_sha256': text('workflow-sha256'),
+              },
+              'summary': {
+                  'stdout_sha256': digest(stage / 'summary.stdout.json'),
+                  'workroot_sha256': digest(stage / 'summary.workroot.json'),
+                  'internal_match': number('internal-match'),
+              },
+              'local_checks': {
+                  'closure_binding': number('closure-binding'),
+                  'repository_boundary': number('repository-boundary'),
+              },
+              'timing': {
+                  'build_start_epoch': number('build-start'),
+                  'build_end_epoch': number('build-end'),
+                  'run_start_epoch': run_start,
+                  'run_end_epoch': run_end,
+                  'run_start_utc': text('run-start-utc'),
+                  'run_end_utc': text('run-end-utc'),
+                  'run_seconds': seconds,
+              },
+              'runner': {
+                  'os': os.environ.get('RUNNER_OS'),
+                  'arch': os.environ.get('RUNNER_ARCH'),
+                  'name': os.environ.get('RUNNER_NAME'),
+                  'environment': os.environ.get('RUNNER_ENVIRONMENT'),
+                  'image_os': os.environ.get('ImageOS'),
+                  'image_version': os.environ.get('ImageVersion'),
+                  'cpu_count': number('cpu-count'),
+                  'mem_total_kb': number('mem-total-kb'),
+                  'disk_avail_kb': number('disk-avail-kb'),
+                  'java_version': text('java-version'),
+                  'run_id': os.environ.get('GITHUB_RUN_ID'),
+                  'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
+                  'run_number': os.environ.get('GITHUB_RUN_NUMBER'),
+              },
+          }
+
+          (stage / 'side.json').write_text(
+              json.dumps(side, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print(json.dumps(side, indent=2, sort_keys=True))
           PY
 
-          python3 -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
-            --summary /tmp/cf10-h0-summary-a.json \
-            --evidence-root /tmp/cf10-h0-a/evidence \
-            || closure_a=$?
-          python3 -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
-            --summary /tmp/cf10-h0-summary-b.json \
-            --evidence-root /tmp/cf10-h0-b/evidence \
-            || closure_b=$?
+          du -sb "$H0_STAGE"
 
-          printf '%s\n' "$internal_a" > /tmp/cf10-h0-internal-a
-          printf '%s\n' "$internal_b" > /tmp/cf10-h0-internal-b
-          printf '%s\n' "$comparison" > /tmp/cf10-h0-comparison
-          printf '%s\n' "$baseline_a" > /tmp/cf10-h0-baseline-a
-          printf '%s\n' "$baseline_b" > /tmp/cf10-h0-baseline-b
-          printf '%s\n' "$parse_status" > /tmp/cf10-h0-parse-status
-          printf '%s\n' "$closure_a" > /tmp/cf10-h0-closure-a
-          printf '%s\n' "$closure_b" > /tmp/cf10-h0-closure-b
+      - name: Upload bounded side evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf06-oracle-runtime-h0-side-${{ matrix.side }}
+          path: /tmp/h0-side
+          if-no-files-found: error
+          retention-days: 3
 
-      - name: Assert metadata-only repository boundary
+      - name: Report side outcome
         if: always()
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain --untracked-files=no)"
-          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
-            echo 'unexpected upstream archive tracked in repository' >&2
-            exit 1
-          fi
-          test -z "$(find corpus donors specs -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print)"
+          status="$(cat "$H0_WORK/exit-status" 2>/dev/null || printf '1')"
+          internal="$(cat "$H0_WORK/internal-match" 2>/dev/null || printf '1')"
+          closure="$(cat "$H0_WORK/closure-binding" 2>/dev/null || printf '1')"
+          boundary="$(cat "$H0_WORK/repository-boundary" 2>/dev/null || printf '1')"
+          printf 'side=%s status=%s internal=%s closure=%s boundary=%s\n' \
+            "$H0_SIDE" "$status" "$internal" "$closure" "$boundary"
+          test "$status" = 0
+          test "$internal" = 0
+          test "$closure" = 0
+          test "$boundary" = 0
 
-      - name: Upload H0 runtime evidence
+  verify:
+    name: verify
+    needs:
+      - identity
+      - runner
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    env:
+      H0_IN: /tmp/h0-in
+      H0_OUT: /tmp/h0-evidence
+      IDENTITY_COMMAND_F_HEAD: ${{ needs.identity.outputs.commandf_head }}
+      IDENTITY_WORKFLOW_SHA256: ${{ needs.identity.outputs.workflow_sha256 }}
+      IDENTITY_CORPUS_MANIFEST_SHA256: ${{ needs.identity.outputs.corpus_manifest_sha256 }}
+    steps:
+      - name: Checkout commandF H0 experiment
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Download side A evidence
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: cf06-oracle-runtime-h0-side-a
+          path: /tmp/h0-in/a
+
+      - name: Download side B evidence
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: cf06-oracle-runtime-h0-side-b
+          path: /tmp/h0-in/b
+
+      - name: Fetch server-recorded job timing
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$H0_OUT"
+          status=1
+          for attempt in 1 2 3; do
+            if gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" \
+              > "$H0_OUT/server-jobs.json"; then
+              status=0
+              break
+            fi
+            sleep 5
+          done
+          printf '%s\n' "$status" > "$H0_OUT/server-jobs-status"
+          exit "$status"
+
+      - name: Evaluate H0 gates
+        if: always()
+        run: |
+          set -u
+          mkdir -p "$H0_OUT"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          IN = Path(os.environ['H0_IN'])
+          OUT = Path(os.environ['H0_OUT'])
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          BASELINE_SECONDS = int(os.environ['SERIAL_BASELINE_SECONDS'])
+          BASELINE_RUN_ID = os.environ['SERIAL_BASELINE_RUN_ID']
+          EXPECTED_SUMMARY_SHA = os.environ['EXPECTED_SERIAL_SUMMARY_SHA256']
+          EXPECTED_HL7_BASE = os.environ['EXPECTED_HL7_BASE']
+          EXPECTED_COMMAND_F_BASE = os.environ['EXPECTED_COMMAND_F_BASE']
+          WORKFLOW_PATH = os.environ['H0_WORKFLOW_PATH']
+          RUN_SHA = os.environ['GITHUB_SHA']
+
+          # Server-clock corroboration tolerance. Runner-measured corpus execution
+          # is strictly inside the job span, so it may never exceed it by more
+          # than clock jitter.
+          SERVER_TOLERANCE_SECONDS = 120
+
+          EXPECTED_FILES = frozenset({
+              'side.json',
+              'summary.stdout.json',
+              'summary.workroot.json',
+              'locks/C001/before.commandf.lock',
+              'locks/C001/after.commandf.lock',
+              'locks/C002/before.commandf.lock',
+              'locks/C002/after.commandf.lock',
+              'locks/C003/before.commandf.lock',
+              'locks/C003/after.commandf.lock',
+          })
+          MAX_FILE_BYTES = 1 << 20
+          MAX_TOTAL_BYTES = 4 << 20
+          EXPECTED_CASE_IDS = ['C001', 'C002', 'C003']
+
+          gates = []
+
+
+          def gate(name, ok, detail=''):
+              gates.append({
+                  'gate': name,
+                  'pass': bool(ok),
+                  'detail': str(detail)[:400],
+              })
+              return bool(ok)
+
+
+          def is_sha256(value):
+              return (
+                  isinstance(value, str)
+                  and len(value) == 64
+                  and all(char in '0123456789abcdef' for char in value)
+              )
+
+
+          def is_sha1(value):
+              return (
+                  isinstance(value, str)
+                  and len(value) == 40
+                  and all(char in '0123456789abcdef' for char in value)
+              )
+
+
+          def digest_file(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+          def inspect_artifact(side):
+              """Structurally validate one untrusted side artifact."""
+              root = IN / side
+              problems = []
+              if not root.is_dir():
+                  return None, ['artifact directory missing']
+
+              resolved_root = root.resolve()
+              found = set()
+              total = 0
+              for path in sorted(root.rglob('*')):
+                  relative = path.relative_to(root).as_posix()
+                  if path.is_symlink():
+                      problems.append('symlink rejected: ' + relative)
+                      continue
+                  if path.is_dir():
+                      continue
+                  if not path.is_file():
+                      problems.append('not a regular file: ' + relative)
+                      continue
+                  if resolved_root not in path.resolve().parents:
+                      problems.append('path escapes artifact root: ' + relative)
+                      continue
+                  found.add(relative)
+                  size = path.stat().st_size
+                  total += size
+                  if size > MAX_FILE_BYTES:
+                      problems.append(
+                          'file exceeds bound: %s (%d bytes)' % (relative, size)
+                      )
+
+              missing = sorted(EXPECTED_FILES - found)
+              unexpected = sorted(found - EXPECTED_FILES)
+              if missing:
+                  problems.append('missing: ' + ','.join(missing))
+              if unexpected:
+                  problems.append('unexpected: ' + ','.join(unexpected))
+              if total > MAX_TOTAL_BYTES:
+                  problems.append('artifact exceeds total bound: %d bytes' % total)
+              return {'root': root, 'total_bytes': total}, problems
+
+
+          def load_side_metadata(side, root):
+              """Parse and schema-check side.json without trusting any value."""
+              problems = []
+              try:
+                  raw = (root / 'side.json').read_bytes()
+                  data = json.loads(raw)
+              except (OSError, ValueError) as error:
+                  return None, ['side.json unreadable or invalid JSON: %s' % error]
+              if not isinstance(data, dict):
+                  return None, ['side.json must be an object']
+              if data.get('schema') != 1:
+                  problems.append('side.json schema must be 1')
+              if data.get('experiment') != 'cf06-oracle-runtime-h0':
+                  problems.append('side.json experiment mismatch')
+              if data.get('side') != side:
+                  problems.append('side.json side label mismatch')
+              if data.get('job_name') != 'runner-' + side:
+                  problems.append('side.json job_name mismatch')
+
+              identity = data.get('identity')
+              summary = data.get('summary')
+              local_checks = data.get('local_checks')
+              timing = data.get('timing')
+              runner = data.get('runner')
+              for label, value in (
+                  ('identity', identity),
+                  ('summary', summary),
+                  ('local_checks', local_checks),
+                  ('timing', timing),
+                  ('runner', runner),
+              ):
+                  if not isinstance(value, dict):
+                      problems.append('side.json %s must be an object' % label)
+              if problems:
+                  return data, problems
+
+              for key in (
+                  'hl7_combined_patch_sha256',
+                  'oracle_definition_navigator_sha256',
+                  'corpus_manifest_sha256',
+                  'workflow_sha256',
+              ):
+                  if not is_sha256(identity.get(key)):
+                      problems.append('identity.%s is not a SHA-256 digest' % key)
+              for key in ('commandf_head', 'hl7_head'):
+                  if not is_sha1(identity.get(key)):
+                      problems.append('identity.%s is not a commit id' % key)
+              for key in ('stdout_sha256', 'workroot_sha256'):
+                  if not is_sha256(summary.get(key)):
+                      problems.append('summary.%s is not a SHA-256 digest' % key)
+              for container, label, keys in (
+                  (summary, 'summary', ('internal_match',)),
+                  (
+                      local_checks,
+                      'local_checks',
+                      ('closure_binding', 'repository_boundary'),
+                  ),
+                  (data, 'side.json', ('exit_status',)),
+              ):
+                  for key in keys:
+                      value = container.get(key)
+                      if not isinstance(value, int) or isinstance(value, bool):
+                          problems.append('%s.%s must be an integer' % (label, key))
+                      elif not 0 <= value <= 255:
+                          problems.append('%s.%s out of bounds' % (label, key))
+              for key in (
+                  'run_start_epoch',
+                  'run_end_epoch',
+                  'run_seconds',
+                  'build_start_epoch',
+                  'build_end_epoch',
+              ):
+                  value = timing.get(key)
+                  if not isinstance(value, int) or isinstance(value, bool):
+                      problems.append('timing.%s must be an integer' % key)
+                  elif not 0 <= value <= 4102444800:
+                      problems.append('timing.%s out of bounds' % key)
+              return data, problems
+
+
+          def repo_digest(relative_path):
+              path = Path(relative_path)
+              if not path.is_file():
+                  return None
+              return digest_file(path)
+
+
+          def git(*args):
+              result = subprocess.run(
+                  ['git', *args],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
+          sides = {}
+          for side in ('a', 'b'):
+              info, problems = inspect_artifact(side)
+              metadata = None
+              metadata_problems = []
+              if info is not None and not problems:
+                  metadata, metadata_problems = load_side_metadata(side, info['root'])
+              sides[side] = {
+                  'info': info,
+                  'problems': problems + metadata_problems,
+                  'metadata': metadata,
+              }
+              gate(
+                  'evidence_artifact_%s_present_and_bounded' % side,
+                  info is not None and not problems and not metadata_problems,
+                  '; '.join(problems + metadata_problems) or 'ok',
+              )
+
+          usable = {
+              side: state
+              for side, state in sides.items()
+              if state['metadata'] is not None and not state['problems']
+          }
+
+
+          def meta(side, *path, default=None):
+              state = usable.get(side)
+              if state is None:
+                  return default
+              value = state['metadata']
+              for key in path:
+                  if not isinstance(value, dict):
+                      return default
+                  value = value.get(key)
+              return default if value is None else value
+
+
+          summary_bytes = {}
+          for side in ('a', 'b'):
+              if side in usable:
+                  root = usable[side]['info']['root']
+                  try:
+                      summary_bytes[side] = {
+                          'stdout': (root / 'summary.stdout.json').read_bytes(),
+                          'workroot': (root / 'summary.workroot.json').read_bytes(),
+                      }
+                  except OSError as error:
+                      summary_bytes[side] = None
+                      gate(
+                          'evidence_artifact_%s_readable' % side,
+                          False,
+                          'summary unreadable: %s' % error,
+                      )
+
+          for side in ('a', 'b'):
+              gate(
+                  'side_%s_exit_status_zero' % side,
+                  meta(side, 'exit_status', default=1) == 0,
+                  'exit_status=%s' % meta(side, 'exit_status', default='missing'),
+              )
+
+          for side in ('a', 'b'):
+              payload = summary_bytes.get(side)
+              ok = False
+              detail = 'evidence unavailable'
+              if payload:
+                  ok = payload['stdout'] == payload['workroot']
+                  detail = (
+                      'stdout=%d bytes workroot=%d bytes recorded_internal_match=%s'
+                      % (
+                          len(payload['stdout']),
+                          len(payload['workroot']),
+                          meta(side, 'summary', 'internal_match', default='missing'),
+                      )
+                  )
+                  ok = ok and meta(side, 'summary', 'internal_match', default=1) == 0
+                  recorded = meta(side, 'summary', 'stdout_sha256', default='')
+                  if hashlib.sha256(payload['stdout']).hexdigest() != recorded:
+                      ok = False
+                      detail += ' recorded stdout digest mismatch'
+              gate('side_%s_internal_summary_self_consistent' % side, ok, detail)
+
+          for side in ('a', 'b'):
+              payload = summary_bytes.get(side)
+              ok = False
+              detail = 'evidence unavailable'
+              if payload:
+                  try:
+                      report = json.loads(payload['stdout'])
+                      case_ids = [case['case_id'] for case in report['cases']]
+                      statuses = {case['status'] for case in report['cases']}
+                      ok = (
+                          report.get('schema') == 1
+                          and case_ids == EXPECTED_CASE_IDS
+                          and statuses == {'complete'}
+                          and is_sha256(report.get('manifest_sha256'))
+                      )
+                      detail = 'cases=%s statuses=%s manifest_sha256=%s' % (
+                          ','.join(case_ids),
+                          ','.join(sorted(statuses)),
+                          report.get('manifest_sha256'),
+                      )
+                  except (ValueError, KeyError, TypeError) as error:
+                      detail = 'summary shape invalid: %s' % error
+              gate('side_%s_summary_shape_valid' % side, ok, detail)
+
+          both = summary_bytes.get('a') and summary_bytes.get('b')
+          gate(
+              'canonical_summary_bytes_a_equal_b',
+              bool(both) and summary_bytes['a']['stdout'] == summary_bytes['b']['stdout'],
+              'byte-for-byte comparison of canonical summaries',
+          )
+
+          for side in ('a', 'b'):
+              payload = summary_bytes.get(side)
+              actual = (
+                  hashlib.sha256(payload['stdout']).hexdigest() if payload else None
+              )
+              gate(
+                  'canonical_summary_sha256_%s_matches_serial_baseline' % side,
+                  actual == EXPECTED_SUMMARY_SHA,
+                  'actual=%s expected=%s' % (actual, EXPECTED_SUMMARY_SHA),
+              )
+
+          for side in ('a', 'b'):
+              ok = False
+              detail = 'evidence unavailable'
+              if side in usable:
+                  root = usable[side]['info']['root']
+                  result = subprocess.run(
+                      [
+                          'python3',
+                          '-B',
+                          '.github/scripts/cf10-closure-evidence/verify_closure_binding.py',
+                          '--summary',
+                          str(root / 'summary.stdout.json'),
+                          '--evidence-root',
+                          str(root / 'locks'),
+                      ],
+                      capture_output=True,
+                      text=True,
+                      check=False,
+                  )
+                  ok = result.returncode == 0 and meta(
+                      side, 'local_checks', 'closure_binding', default=1
+                  ) == 0
+                  detail = 'reverify_rc=%d %s' % (
+                      result.returncode,
+                      (result.stdout.strip() or result.stderr.strip())[:200],
+                  )
+              gate('closure_binding_%s_reverified' % side, ok, detail)
+
+          manifest_digest = repo_digest('corpus/real-ig/v1/corpus.json')
+          rc_corpus, corpus_diff, _ = git(
+              'diff',
+              '--name-only',
+              EXPECTED_COMMAND_F_BASE + '...HEAD',
+              '--',
+              'corpus',
+          )
+          gate(
+              'frozen_corpus_identity_exact',
+              (
+                  manifest_digest is not None
+                  and meta('a', 'identity', 'corpus_manifest_sha256') == manifest_digest
+                  and meta('b', 'identity', 'corpus_manifest_sha256') == manifest_digest
+                  and os.environ.get('IDENTITY_CORPUS_MANIFEST_SHA256')
+                  == manifest_digest
+                  and rc_corpus == 0
+                  and corpus_diff == ''
+              ),
+              'manifest_sha256=%s corpus_diff_vs_base=%r' % (
+                  manifest_digest,
+                  corpus_diff,
+              ),
+          )
+
+          rc_ancestor, _, _ = git(
+              'merge-base', '--is-ancestor', EXPECTED_COMMAND_F_BASE, 'HEAD'
+          )
+          rc_scope, scope_diff, _ = git(
+              'diff', '--name-only', EXPECTED_COMMAND_F_BASE + '...HEAD'
+          )
+          changed = [line for line in scope_diff.splitlines() if line]
+          gate(
+              'commandf_identity_exact',
+              (
+                  meta('a', 'identity', 'commandf_head') == RUN_SHA
+                  and meta('b', 'identity', 'commandf_head') == RUN_SHA
+                  and os.environ.get('IDENTITY_COMMAND_F_HEAD') == RUN_SHA
+                  and rc_ancestor == 0
+                  and rc_scope == 0
+                  and changed == [WORKFLOW_PATH]
+              ),
+              'head=%s base_ancestor_rc=%d changed_vs_base=%s' % (
+                  RUN_SHA,
+                  rc_ancestor,
+                  ','.join(changed) or 'none',
+              ),
+          )
+
+          gate(
+              'pinned_hl7_identity_exact',
+              (
+                  meta('a', 'identity', 'hl7_head') == EXPECTED_HL7_BASE
+                  and meta('b', 'identity', 'hl7_head') == EXPECTED_HL7_BASE
+              ),
+              'a=%s b=%s expected=%s' % (
+                  meta('a', 'identity', 'hl7_head'),
+                  meta('b', 'identity', 'hl7_head'),
+                  EXPECTED_HL7_BASE,
+              ),
+          )
+
+          patch_a = meta('a', 'identity', 'hl7_combined_patch_sha256')
+          patch_b = meta('b', 'identity', 'hl7_combined_patch_sha256')
+          navigator_a = meta('a', 'identity', 'oracle_definition_navigator_sha256')
+          navigator_b = meta('b', 'identity', 'oracle_definition_navigator_sha256')
+          gate(
+              'candidate_oracle_identity_equal_across_sides',
+              (
+                  is_sha256(patch_a)
+                  and patch_a == patch_b
+                  and is_sha256(navigator_a)
+                  and navigator_a == navigator_b
+              ),
+              'patch=%s/%s definition_navigator=%s/%s' % (
+                  patch_a,
+                  patch_b,
+                  navigator_a,
+                  navigator_b,
+              ),
+          )
+
+          workflow_digest = repo_digest(WORKFLOW_PATH)
+          gate(
+              'experimental_workflow_identity_recorded',
+              (
+                  workflow_digest is not None
+                  and meta('a', 'identity', 'workflow_sha256') == workflow_digest
+                  and meta('b', 'identity', 'workflow_sha256') == workflow_digest
+                  and os.environ.get('IDENTITY_WORKFLOW_SHA256') == workflow_digest
+              ),
+              'workflow_sha256=%s' % workflow_digest,
+          )
+
+          rc_status, dirty, _ = git('status', '--porcelain', '--untracked-files=no')
+          rc_tracked, tracked, _ = git('ls-files')
+          archives = [
+              line
+              for line in tracked.splitlines()
+              if line.endswith('.tgz') or line.endswith('.tar.gz')
+          ]
+          gate(
+              'no_unauthorized_repository_mutation',
+              (
+                  meta('a', 'local_checks', 'repository_boundary', default=1) == 0
+                  and meta('b', 'local_checks', 'repository_boundary', default=1) == 0
+                  and rc_status == 0
+                  and dirty == ''
+                  and rc_tracked == 0
+                  and not archives
+              ),
+              'verify_dirty=%r tracked_archives=%d side_a=%s side_b=%s' % (
+                  dirty,
+                  len(archives),
+                  meta('a', 'local_checks', 'repository_boundary', default='missing'),
+                  meta('b', 'local_checks', 'repository_boundary', default='missing'),
+              ),
+          )
+
+          timing = {}
+          for side in ('a', 'b'):
+              timing[side] = {
+                  'start': meta(side, 'timing', 'run_start_epoch'),
+                  'end': meta(side, 'timing', 'run_end_epoch'),
+                  'seconds': meta(side, 'timing', 'run_seconds'),
+                  'start_utc': meta(side, 'timing', 'run_start_utc'),
+                  'end_utc': meta(side, 'timing', 'run_end_utc'),
+              }
+
+          complete = all(
+              isinstance(timing[side][key], int)
+              for side in ('a', 'b')
+              for key in ('start', 'end', 'seconds')
+          )
+          monotonic = complete and all(
+              timing[side]['end'] >= timing[side]['start']
+              and timing[side]['seconds'] == timing[side]['end'] - timing[side]['start']
+              and timing[side]['seconds'] > 0
+              for side in ('a', 'b')
+          )
+          gate(
+              'timing_evidence_complete_and_monotonic',
+              monotonic,
+              'a=%s b=%s' % (timing['a'], timing['b']),
+          )
+
+          metrics = {
+              'serial_baseline_seconds': BASELINE_SECONDS,
+              'serial_baseline_run_id': BASELINE_RUN_ID,
+          }
+          if monotonic:
+              concurrent_start = min(timing['a']['start'], timing['b']['start'])
+              concurrent_end = max(timing['a']['end'], timing['b']['end'])
+              overlap = min(timing['a']['end'], timing['b']['end']) - max(
+                  timing['a']['start'], timing['b']['start']
+              )
+              wall = concurrent_end - concurrent_start
+              improvement = BASELINE_SECONDS - wall
+              metrics.update({
+                  'a_start_epoch': timing['a']['start'],
+                  'a_end_epoch': timing['a']['end'],
+                  'a_start_utc': timing['a']['start_utc'],
+                  'a_end_utc': timing['a']['end_utc'],
+                  'a_elapsed_seconds': timing['a']['seconds'],
+                  'b_start_epoch': timing['b']['start'],
+                  'b_end_epoch': timing['b']['end'],
+                  'b_start_utc': timing['b']['start_utc'],
+                  'b_end_utc': timing['b']['end_utc'],
+                  'b_elapsed_seconds': timing['b']['seconds'],
+                  'overall_concurrent_start_epoch': concurrent_start,
+                  'overall_concurrent_end_epoch': concurrent_end,
+                  'concurrent_wall_seconds': wall,
+                  'overlap_seconds': overlap,
+                  'improvement_seconds': improvement,
+                  'improvement_percent': round(
+                      improvement / BASELINE_SECONDS * 100, 3
+                  ),
+                  # Recorded for completeness only. This sum is NOT the metric and
+                  # must never be used to claim a runtime improvement.
+                  'sum_of_side_seconds_not_a_metric': (
+                      timing['a']['seconds'] + timing['b']['seconds']
+                  ),
+              })
+              gate(
+                  'sides_executed_concurrently',
+                  overlap > 0,
+                  'overlap_seconds=%d' % overlap,
+              )
+          else:
+              gate(
+                  'sides_executed_concurrently',
+                  False,
+                  'timing evidence incomplete',
+              )
+
+          server = {'available': False}
+          server_ok = False
+          server_detail = 'server job timing unavailable'
+          server_path = OUT / 'server-jobs.json'
+          if server_path.is_file():
+              try:
+                  payload = json.loads(server_path.read_text(encoding='utf-8'))
+                  jobs = payload.get('jobs')
+                  if not isinstance(jobs, list):
+                      raise ValueError('jobs must be an array')
+                  matched = {}
+                  for name in ('runner-a', 'runner-b'):
+                      hits = [job for job in jobs if job.get('name') == name]
+                      if len(hits) != 1:
+                          raise ValueError(
+                              'expected exactly one %s job, found %d'
+                              % (name, len(hits))
+                          )
+                      matched[name] = hits[0]
+
+                  def epoch(value):
+                      # GitHub reports UTC with a trailing Z; bind the timezone
+                      # explicitly so the verifier never depends on runner locale.
+                      return int(
+                          datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ')
+                          .replace(tzinfo=timezone.utc)
+                          .timestamp()
+                      )
+
+                  starts = [epoch(job['started_at']) for job in matched.values()]
+                  ends = [epoch(job['completed_at']) for job in matched.values()]
+                  span = max(ends) - min(starts)
+                  server_overlap = min(ends) - max(starts)
+                  server = {
+                      'available': True,
+                      'runner_a_started_at': matched['runner-a']['started_at'],
+                      'runner_a_completed_at': matched['runner-a']['completed_at'],
+                      'runner_a_id': matched['runner-a'].get('id'),
+                      'runner_a_runner_name': matched['runner-a'].get('runner_name'),
+                      'runner_b_started_at': matched['runner-b']['started_at'],
+                      'runner_b_completed_at': matched['runner-b']['completed_at'],
+                      'runner_b_id': matched['runner-b'].get('id'),
+                      'runner_b_runner_name': matched['runner-b'].get('runner_name'),
+                      'job_span_seconds': span,
+                      'job_overlap_seconds': server_overlap,
+                  }
+                  wall = metrics.get('concurrent_wall_seconds')
+                  if isinstance(wall, int):
+                      server_ok = (
+                          wall <= span + SERVER_TOLERANCE_SECONDS
+                          and server_overlap > 0
+                      )
+                      server_detail = (
+                          'runner_wall=%d server_job_span=%d server_overlap=%d'
+                          % (wall, span, server_overlap)
+                      )
+                  else:
+                      server_detail = 'runner wall unavailable for corroboration'
+              except (ValueError, KeyError, TypeError, OSError) as error:
+                  server_detail = 'server job timing invalid: %s' % error
+          gate(
+              'server_side_timing_corroborates_runner_clocks',
+              server_ok,
+              server_detail,
+          )
+
+          failed = [entry['gate'] for entry in gates if not entry['pass']]
+          all_pass = not failed
+          wall = metrics.get('concurrent_wall_seconds')
+          if not all_pass:
+              classification = 'REJECT_OR_REDESIGN_H0'
+          elif isinstance(wall, int) and wall < BASELINE_SECONDS:
+              classification = 'H0_SINGLE_RUN_PASS_CANDIDATE'
+          else:
+              classification = 'H0_SEMANTIC_PASS_NO_RUNTIME_IMPROVEMENT'
+
+          verdict = {
+              'schema': 1,
+              'experiment': 'cf06-oracle-runtime-h0',
+              'run_id': os.environ.get('GITHUB_RUN_ID'),
+              'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
+              'head_sha': RUN_SHA,
+              'workflow_sha256': workflow_digest,
+              'all_gates_pass': all_pass,
+              'first_failing_gate': failed[0] if failed else None,
+              'failing_gates': failed,
+              'classification': classification,
+              'replication_requirement': (
+                  'H0_ACCEPT_FOR_RUNTIME_HARDENING requires 3 independent passing '
+                  'runs at this exact workflow and head'
+              ),
+              'gates': gates,
+              'metrics': metrics,
+              'server_timing': server,
+              'sides': {
+                  side: (
+                      sides[side]['metadata']
+                      if sides[side]['metadata'] is not None
+                      else {'error': sides[side]['problems']}
+                  )
+                  for side in ('a', 'b')
+              },
+          }
+          (OUT / 'verdict.json').write_text(
+              json.dumps(verdict, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+
+          lines = ['gate                                                    result']
+          for entry in gates:
+              lines.append(
+                  '%-55s %s  %s'
+                  % (entry['gate'], 'PASS' if entry['pass'] else 'FAIL', entry['detail'])
+              )
+          lines.append('')
+          lines.append('classification=%s' % classification)
+          for key in (
+              'concurrent_wall_seconds',
+              'overlap_seconds',
+              'improvement_seconds',
+              'improvement_percent',
+              'a_elapsed_seconds',
+              'b_elapsed_seconds',
+              'sum_of_side_seconds_not_a_metric',
+          ):
+              if key in metrics:
+                  lines.append('%s=%s' % (key, metrics[key]))
+          report = '\n'.join(lines)
+          (OUT / 'gates.txt').write_text(report + '\n', encoding='utf-8')
+          print(report)
+
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary_path:
+              with open(summary_path, 'a', encoding='utf-8') as handle:
+                  handle.write('## cf06 H0 concurrent A/B\n\n')
+                  handle.write('```\n' + report + '\n```\n')
+
+          for side in ('a', 'b'):
+              if (IN / side).is_dir():
+                  shutil.copytree(
+                      IN / side,
+                      OUT / ('side-' + side),
+                      symlinks=False,
+                      dirs_exist_ok=True,
+                  )
+          PY
+
+      - name: Upload combined H0 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cf06-oracle-runtime-h0-evidence
-          path: |
-            /tmp/hl7-h0-combined.patch
-            /tmp/hl7-h0-combined.patch.sha256
-            /tmp/oracle-h0-combined.jar.sha256
-            /tmp/oracle-h0-definition-navigator.sha256
-            /tmp/cf10-h0-summary-a.json
-            /tmp/cf10-h0-summary-b.json
-            /tmp/cf10-h0-summary-a.sha256
-            /tmp/cf10-h0-summary-b.sha256
-            /tmp/cf10-h0-status-a
-            /tmp/cf10-h0-status-b
-            /tmp/cf10-h0-internal-a
-            /tmp/cf10-h0-internal-b
-            /tmp/cf10-h0-comparison
-            /tmp/cf10-h0-baseline-a
-            /tmp/cf10-h0-baseline-b
-            /tmp/cf10-h0-parse-status
-            /tmp/cf10-h0-closure-a
-            /tmp/cf10-h0-closure-b
-            /tmp/cf10-h0-start-a
-            /tmp/cf10-h0-end-a
-            /tmp/cf10-h0-seconds-a
-            /tmp/cf10-h0-start-b
-            /tmp/cf10-h0-end-b
-            /tmp/cf10-h0-seconds-b
-            /tmp/cf10-h0-wall-start
-            /tmp/cf10-h0-wall-end
-            /tmp/cf10-h0-wall-seconds
-            /tmp/cf10-h0-a/summary.json
-            /tmp/cf10-h0-b/summary.json
-            /tmp/cf10-h0-a/evidence
-            /tmp/cf10-h0-b/evidence
-          if-no-files-found: warn
-          retention-days: 3
+          path: /tmp/h0-evidence
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Enforce H0 proof
         if: always()
         run: |
           set -euo pipefail
-          status_a="$(cat /tmp/cf10-h0-status-a 2>/dev/null || printf '1')"
-          status_b="$(cat /tmp/cf10-h0-status-b 2>/dev/null || printf '1')"
-          internal_a="$(cat /tmp/cf10-h0-internal-a 2>/dev/null || printf '1')"
-          internal_b="$(cat /tmp/cf10-h0-internal-b 2>/dev/null || printf '1')"
-          comparison="$(cat /tmp/cf10-h0-comparison 2>/dev/null || printf '1')"
-          baseline_a="$(cat /tmp/cf10-h0-baseline-a 2>/dev/null || printf '1')"
-          baseline_b="$(cat /tmp/cf10-h0-baseline-b 2>/dev/null || printf '1')"
-          parsed="$(cat /tmp/cf10-h0-parse-status 2>/dev/null || printf '1')"
-          closure_a="$(cat /tmp/cf10-h0-closure-a 2>/dev/null || printf '1')"
-          closure_b="$(cat /tmp/cf10-h0-closure-b 2>/dev/null || printf '1')"
-          wall_seconds="$(cat /tmp/cf10-h0-wall-seconds 2>/dev/null || printf '0')"
+          test -f "$H0_OUT/verdict.json"
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
 
-          printf 'status_a=%s status_b=%s internal_a=%s internal_b=%s comparison=%s baseline_a=%s baseline_b=%s parsed=%s closure_a=%s closure_b=%s wall_seconds=%s\n' \
-            "$status_a" "$status_b" "$internal_a" "$internal_b" "$comparison" "$baseline_a" "$baseline_b" "$parsed" "$closure_a" "$closure_b" "$wall_seconds"
-
-          test "$status_a" = 0
-          test "$status_b" = 0
-          test "$internal_a" = 0
-          test "$internal_b" = 0
-          test "$comparison" = 0
-          test "$baseline_a" = 0
-          test "$baseline_b" = 0
-          test "$parsed" = 0
-          test "$closure_a" = 0
-          test "$closure_b" = 0
-          test "$wall_seconds" -gt 0
+          verdict = json.loads(
+              (Path(os.environ['H0_OUT']) / 'verdict.json').read_text(encoding='utf-8')
+          )
+          print('classification=%s' % verdict['classification'])
+          if not verdict['all_gates_pass']:
+              print(
+                  'first_failing_gate=%s' % verdict['first_failing_gate'],
+                  file=sys.stderr,
+              )
+              print(
+                  'failing_gates=%s' % ','.join(verdict['failing_gates']),
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(
+              'H0 semantic and evidence gates passed. One passing run is not '
+              'acceptance; 3 independent passing runs are required.'
+          )
+          PY
