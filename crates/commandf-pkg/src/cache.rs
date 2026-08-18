@@ -80,6 +80,18 @@ impl PackageCache {
         }
         Ok(())
     }
+
+    pub(crate) fn read_verified(&self, digest: &str) -> Result<Vec<u8>, PackageError> {
+        self.verify(digest)?;
+        let path = self.object_path(digest);
+        fs::read(&path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                PackageError::CacheMissing(digest.to_owned())
+            } else {
+                PackageError::Io(error)
+            }
+        })
+    }
 }
 
 fn validate_digest(digest: &str) -> Result<(), PackageError> {

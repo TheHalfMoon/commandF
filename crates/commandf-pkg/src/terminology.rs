@@ -8,9 +8,9 @@ use crate::{
     compare_complete_code_systems, compare_value_set_expansions,
     terminology_index::{TerminologyClosure, TerminologyResource},
     BindingRefinement, CompatibilityDirection, CompatibilityReport, CompatibilitySeverity,
-    ElementView, Lockfile, PackageCache, PackageEvidence, ResourceKeyKind, StructuralDiffReport,
-    TerminologyDiffReport, TerminologyError, TerminologyIndeterminateReason, TerminologyRelation,
-    TerminologySetDelta,
+    ElementView, LockedPackage, Lockfile, PackageCache, PackageEvidence, ResourceKeyKind,
+    StructuralDiffReport, TerminologyDiffReport, TerminologyError, TerminologyIndeterminateReason,
+    TerminologyRelation, TerminologySetDelta,
 };
 
 pub struct TerminologyPackageState<'a> {
@@ -26,15 +26,17 @@ pub fn build_terminology_diff_report(
     compatibility: &CompatibilityReport,
 ) -> Result<TerminologyDiffReport, TerminologyError> {
     validate_report_contract(structural, compatibility)?;
-    validate_root_evidence(
+    let before_root = validate_root_evidence(
         before.lockfile,
         &structural.package_name,
         &structural.before,
     )?;
-    validate_root_evidence(after.lockfile, &structural.package_name, &structural.after)?;
+    let after_root =
+        validate_root_evidence(after.lockfile, &structural.package_name, &structural.after)?;
 
-    let before_closure = TerminologyClosure::load(before.lockfile, before.cache)?;
-    let after_closure = TerminologyClosure::load(after.lockfile, after.cache)?;
+    let before_closure =
+        TerminologyClosure::load_for_root(before.lockfile, before.cache, before_root)?;
+    let after_closure = TerminologyClosure::load_for_root(after.lockfile, after.cache, after_root)?;
 
     let pairs = matched_resource_pairs(
         &structural.package_name,
@@ -119,37 +121,32 @@ fn validate_report_contract(
     Ok(())
 }
 
-fn validate_root_evidence(
-    lockfile: &Lockfile,
+fn validate_root_evidence<'a>(
+    lockfile: &'a Lockfile,
     package_name: &str,
     evidence: &PackageEvidence,
-) -> Result<(), TerminologyError> {
-    let mut matches = lockfile
-        .packages
-        .iter()
-        .filter(|package| package.name == package_name);
+) -> Result<&'a LockedPackage, TerminologyError> {
+    let mut matches = lockfile.packages.iter().filter(|package| {
+        package.name == package_name
+            && package.version == evidence.version
+            && package.sha256 == evidence.archive_sha256
+    });
     let Some(package) = matches.next() else {
         return Err(TerminologyError::InvalidField {
             resource: package_name.to_owned(),
             field: "lockfile".to_owned(),
-            message: "root package is not present in the lockfile".to_owned(),
+            message: "exact root package identity is not present in the lockfile".to_owned(),
         });
     };
     if matches.next().is_some() {
         return Err(TerminologyError::InvalidField {
             resource: package_name.to_owned(),
             field: "lockfile".to_owned(),
-            message: "root package appears more than once in the lockfile".to_owned(),
+            message: "exact root package identity appears more than once in the lockfile"
+                .to_owned(),
         });
     }
-    if package.version != evidence.version || package.sha256 != evidence.archive_sha256 {
-        return Err(TerminologyError::InvalidField {
-            resource: package_name.to_owned(),
-            field: "lockfile".to_owned(),
-            message: "root lock identity does not match CF-03 package evidence".to_owned(),
-        });
-    }
-    Ok(())
+    Ok(package)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -220,8 +217,36 @@ fn build_binding_refinements(
             };
 
             let references_changed = before_reference != after_reference;
-            let before_resource = before_closure.resolve_value_set(before_reference)?;
-            let after_resource = after_closure.resolve_value_set(after_reference)?;
+            let before_resource = match before_closure.resolve_value_set(before_reference) {
+                Ok(resource) => resource,
+                Err(TerminologyError::AmbiguousCanonical { .. }) => {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::AmbiguousCanonical,
+                    ));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let after_resource = match after_closure.resolve_value_set(after_reference) {
+                Ok(resource) => resource,
+                Err(TerminologyError::AmbiguousCanonical { .. }) => {
+                    output.push(indeterminate_refinement(
+                        &pair.key,
+                        binding.view,
+                        &binding.element_id,
+                        before_value_set,
+                        after_value_set,
+                        TerminologyIndeterminateReason::AmbiguousCanonical,
+                    ));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             let (before_resource, after_resource) = match (before_resource, after_resource) {
                 (None, None) if !references_changed => continue,
                 (Some(before_resource), Some(after_resource)) => (before_resource, after_resource),

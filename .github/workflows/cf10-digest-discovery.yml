@@ -1,0 +1,207 @@
+name: cf10-digest-discovery
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf10-digest-discovery.yml
+      - corpus/real-ig/v1/**
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - Cargo.toml
+      - Cargo.lock
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cf10-digest-discovery.yml
+      - corpus/real-ig/v1/**
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Build commandF resolver
+        run: cargo build --locked -p commandf
+
+      - name: Resolve every frozen package twice and attest identical bytes
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/cf10-digest-discovery
+          mkdir -p /tmp/cf10-digest-discovery
+          : > /tmp/cf10-digest-discovery/failures.tsv
+
+          cat > /tmp/cf10-cases.tsv <<'CASES'
+          C001-us-core-before	hl7.fhir.us.core	8.0.1
+          C001-us-core-after	hl7.fhir.us.core	9.0.0
+          C002-ips-before	hl7.fhir.uv.ips	1.1.0
+          C002-ips-after	hl7.fhir.uv.ips	2.0.1
+          C003-mcode-before	hl7.fhir.us.mcode	3.0.0
+          C003-mcode-after	hl7.fhir.us.mcode	4.0.0
+          CASES
+
+          while IFS=$'\t' read -r id package version; do
+            test -n "$id"
+            for pass in a b; do
+              root="/tmp/cf10-digest-discovery/$id/$pass"
+              mkdir -p "$root"
+              if ! cargo run --locked --quiet -p commandf -- \
+                pkg resolve "$package@$version" \
+                --cache "$root/cache" \
+                --lock "$root/commandf.lock" \
+                2>"$root/resolve.err"; then
+                error="$(head -c 1000 "$root/resolve.err" | tr '\r\n\t' '   ')"
+                printf '%s\t%s\t%s\t%s\tresolve\t%s\n' \
+                  "$id" "$package" "$version" "$pass" "$error" \
+                  >> /tmp/cf10-digest-discovery/failures.tsv
+                continue
+              fi
+              if ! cargo run --locked --quiet -p commandf -- \
+                pkg verify \
+                --cache "$root/cache" \
+                --lock "$root/commandf.lock" \
+                2>"$root/verify.err"; then
+                error="$(head -c 1000 "$root/verify.err" | tr '\r\n\t' '   ')"
+                printf '%s\t%s\t%s\t%s\tverify\t%s\n' \
+                  "$id" "$package" "$version" "$pass" "$error" \
+                  >> /tmp/cf10-digest-discovery/failures.tsv
+              fi
+            done
+          done < /tmp/cf10-cases.tsv
+
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path('/tmp/cf10-digest-discovery')
+          failures = {}
+          failure_path = root / 'failures.tsv'
+          for raw in failure_path.read_text().splitlines():
+              state_id, package, version, run, phase, error = raw.split('\t', 5)
+              failures.setdefault(state_id, []).append({
+                  'run': run,
+                  'phase': phase,
+                  'error': error,
+              })
+
+          rows = []
+          for raw in Path('/tmp/cf10-cases.tsv').read_text().splitlines():
+              case_state, package, version = raw.split('\t')
+              state_failures = sorted(
+                  failures.get(case_state, []),
+                  key=lambda item: (item['run'], item['phase'], item['error']),
+              )
+              if state_failures:
+                  rows.append({
+                      'state_id': case_state,
+                      'package': package,
+                      'version': version,
+                      'status': 'ineligible_resolution_failure',
+                      'failures': state_failures,
+                  })
+                  continue
+
+              observed = []
+              for run in ('a', 'b'):
+                  state = root / case_state / run
+                  lock = json.loads((state / 'commandf.lock').read_text())
+                  matches = [
+                      item for item in lock['packages']
+                      if item['name'] == package and item['version'] == version
+                  ]
+                  assert len(matches) == 1, (case_state, run, matches)
+                  locked = matches[0]
+                  archive = state / 'cache' / 'sha256' / f"{locked['sha256']}.tgz"
+                  data = archive.read_bytes()
+                  actual = hashlib.sha256(data).hexdigest()
+                  assert actual == locked['sha256'], (case_state, run, actual, locked['sha256'])
+                  observed.append({
+                      'sha256': actual,
+                      'bytes': len(data),
+                      'data': data,
+                  })
+              assert observed[0]['sha256'] == observed[1]['sha256'], case_state
+              assert observed[0]['bytes'] == observed[1]['bytes'], case_state
+              assert observed[0]['data'] == observed[1]['data'], case_state
+              rows.append({
+                  'state_id': case_state,
+                  'package': package,
+                  'version': version,
+                  'status': 'attested',
+                  'sha256': observed[0]['sha256'],
+                  'archive_bytes': observed[0]['bytes'],
+                  'independent_resolutions': 2,
+                  'byte_identical': True,
+              })
+
+          rows.sort(key=lambda item: item['state_id'])
+          output = {
+              'schema': 1,
+              'selection_frozen_before_results': True,
+              'eligibility_sweep_complete': True,
+              'states': rows,
+          }
+          out = root / 'cf10-package-attestation.json'
+          out.write_text(json.dumps(output, indent=2, sort_keys=True) + '\n')
+          print(out.read_text())
+          PY
+
+      - name: Assert no upstream package archives are staged in the repository
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
+            echo 'unexpected archive tracked in repository' >&2
+            exit 1
+          fi
+
+      - name: Upload digest discovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf10-package-attestation
+          path: /tmp/cf10-digest-discovery/cf10-package-attestation.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Fail if any frozen package state is ineligible
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path('/tmp/cf10-digest-discovery/cf10-package-attestation.json').read_text()
+          )
+          failed = [state for state in evidence['states'] if state['status'] != 'attested']
+          if failed:
+              for state in failed:
+                  print(
+                      f"ineligible frozen state: {state['state_id']} "
+                      f"{state['package']}@{state['version']}"
+                  )
+                  for failure in state['failures']:
+                      print(
+                          f"  run={failure['run']} phase={failure['phase']} "
+                          f"error={failure['error']}"
+                      )
+              raise SystemExit(1)
+          PY

@@ -1,0 +1,174 @@
+name: cf10-oracle-qualification
+
+on:
+  pull_request:
+    paths:
+      - .github/scripts/cf10-oracle-qualification/**
+      - .github/workflows/cf10-oracle-qualification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-pinned-hl7:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Test deterministic qualification harness
+        run: >-
+          python3 -m unittest discover
+          -s .github/scripts/cf10-oracle-qualification
+          -p 'test_*.py'
+
+      - name: Build exact commandF and pinned HL7 adapter
+        run: |
+          cargo build --locked -p commandf
+          mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+          mkdir -p /tmp/cf10-probe-classes
+          javac \
+            -cp tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            -d /tmp/cf10-probe-classes \
+            .github/scripts/cf10-oracle-qualification/QualificationProbe.java
+
+      - name: Acquire only C001 and C002 exact states A
+        run: |
+          test ! -e /tmp/cf10-oracle-qualification-a
+          python3 .github/scripts/cf10-oracle-qualification/qualify_cf10_oracle.py \
+            acquire \
+            --commandf ./target/debug/commandf \
+            --work-root /tmp/cf10-oracle-qualification-a \
+            --output /tmp/cf10-acquisition-a.json
+
+      - name: Acquire only C001 and C002 exact states B
+        run: |
+          test ! -e /tmp/cf10-oracle-qualification-b
+          python3 .github/scripts/cf10-oracle-qualification/qualify_cf10_oracle.py \
+            acquire \
+            --commandf ./target/debug/commandf \
+            --work-root /tmp/cf10-oracle-qualification-b \
+            --output /tmp/cf10-acquisition-b.json
+
+      - name: Prove independent acquisition identity
+        run: |
+          cmp /tmp/cf10-acquisition-a.json /tmp/cf10-acquisition-b.json
+          for case in C001 C002; do
+            for side in before after; do
+              cmp \
+                "/tmp/cf10-oracle-qualification-a/states/$case/$side/commandf.lock" \
+                "/tmp/cf10-oracle-qualification-b/states/$case/$side/commandf.lock"
+            done
+            cmp \
+              "/tmp/cf10-oracle-qualification-a/cases/$case/structural.json" \
+              "/tmp/cf10-oracle-qualification-b/cases/$case/structural.json"
+          done
+
+      - name: Run pinned self/cross DIRECT and FULL_CLOSURE matrix A without network
+        run: |
+          sudo unshare --net -- \
+            python3 .github/scripts/cf10-oracle-qualification/qualify_cf10_oracle.py \
+              qualify \
+              --java "$JAVA_HOME/bin/java" \
+              --probe-classes /tmp/cf10-probe-classes \
+              --oracle-jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+              --work-root /tmp/cf10-oracle-qualification-a \
+              --output /tmp/cf10-qualification-a.json
+
+      - name: Run pinned self/cross DIRECT and FULL_CLOSURE matrix B without network
+        run: |
+          sudo unshare --net -- \
+            python3 .github/scripts/cf10-oracle-qualification/qualify_cf10_oracle.py \
+              qualify \
+              --java "$JAVA_HOME/bin/java" \
+              --probe-classes /tmp/cf10-probe-classes \
+              --oracle-jar tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+              --work-root /tmp/cf10-oracle-qualification-b \
+              --output /tmp/cf10-qualification-b.json
+
+      - name: Enforce deterministic complete evidence
+        run: |
+          cmp /tmp/cf10-qualification-a.json /tmp/cf10-qualification-b.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('/tmp/cf10-qualification-a.json').read_text())
+          assert report['schema'] == 1
+          assert report['oracle'] == {
+              'project': 'hapifhir/org.hl7.fhir.core',
+              'release': '6.10.2',
+              'source_commit': 'd06577dbc5c62c74a2a8823fbc4830a3024d5b0b',
+          }
+          assert len(report['probes']) == 12
+          assert len(report['discoveries']) == 2
+          assert len(report['discovery_probes']) >= 2
+          assert len(report['differential_shapes']) == 4
+          allowed = {
+              'CF10_ORACLE_ROOT_CAUSE_COMMAND_F_CONTEXT_DEFECT',
+              'CF10_ORACLE_ROOT_CAUSE_PINNED_HL7_COMPARATOR_LIMITATION',
+              'CF10_ORACLE_ROOT_CAUSE_MIXED',
+              'CF10_ORACLE_ROOT_CAUSE_NOT_PROVEN',
+          }
+          assert report['root_cause_class'] in allowed
+          assert set(report['case_classifications']) == {'C001', 'C002'}
+          for discovery in report['discoveries']:
+              assert discovery['selected_canonical_url']
+              assert discovery['observed_exception_path']
+          for probe in report['discovery_probes'] + report['probes']:
+              assert probe['result']['status'] in {'completed', 'exception'}
+          print(report['root_cause_class'])
+          for discovery in report['discoveries']:
+              print(
+                  discovery['case_id'],
+                  discovery['selected_canonical_url'],
+                  discovery['observed_exception_path'],
+                  discovery['hypothesis_canonical_confirmed'],
+                  discovery['hypothesis_path_confirmed'],
+              )
+          for probe in report['probes']:
+              result = probe['result']
+              print(
+                  probe['case_id'],
+                  probe['probe'],
+                  probe['context_mode'],
+                  result['status'],
+                  result.get('exception_class'),
+                  result.get('exception_message'),
+              )
+          PY
+
+      - name: Upload qualification evidence without package archives
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf10-oracle-qualification-evidence
+          path: |
+            /tmp/cf10-acquisition-a.json
+            /tmp/cf10-acquisition-b.json
+            /tmp/cf10-qualification-a.json
+            /tmp/cf10-qualification-b.json
+            /tmp/cf10-oracle-qualification-a/states/C001/before/commandf.lock
+            /tmp/cf10-oracle-qualification-a/states/C001/after/commandf.lock
+            /tmp/cf10-oracle-qualification-a/states/C002/before/commandf.lock
+            /tmp/cf10-oracle-qualification-a/states/C002/after/commandf.lock
+            /tmp/cf10-oracle-qualification-a/cases/C001/structural.json
+            /tmp/cf10-oracle-qualification-a/cases/C002/structural.json
+            /tmp/cf10-oracle-qualification-b/states/C001/before/commandf.lock
+            /tmp/cf10-oracle-qualification-b/states/C001/after/commandf.lock
+            /tmp/cf10-oracle-qualification-b/states/C002/before/commandf.lock
+            /tmp/cf10-oracle-qualification-b/states/C002/after/commandf.lock
+            /tmp/cf10-oracle-qualification-b/cases/C001/structural.json
+            /tmp/cf10-oracle-qualification-b/cases/C002/structural.json
+          if-no-files-found: warn
+          retention-days: 7

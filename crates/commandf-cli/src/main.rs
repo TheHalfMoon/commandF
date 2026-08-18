@@ -1,3 +1,4 @@
+mod corpus;
 mod oracle;
 
 use std::ffi::OsStr;
@@ -38,6 +39,10 @@ enum Command {
     Pkg {
         #[command(subcommand)]
         command: PkgCommand,
+    },
+    Corpus {
+        #[command(subcommand)]
+        command: CorpusCommand,
     },
     Inspect {
         package: String,
@@ -214,6 +219,22 @@ enum PkgCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum CorpusCommand {
+    Run {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        work_root: PathBuf,
+        #[arg(long)]
+        oracle_adapter: PathBuf,
+        #[arg(long)]
+        oracle_java: Option<PathBuf>,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
 fn main() -> ExitCode {
     let is_check = std::env::args_os().nth(1).as_deref() == Some(OsStr::new("check"));
     let cli = match Cli::try_parse() {
@@ -271,6 +292,24 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 let cache = PackageCache::new(cache);
                 lockfile.verify_cache(&cache)?;
                 println!("verified {} packages", lockfile.packages.len());
+            }
+        },
+        Command::Corpus { command } => match command {
+            CorpusCommand::Run {
+                manifest,
+                work_root,
+                oracle_adapter,
+                oracle_java,
+                format,
+            } => {
+                let execution = corpus::run(manifest, work_root, oracle_adapter, oracle_java)?;
+                let bytes = execution.summary.to_json_bytes()?;
+                match format {
+                    OutputFormat::Json => io::stdout().write_all(&bytes)?,
+                }
+                if execution.failed {
+                    return Ok(ExitCode::from(1));
+                }
             }
         },
         Command::Inspect {

@@ -1,5 +1,5 @@
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,6 +14,8 @@ pub struct Hl7OracleInvocation<'a> {
     pub core_package: &'a Path,
     pub left_package: &'a Path,
     pub right_package: &'a Path,
+    pub left_context_packages: &'a [PathBuf],
+    pub right_context_packages: &'a [PathBuf],
     pub left_url: &'a str,
     pub left_version: Option<&'a str>,
     pub right_url: &'a str,
@@ -60,7 +62,16 @@ pub fn run_hl7_oracle_adapter(
         .arg("--left-package")
         .arg(invocation.left_package)
         .arg("--right-package")
-        .arg(invocation.right_package)
+        .arg(invocation.right_package);
+
+    for context_package in invocation.left_context_packages {
+        command.arg("--left-context-package").arg(context_package);
+    }
+    for context_package in invocation.right_context_packages {
+        command.arg("--right-context-package").arg(context_package);
+    }
+
+    command
         .arg("--left-url")
         .arg(invocation.left_url)
         .arg("--right-url")

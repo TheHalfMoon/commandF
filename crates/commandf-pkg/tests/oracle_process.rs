@@ -45,10 +45,13 @@ fn invoke(
     right: &Path,
     timeout: Duration,
 ) -> Result<commandf_pkg::Hl7OracleReport, commandf_pkg::OracleError> {
+    let context_packages = Vec::<PathBuf>::new();
     let invocation = Hl7OracleInvocation {
         core_package: core,
         left_package: left,
         right_package: right,
+        left_context_packages: &context_packages,
+        right_context_packages: &context_packages,
         left_url: "http://example.org/StructureDefinition/test",
         left_version: None,
         right_url: "http://example.org/StructureDefinition/test",
@@ -69,6 +72,71 @@ fn executable_adapter_accepts_valid_pinned_json() {
         .expect("valid adapter report");
     assert_eq!(report.schema, 1);
     assert!(report.messages.is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn context_package_arguments_are_forwarded_in_input_order() {
+    let root = unique_temp_dir("contexts");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let adapter = root.join("adapter.sh");
+    let capture = root.join("args.txt");
+    write_executable(
+        &adapter,
+        &format!(
+            "printf '%s\n' \"$@\" > '{}'; printf '%s\n' '{}'",
+            capture.display(),
+            GOOD_REPORT
+        ),
+    );
+    let (core, left, right) = package_inputs(&root);
+    let left_contexts = vec![root.join("left-a.tgz"), root.join("left-b.tgz")];
+    let right_contexts = vec![root.join("right-a.tgz")];
+    for path in left_contexts.iter().chain(right_contexts.iter()) {
+        fs::write(path, b"fixture").expect("write context fixture");
+    }
+
+    let invocation = Hl7OracleInvocation {
+        core_package: &core,
+        left_package: &left,
+        right_package: &right,
+        left_context_packages: &left_contexts,
+        right_context_packages: &right_contexts,
+        left_url: "http://example.org/StructureDefinition/test",
+        left_version: None,
+        right_url: "http://example.org/StructureDefinition/test",
+        right_version: None,
+    };
+    run_hl7_oracle_adapter(&adapter, None, &invocation, Duration::from_secs(1))
+        .expect("context argv adapter report");
+
+    let args = fs::read_to_string(&capture)
+        .expect("read captured args")
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let context_args = args
+        .windows(2)
+        .filter(|pair| pair[0] == "--left-context-package" || pair[0] == "--right-context-package")
+        .map(|pair| (pair[0].clone(), pair[1].clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        context_args,
+        vec![
+            (
+                "--left-context-package".to_owned(),
+                left_contexts[0].display().to_string(),
+            ),
+            (
+                "--left-context-package".to_owned(),
+                left_contexts[1].display().to_string(),
+            ),
+            (
+                "--right-context-package".to_owned(),
+                right_contexts[0].display().to_string(),
+            ),
+        ]
+    );
     let _ = fs::remove_dir_all(root);
 }
 

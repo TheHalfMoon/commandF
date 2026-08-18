@@ -1,0 +1,207 @@
+name: cf10-real-corpus
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf10-real-corpus.yml
+      - .github/scripts/cf10-closure-evidence/**
+      - corpus/real-ig/v1/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - tools/hl7-oracle/**
+      - Cargo.toml
+      - Cargo.lock
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cf10-real-corpus.yml
+      - .github/scripts/cf10-closure-evidence/**
+      - corpus/real-ig/v1/**
+      - donors/cf-10-real-ig-delta-corpus.yaml
+      - specs/010-cf-10-real-ig-delta-corpus/**
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - tools/hl7-oracle/**
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+
+      - name: Test closure evidence verifier
+        run: python -B -m unittest discover -s .github/scripts/cf10-closure-evidence -p 'test_*.py'
+
+      - name: Build pinned HL7 oracle adapter
+        run: mvn -B -ntp -f tools/hl7-oracle/pom.xml package
+
+      - name: Build commandF corpus runner
+        run: cargo build --locked -p commandf
+
+      - name: Run frozen corpus from clean state A
+        run: |
+          set -u
+          test ! -e /tmp/cf10-real-a
+          runner_status=0
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-real-a \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-summary-a.json \
+            || runner_status=$?
+
+          internal_match=0
+          if [[ -f /tmp/cf10-real-a/summary.json ]]; then
+            cmp /tmp/cf10-summary-a.json /tmp/cf10-real-a/summary.json || internal_match=$?
+          else
+            internal_match=1
+          fi
+          printf '%s\n' "$runner_status" > /tmp/cf10-runner-status-a
+          printf '%s\n' "$internal_match" > /tmp/cf10-internal-match-a
+
+      - name: Run frozen corpus from independent clean state B
+        run: |
+          set -u
+          test ! -e /tmp/cf10-real-b
+          runner_status=0
+          ./target/debug/commandf corpus run \
+            --manifest corpus/real-ig/v1/corpus.json \
+            --work-root /tmp/cf10-real-b \
+            --oracle-adapter tools/hl7-oracle/target/commandf-hl7-oracle.jar \
+            --oracle-java "$JAVA_HOME/bin/java" \
+            --format json \
+            > /tmp/cf10-summary-b.json \
+            || runner_status=$?
+
+          internal_match=0
+          if [[ -f /tmp/cf10-real-b/summary.json ]]; then
+            cmp /tmp/cf10-summary-b.json /tmp/cf10-real-b/summary.json || internal_match=$?
+          else
+            internal_match=1
+          fi
+          printf '%s\n' "$runner_status" > /tmp/cf10-runner-status-b
+          printf '%s\n' "$internal_match" > /tmp/cf10-internal-match-b
+
+      - name: Record deterministic summary comparison
+        if: always()
+        run: |
+          set -u
+          comparison_status=0
+          if [[ -f /tmp/cf10-summary-a.json && -f /tmp/cf10-summary-b.json ]]; then
+            cmp /tmp/cf10-summary-a.json /tmp/cf10-summary-b.json || comparison_status=$?
+          else
+            comparison_status=1
+          fi
+          printf '%s\n' "$comparison_status" > /tmp/cf10-summary-comparison-status
+
+          parse_status=0
+          python - <<'PY' || parse_status=$?
+          import json
+          from pathlib import Path
+
+          a = json.loads(Path('/tmp/cf10-summary-a.json').read_text())
+          b = json.loads(Path('/tmp/cf10-summary-b.json').read_text())
+          for summary in (a, b):
+              assert summary['schema'] == 1
+              assert [case['case_id'] for case in summary['cases']] == ['C001', 'C002', 'C003']
+              assert len(summary['manifest_sha256']) == 64
+          assert all(case['status'] == 'complete' for case in a['cases'])
+          assert all(case['status'] == 'complete' for case in b['cases'])
+          print(json.dumps(a, indent=2, sort_keys=True))
+          PY
+          printf '%s\n' "$parse_status" > /tmp/cf10-summary-parse-status
+
+      - name: Bind retained lockfiles to summary closure evidence
+        if: always()
+        run: |
+          set -u
+          closure_a=0
+          closure_b=0
+          python -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-summary-a.json \
+            --evidence-root /tmp/cf10-real-a/evidence \
+            || closure_a=$?
+          python -B .github/scripts/cf10-closure-evidence/verify_closure_binding.py \
+            --summary /tmp/cf10-summary-b.json \
+            --evidence-root /tmp/cf10-real-b/evidence \
+            || closure_b=$?
+          printf '%s\n' "$closure_a" > /tmp/cf10-closure-binding-status-a
+          printf '%s\n' "$closure_b" > /tmp/cf10-closure-binding-status-b
+
+      - name: Assert metadata-only repository boundary
+        if: always()
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=no)"
+          if git ls-files | grep -E '\.(tgz|tar\.gz)$'; then
+            echo 'unexpected upstream archive tracked in repository' >&2
+            exit 1
+          fi
+          test -z "$(find corpus donors specs -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print)"
+
+      - name: Upload short-retention corpus evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf10-real-corpus-evidence
+          path: |
+            /tmp/cf10-summary-a.json
+            /tmp/cf10-summary-b.json
+            /tmp/cf10-runner-status-a
+            /tmp/cf10-runner-status-b
+            /tmp/cf10-internal-match-a
+            /tmp/cf10-internal-match-b
+            /tmp/cf10-summary-comparison-status
+            /tmp/cf10-summary-parse-status
+            /tmp/cf10-closure-binding-status-a
+            /tmp/cf10-closure-binding-status-b
+            /tmp/cf10-real-a/summary.json
+            /tmp/cf10-real-b/summary.json
+            /tmp/cf10-real-a/evidence
+            /tmp/cf10-real-b/evidence
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Enforce corpus proof outcome
+        if: always()
+        run: |
+          set -euo pipefail
+          status_a="$(cat /tmp/cf10-runner-status-a 2>/dev/null || printf '1')"
+          status_b="$(cat /tmp/cf10-runner-status-b 2>/dev/null || printf '1')"
+          internal_a="$(cat /tmp/cf10-internal-match-a 2>/dev/null || printf '1')"
+          internal_b="$(cat /tmp/cf10-internal-match-b 2>/dev/null || printf '1')"
+          comparison="$(cat /tmp/cf10-summary-comparison-status 2>/dev/null || printf '1')"
+          parsed="$(cat /tmp/cf10-summary-parse-status 2>/dev/null || printf '1')"
+          closure_a="$(cat /tmp/cf10-closure-binding-status-a 2>/dev/null || printf '1')"
+          closure_b="$(cat /tmp/cf10-closure-binding-status-b 2>/dev/null || printf '1')"
+
+          printf 'runner_a=%s runner_b=%s internal_a=%s internal_b=%s comparison=%s parsed=%s closure_a=%s closure_b=%s\n' \
+            "$status_a" "$status_b" "$internal_a" "$internal_b" "$comparison" "$parsed" "$closure_a" "$closure_b"
+
+          if [[ "$status_a" != 0 || "$status_b" != 0 || \
+                "$internal_a" != 0 || "$internal_b" != 0 || \
+                "$comparison" != 0 || "$parsed" != 0 || \
+                "$closure_a" != 0 || "$closure_b" != 0 ]]; then
+            exit 1
+          fi

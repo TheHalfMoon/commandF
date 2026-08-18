@@ -19,6 +19,10 @@ mod compatibility;
 mod compatibility_error;
 mod compatibility_model;
 mod compatibility_validate;
+mod corpus;
+mod corpus_error;
+mod corpus_evaluate;
+mod corpus_model;
 mod error;
 mod lock;
 mod model;
@@ -63,6 +67,25 @@ pub use compatibility_model::{
     CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
 };
 pub use compatibility_validate::classify_structural_diff;
+pub use corpus::{
+    attest_corpus_package_state, canonical_corpus_manifest_bytes, parse_corpus_manifest,
+    validate_corpus_manifest, MAX_CORPUS_ARCHIVE_BYTES, MAX_CORPUS_CASES,
+    MAX_CORPUS_MANIFEST_BYTES,
+};
+pub use corpus_error::CorpusError;
+pub use corpus_evaluate::{
+    evaluate_corpus_case, evaluate_corpus_compatibility, evaluate_corpus_structural,
+    evaluate_corpus_terminology, failed_corpus_case_summary,
+    failed_corpus_case_summary_with_closure, summarize_corpus_case, CorpusCaseReports,
+    CorpusPackageStateInput,
+};
+pub use corpus_model::{
+    CorpusCaseStatus, CorpusCaseSummary, CorpusClosurePackage, CorpusCompatibilitySummary,
+    CorpusOracleMode, CorpusOracleSummary, CorpusPackageAttestation, CorpusPackageSide,
+    CorpusPackageState, CorpusRightsMode, CorpusRunSummary, CorpusSelectionPolicy,
+    CorpusStructuralSummary, CorpusSummaryPackageState, CorpusTerminologySummary, RealIgCase,
+    RealIgCorpus,
+};
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
