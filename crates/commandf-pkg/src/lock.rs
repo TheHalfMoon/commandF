@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::{PackageCache, PackageError};
+use crate::{PackageCache, PackageError, PackageName, VersionConstraint};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Lockfile {
@@ -166,7 +167,7 @@ impl Lockfile {
             ));
         }
 
-        let mut package_order = self
+        let package_order = self
             .packages
             .iter()
             .map(|package| (package.name.as_str(), package.version.as_str()))
@@ -177,14 +178,9 @@ impl Lockfile {
                 "schema v2 packages contain a duplicate exact identity".to_owned(),
             ));
         }
-        package_order.sort();
-        if package_order
-            != self
-                .packages
-                .iter()
-                .map(|package| (package.name.as_str(), package.version.as_str()))
-                .collect::<Vec<_>>()
-        {
+        let mut canonical_package_order = package_order.clone();
+        canonical_package_order.sort();
+        if canonical_package_order != package_order {
             return Err(PackageError::InvalidLockfile(
                 "schema v2 packages must be sorted by name and version".to_owned(),
             ));
@@ -246,6 +242,8 @@ impl Lockfile {
                 )));
             }
 
+            validate_edge_target_matches_constraint(edge)?;
+
             let dependency_key = (
                 edge.from_name.as_str(),
                 edge.from_version.as_str(),
@@ -276,6 +274,36 @@ impl Lockfile {
 
         Ok(())
     }
+}
+
+fn validate_edge_target_matches_constraint(edge: &ResolvedDependency) -> Result<(), PackageError> {
+    let target_name = PackageName::parse(edge.to_name.clone()).map_err(|error| {
+        PackageError::InvalidLockfile(format!(
+            "resolved dependency target name {:?} is invalid: {error}",
+            edge.to_name
+        ))
+    })?;
+    let constraint = VersionConstraint::parse(&target_name, &edge.declared_constraint).map_err(
+        |error| {
+            PackageError::InvalidLockfile(format!(
+                "resolved dependency constraint {:?} for {} is invalid: {error}",
+                edge.declared_constraint, edge.to_name
+            ))
+        },
+    )?;
+    let target_version = Version::parse(&edge.to_version).map_err(|error| {
+        PackageError::InvalidLockfile(format!(
+            "resolved dependency target version {:?} for {} is invalid: {error}",
+            edge.to_version, edge.to_name
+        ))
+    })?;
+    if !constraint.matches(&target_version) {
+        return Err(PackageError::InvalidLockfile(format!(
+            "resolved dependency target {}@{} does not satisfy declared constraint {}",
+            edge.to_name, edge.to_version, edge.declared_constraint
+        )));
+    }
+    Ok(())
 }
 
 fn canonicalize_roots_and_packages(roots: &mut Vec<String>, packages: &mut [LockedPackage]) {
