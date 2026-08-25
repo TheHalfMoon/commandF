@@ -134,18 +134,8 @@ fn builds_deterministic_context_graph_with_explicit_resolution_states() {
     let lock = Lockfile::new_v2(
         vec!["acme.refs@1.0.0".to_owned()],
         vec![
-            locked_package(
-                "acme.refs",
-                "1.0.0",
-                &refs_sha,
-                refs_dependencies,
-            ),
-            locked_package(
-                "acme.targets",
-                "1.0.0",
-                &targets_sha,
-                BTreeMap::new(),
-            ),
+            locked_package("acme.refs", "1.0.0", &refs_sha, refs_dependencies),
+            locked_package("acme.targets", "1.0.0", &targets_sha, BTreeMap::new()),
         ],
         vec![ResolvedDependency {
             from_name: "acme.refs".to_owned(),
@@ -158,12 +148,18 @@ fn builds_deterministic_context_graph_with_explicit_resolution_states() {
 
     let first = build_context_graph(&lock, &cache).unwrap();
     let second = build_context_graph(&lock, &cache).unwrap();
-    assert_eq!(first.to_json_bytes().unwrap(), second.to_json_bytes().unwrap());
+    assert_eq!(
+        first.to_json_bytes().unwrap(),
+        second.to_json_bytes().unwrap()
+    );
     assert_eq!(first.schema, 1);
     assert_eq!(first.lock_schema, Lockfile::SCHEMA_V2);
     assert_eq!(first.packages.len(), 2);
     assert_eq!(first.package_dependency_edges.len(), 1);
-    assert_eq!(first.coverage.unsupported_source_resource_types, vec!["Patient"]);
+    assert_eq!(
+        first.coverage.unsupported_source_resource_types,
+        vec!["Patient"]
+    );
 
     assert_resolution(
         &first,
