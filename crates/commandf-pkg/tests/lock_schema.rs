@@ -23,6 +23,21 @@ fn schema_v1_rejects_resolved_dependency_evidence() {
 }
 
 #[test]
+fn schema_v1_refuses_to_serialize_resolved_dependency_evidence() {
+    let mut lock = Lockfile::new(Vec::new(), Vec::new());
+    lock.resolved_dependencies.push(ResolvedDependency {
+        from_name: "acme.parent".to_owned(),
+        from_version: "1.0.0".to_owned(),
+        to_name: "acme.child".to_owned(),
+        to_version: "1.0.0".to_owned(),
+        declared_constraint: "1.0.0".to_owned(),
+    });
+
+    let error = lock.to_bytes().unwrap_err();
+    assert!(matches!(error, PackageError::InvalidLockfile(_)));
+}
+
+#[test]
 fn schema_v2_requires_resolved_dependency_field() {
     let bytes = br#"{"schema":2,"roots":[],"packages":[]}"#;
     let error = Lockfile::from_slice(bytes).unwrap_err();
