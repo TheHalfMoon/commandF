@@ -52,17 +52,21 @@ pub fn build_context_graph(
         let from = package_identities
             .get(&(edge.from_name.clone(), edge.from_version.clone()))
             .cloned()
-            .ok_or_else(|| crate::PackageError::InvalidLockfile(format!(
-                "context graph source package {}@{} disappeared after lock validation",
-                edge.from_name, edge.from_version
-            )))?;
+            .ok_or_else(|| {
+                crate::PackageError::InvalidLockfile(format!(
+                    "context graph source package {}@{} disappeared after lock validation",
+                    edge.from_name, edge.from_version
+                ))
+            })?;
         let to = package_identities
             .get(&(edge.to_name.clone(), edge.to_version.clone()))
             .cloned()
-            .ok_or_else(|| crate::PackageError::InvalidLockfile(format!(
-                "context graph target package {}@{} disappeared after lock validation",
-                edge.to_name, edge.to_version
-            )))?;
+            .ok_or_else(|| {
+                crate::PackageError::InvalidLockfile(format!(
+                    "context graph target package {}@{} disappeared after lock validation",
+                    edge.to_name, edge.to_version
+                ))
+            })?;
         package_dependency_edges.push(ContextPackageDependencyEdge {
             from,
             to,
@@ -102,10 +106,12 @@ pub fn build_context_graph(
             let package_identity = package_identities
                 .get(&(package.name.clone(), package.version.clone()))
                 .cloned()
-                .ok_or_else(|| crate::PackageError::InvalidLockfile(format!(
-                    "context graph package {}@{} disappeared after lock validation",
-                    package.name, package.version
-                )))?;
+                .ok_or_else(|| {
+                    crate::PackageError::InvalidLockfile(format!(
+                        "context graph package {}@{} disappeared after lock validation",
+                        package.name, package.version
+                    ))
+                })?;
             let artifact_identity = ContextArtifactIdentity {
                 package: package_identity,
                 filename: inspected.filename.clone(),
@@ -125,11 +131,9 @@ pub fn build_context_graph(
                     source,
                 })
             })?;
-            let object = value.as_object().ok_or_else(|| invalid_field(
-                &scanned.filename,
-                "$",
-                "a JSON object",
-            ))?;
+            let object = value
+                .as_object()
+                .ok_or_else(|| invalid_field(&scanned.filename, "$", "a JSON object"))?;
             extract_references(
                 &artifact_identity,
                 &scanned.filename,
@@ -314,12 +318,13 @@ fn extract_structure_definition(
     let elements = required_array(differential, "element", file, "differential.element")?;
     for (element_index, element) in elements.iter().enumerate() {
         let element_path = format!("differential.element[{element_index}]");
-        let element = element.as_object().ok_or_else(|| {
-            invalid_field(file, &element_path, "a JSON object")
-        })?;
+        let element = element
+            .as_object()
+            .ok_or_else(|| invalid_field(file, &element_path, "a JSON object"))?;
         let element_id = required_string(element, "id", file, &format!("{element_path}.id"))?;
 
-        if let Some(types) = optional_array(element, "type", file, &format!("{element_path}.type"))? {
+        if let Some(types) = optional_array(element, "type", file, &format!("{element_path}.type"))?
+        {
             for (type_index, type_value) in types.iter().enumerate() {
                 let type_path = format!("{element_path}.type[{type_index}]");
                 let type_object = type_value
@@ -348,12 +353,9 @@ fn extract_structure_definition(
             }
         }
 
-        if let Some(binding) = optional_object(
-            element,
-            "binding",
-            file,
-            &format!("{element_path}.binding"),
-        )? {
+        if let Some(binding) =
+            optional_object(element, "binding", file, &format!("{element_path}.binding"))?
+        {
             if let Some(canonical) = optional_string(
                 binding,
                 "valueSet",
@@ -436,12 +438,9 @@ fn extract_value_set(
             let clause = clause
                 .as_object()
                 .ok_or_else(|| invalid_field(file, &clause_path, "a JSON object"))?;
-            if let Some(system) = optional_string(
-                clause,
-                "system",
-                file,
-                &format!("{clause_path}.system"),
-            )? {
+            if let Some(system) =
+                optional_string(clause, "system", file, &format!("{clause_path}.system"))?
+            {
                 push_reference(
                     output,
                     source,
@@ -528,8 +527,7 @@ fn required_string(
     file: &str,
     path: &str,
 ) -> Result<String, ContextGraphError> {
-    optional_string(object, field, file, path)?
-        .ok_or_else(|| invalid_field(file, path, "a string"))
+    optional_string(object, field, file, path)?.ok_or_else(|| invalid_field(file, path, "a string"))
 }
 
 fn optional_array<'a>(
@@ -551,8 +549,7 @@ fn required_array<'a>(
     file: &str,
     path: &str,
 ) -> Result<&'a Vec<Value>, ContextGraphError> {
-    optional_array(object, field, file, path)?
-        .ok_or_else(|| invalid_field(file, path, "an array"))
+    optional_array(object, field, file, path)?.ok_or_else(|| invalid_field(file, path, "an array"))
 }
 
 fn optional_object<'a>(
@@ -568,11 +565,7 @@ fn optional_object<'a>(
     }
 }
 
-fn invalid_field(
-    file: &str,
-    path: &str,
-    expected: &'static str,
-) -> ContextGraphError {
+fn invalid_field(file: &str, path: &str, expected: &'static str) -> ContextGraphError {
     ContextGraphError::InvalidResourceField {
         file: file.to_owned(),
         path: path.to_owned(),
