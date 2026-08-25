@@ -61,6 +61,10 @@ impl PackageCache {
     }
 
     pub fn verify(&self, digest: &str) -> Result<(), PackageError> {
+        self.read_verified(digest).map(|_| ())
+    }
+
+    pub fn read_verified(&self, digest: &str) -> Result<Vec<u8>, PackageError> {
         validate_digest(digest)?;
         let path = self.object_path(digest);
         let bytes = fs::read(&path).map_err(|error| {
@@ -78,7 +82,7 @@ impl PackageCache {
                 found,
             });
         }
-        Ok(())
+        Ok(bytes)
     }
 }
 
