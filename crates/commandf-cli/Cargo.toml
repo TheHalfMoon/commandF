@@ -8,3 +8,8 @@ publish.workspace = true
 [dependencies]
 clap.workspace = true
 commandf-pkg = { path = "../commandf-pkg" }
+
+[dev-dependencies]
+flate2.workspace = true
+tar.workspace = true
+tempfile = "3.12"
