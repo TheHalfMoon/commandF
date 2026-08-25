@@ -40,9 +40,11 @@ fn schema_v2_accepts_empty_edges_for_root_only_lock() {
 
 #[test]
 fn schema_v2_round_trip_retains_exact_edge_evidence() {
+    let mut parent_dependencies = BTreeMap::new();
+    parent_dependencies.insert("acme.child".to_owned(), "2.0.x".to_owned());
     let packages = vec![
-        package("acme.child", "2.0.0"),
-        package("acme.parent", "1.0.0"),
+        package("acme.child", "2.0.0", BTreeMap::new()),
+        package("acme.parent", "1.0.0", parent_dependencies),
     ];
     let edge = ResolvedDependency {
         from_name: "acme.parent".to_owned(),
@@ -65,15 +67,57 @@ fn schema_v2_round_trip_retains_exact_edge_evidence() {
 
 #[test]
 fn schema_v2_rejects_edge_with_missing_endpoint() {
+    let mut dependencies = BTreeMap::new();
+    dependencies.insert("acme.missing".to_owned(), "2.0.0".to_owned());
     let lock = Lockfile::new_v2(
         vec!["acme.parent@1.0.0".to_owned()],
-        vec![package("acme.parent", "1.0.0")],
+        vec![package("acme.parent", "1.0.0", dependencies)],
         vec![ResolvedDependency {
             from_name: "acme.parent".to_owned(),
             from_version: "1.0.0".to_owned(),
             to_name: "acme.missing".to_owned(),
             to_version: "2.0.0".to_owned(),
             declared_constraint: "2.0.0".to_owned(),
+        }],
+    );
+
+    let error = lock.to_bytes().unwrap_err();
+    assert!(matches!(error, PackageError::InvalidLockfile(_)));
+}
+
+#[test]
+fn schema_v2_rejects_missing_edge_for_declared_dependency() {
+    let mut dependencies = BTreeMap::new();
+    dependencies.insert("acme.child".to_owned(), "2.0.0".to_owned());
+    let lock = Lockfile::new_v2(
+        vec!["acme.parent@1.0.0".to_owned()],
+        vec![
+            package("acme.child", "2.0.0", BTreeMap::new()),
+            package("acme.parent", "1.0.0", dependencies),
+        ],
+        vec![],
+    );
+
+    let error = lock.to_bytes().unwrap_err();
+    assert!(matches!(error, PackageError::InvalidLockfile(_)));
+}
+
+#[test]
+fn schema_v2_rejects_target_version_that_does_not_match_declared_constraint() {
+    let mut dependencies = BTreeMap::new();
+    dependencies.insert("acme.child".to_owned(), "2.0.x".to_owned());
+    let lock = Lockfile::new_v2(
+        vec!["acme.parent@1.0.0".to_owned()],
+        vec![
+            package("acme.child", "3.0.0", BTreeMap::new()),
+            package("acme.parent", "1.0.0", dependencies),
+        ],
+        vec![ResolvedDependency {
+            from_name: "acme.parent".to_owned(),
+            from_version: "1.0.0".to_owned(),
+            to_name: "acme.child".to_owned(),
+            to_version: "3.0.0".to_owned(),
+            declared_constraint: "2.0.x".to_owned(),
         }],
     );
 
@@ -110,12 +154,16 @@ fn unsupported_lock_schema_fails_closed() {
     assert!(matches!(error, PackageError::UnsupportedLockSchema { .. }));
 }
 
-fn package(name: &str, version: &str) -> LockedPackage {
+fn package(
+    name: &str,
+    version: &str,
+    dependencies: BTreeMap<String, String>,
+) -> LockedPackage {
     LockedPackage {
         name: name.to_owned(),
         version: version.to_owned(),
         sha256: "a".repeat(64),
         source: "memory:test".to_owned(),
-        dependencies: BTreeMap::new(),
+        dependencies,
     }
 }
