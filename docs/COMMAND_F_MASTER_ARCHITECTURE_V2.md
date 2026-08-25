@@ -119,6 +119,20 @@ Any future source profiler that touches instances must be a separate on-premises
 
 Each CF slice is a Spec Kit-style feature unit with `spec.md`, `plan.md`, and `tasks.md`, followed by consistency analysis, implementation, deterministic evidence, and a convergence pass. The specification states **what/why**; the plan states **how**; tasks are independently verifiable work items. Feature architecture must not be smuggled into the constitution or treated as completed merely because documentation exists.
 
+## Roadmap identity reconciliation
+
+Canonical execution used `CF-11` for the multi-version package-graph foundation correction required to represent real transitive FHIR package closures. That completed history is retained exactly and is not renamed.
+
+The ecosystem Context Graph originally planned under numeric CF-11 still remains a required prerequisite for `CF-12 commandf impact`. To restore that missing product capability without rewriting history or shifting every downstream identifier, the graph-gap restoration slice is named:
+
+```text
+CF-11G = ecosystem Context Graph + `commandf context`
+```
+
+`CF-11G` is a product slice identity. Its Spec Kit package uses sequence `012` only because that is the next available spec-directory sequence. CF-12 and later product identifiers remain unchanged.
+
+The graph slice consumes exact multi-version package identity from canonical CF-11 and canonical artifact inspection from CF-02. It does not depend on the external CF-06/CF-10 HL7-maintainer gate.
+
 ## First execution stack
 
 | Slice | User-visible result | Depends on |
@@ -133,12 +147,13 @@ Each CF slice is a Spec Kit-style feature unit with `spec.md`, `plan.md`, and `t
 | CF-08 | GitHub Action + annotations | CF-05 |
 | CF-09 | FSH source mapping | CF-08 |
 | CF-10 | public real-IG delta corpus | CF-06, CF-07 |
-| CF-11 | ecosystem context graph | CF-02 |
-| CF-12 | `commandf impact` | CF-11 |
+| CF-11 | multi-version package graph foundation correction | CF-01 |
+| CF-11G | ecosystem Context Graph + `commandf context` | CF-02, CF-11 |
+| CF-12 | `commandf impact` | CF-11G |
 | CF-13 | baselines/suppression/quality gates | CF-05 |
 | CF-14 | on-prem aggregate-only source profiler | CF-02 |
 | CF-15 | verified dry-run recipes | CF-04, CF-09 |
-| CF-16 | mapping analysis IR, parse-only | CF-11 |
+| CF-16 | mapping analysis IR, parse-only | CF-11G |
 
 ## Mandatory acceptance gates
 
