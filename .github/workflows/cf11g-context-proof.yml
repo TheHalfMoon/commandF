@@ -57,7 +57,10 @@ jobs:
           test -s /tmp/cf11g-context.sha256
 
       - name: Assert repository remains clean
-        run: test -z "$(git status --porcelain)"
+        run: |
+          set -euo pipefail
+          status="$(git -c safe.directory="$GITHUB_WORKSPACE" status --porcelain)"
+          test -z "$status"
 
       - name: Upload context determinism evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
