@@ -87,11 +87,18 @@ impl Lockfile {
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, PackageError> {
         let mut bytes = match self.schema {
-            Self::SCHEMA_V1 => serde_json::to_vec_pretty(&LockfileV1 {
-                schema: self.schema,
-                roots: &self.roots,
-                packages: &self.packages,
-            })?,
+            Self::SCHEMA_V1 => {
+                if !self.resolved_dependencies.is_empty() {
+                    return Err(PackageError::InvalidLockfile(
+                        "schema v1 must not contain resolved_dependencies".to_owned(),
+                    ));
+                }
+                serde_json::to_vec_pretty(&LockfileV1 {
+                    schema: self.schema,
+                    roots: &self.roots,
+                    packages: &self.packages,
+                })?
+            }
             Self::SCHEMA_V2 => {
                 self.validate_v2()?;
                 serde_json::to_vec_pretty(&LockfileV2 {
