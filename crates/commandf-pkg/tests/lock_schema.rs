@@ -151,10 +151,7 @@ fn schema_v2_rejects_noncanonical_edge_order() {
 fn unsupported_lock_schema_fails_closed() {
     let bytes = br#"{"schema":3,"roots":[],"packages":[],"resolved_dependencies":[]}"#;
     let error = Lockfile::from_slice(bytes).unwrap_err();
-    assert!(matches!(
-        error,
-        PackageError::UnsupportedLockSchema { .. }
-    ));
+    assert!(matches!(error, PackageError::UnsupportedLockSchema { .. }));
 }
 
 fn package(name: &str, version: &str, dependencies: BTreeMap<String, String>) -> LockedPackage {
