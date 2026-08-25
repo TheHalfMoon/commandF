@@ -157,11 +157,38 @@ impl Lockfile {
     }
 
     fn validate_v2(&self) -> Result<(), PackageError> {
-        let package_identities = self
+        let mut canonical_roots = self.roots.clone();
+        canonical_roots.sort();
+        canonical_roots.dedup();
+        if canonical_roots != self.roots {
+            return Err(PackageError::InvalidLockfile(
+                "schema v2 roots must be sorted and deduplicated".to_owned(),
+            ));
+        }
+
+        let mut package_order = self
             .packages
             .iter()
             .map(|package| (package.name.as_str(), package.version.as_str()))
-            .collect::<BTreeSet<_>>();
+            .collect::<Vec<_>>();
+        let package_identities = package_order.iter().copied().collect::<BTreeSet<_>>();
+        if package_identities.len() != self.packages.len() {
+            return Err(PackageError::InvalidLockfile(
+                "schema v2 packages contain a duplicate exact identity".to_owned(),
+            ));
+        }
+        package_order.sort();
+        if package_order
+            != self
+                .packages
+                .iter()
+                .map(|package| (package.name.as_str(), package.version.as_str()))
+                .collect::<Vec<_>>()
+        {
+            return Err(PackageError::InvalidLockfile(
+                "schema v2 packages must be sorted by name and version".to_owned(),
+            ));
+        }
 
         let mut canonical_edges = self.resolved_dependencies.clone();
         canonical_edges.sort();
@@ -172,13 +199,22 @@ impl Lockfile {
             ));
         }
 
+        let packages_by_identity = self
+            .packages
+            .iter()
+            .map(|package| ((package.name.as_str(), package.version.as_str()), package))
+            .collect::<BTreeMap<_, _>>();
+        let mut covered_dependencies = BTreeSet::new();
+
         for edge in &self.resolved_dependencies {
-            if !package_identities.contains(&(edge.from_name.as_str(), edge.from_version.as_str())) {
-                return Err(PackageError::InvalidLockfile(format!(
-                    "resolved dependency source {}@{} is not present in packages",
-                    edge.from_name, edge.from_version
-                )));
-            }
+            let parent = packages_by_identity
+                .get(&(edge.from_name.as_str(), edge.from_version.as_str()))
+                .ok_or_else(|| {
+                    PackageError::InvalidLockfile(format!(
+                        "resolved dependency source {}@{} is not present in packages",
+                        edge.from_name, edge.from_version
+                    ))
+                })?;
             if !package_identities.contains(&(edge.to_name.as_str(), edge.to_version.as_str())) {
                 return Err(PackageError::InvalidLockfile(format!(
                     "resolved dependency target {}@{} is not present in packages",
@@ -190,6 +226,51 @@ impl Lockfile {
                     "resolved dependency {}@{} -> {}@{} has an empty declared constraint",
                     edge.from_name, edge.from_version, edge.to_name, edge.to_version
                 )));
+            }
+
+            let manifest_constraint = parent.dependencies.get(&edge.to_name).ok_or_else(|| {
+                PackageError::InvalidLockfile(format!(
+                    "resolved dependency {}@{} -> {}@{} is not declared by the source package manifest",
+                    edge.from_name, edge.from_version, edge.to_name, edge.to_version
+                ))
+            })?;
+            if manifest_constraint != &edge.declared_constraint {
+                return Err(PackageError::InvalidLockfile(format!(
+                    "resolved dependency {}@{} -> {}@{} records constraint {:?}, but the source package declares {:?}",
+                    edge.from_name,
+                    edge.from_version,
+                    edge.to_name,
+                    edge.to_version,
+                    edge.declared_constraint,
+                    manifest_constraint
+                )));
+            }
+
+            let dependency_key = (
+                edge.from_name.as_str(),
+                edge.from_version.as_str(),
+                edge.to_name.as_str(),
+            );
+            if !covered_dependencies.insert(dependency_key) {
+                return Err(PackageError::InvalidLockfile(format!(
+                    "schema v2 records more than one resolved target for dependency {}@{} -> {}",
+                    edge.from_name, edge.from_version, edge.to_name
+                )));
+            }
+        }
+
+        for package in &self.packages {
+            for dependency_name in package.dependencies.keys() {
+                if !covered_dependencies.contains(&(
+                    package.name.as_str(),
+                    package.version.as_str(),
+                    dependency_name.as_str(),
+                )) {
+                    return Err(PackageError::InvalidLockfile(format!(
+                        "schema v2 is missing resolved dependency evidence for {}@{} -> {}",
+                        package.name, package.version, dependency_name
+                    )));
+                }
             }
         }
 
