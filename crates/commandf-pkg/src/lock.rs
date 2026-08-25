@@ -283,14 +283,13 @@ fn validate_edge_target_matches_constraint(edge: &ResolvedDependency) -> Result<
             edge.to_name
         ))
     })?;
-    let constraint = VersionConstraint::parse(&target_name, &edge.declared_constraint).map_err(
-        |error| {
+    let constraint =
+        VersionConstraint::parse(&target_name, &edge.declared_constraint).map_err(|error| {
             PackageError::InvalidLockfile(format!(
                 "resolved dependency constraint {:?} for {} is invalid: {error}",
                 edge.declared_constraint, edge.to_name
             ))
-        },
-    )?;
+        })?;
     let target_version = Version::parse(&edge.to_version).map_err(|error| {
         PackageError::InvalidLockfile(format!(
             "resolved dependency target version {:?} for {} is invalid: {error}",
