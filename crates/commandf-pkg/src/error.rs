@@ -28,8 +28,10 @@ pub enum PackageError {
     ManifestTooLarge,
     #[error("package identity mismatch: expected {expected}, found {found}")]
     IdentityMismatch { expected: String, found: String },
-    #[error("unsupported commandf.lock schema {found}; expected {expected}")]
+    #[error("unsupported commandf.lock schema {found}; latest supported schema is {expected}")]
     UnsupportedLockSchema { found: u32, expected: u32 },
+    #[error("invalid commandf.lock: {0}")]
+    InvalidLockfile(String),
     #[error("invalid SHA-256 digest: {0}")]
     InvalidDigest(String),
     #[error("cache object missing: {0}")]
