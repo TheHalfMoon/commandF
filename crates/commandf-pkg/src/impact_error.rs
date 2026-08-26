@@ -2,15 +2,42 @@ use std::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ImpactError {
-    UnsupportedDiffSchema { found: u32 },
-    UnsupportedContextSchema { side: &'static str, found: u32 },
-    UnsupportedLockSchema { side: &'static str, found: u32 },
-    SubjectPackageMissing { side: &'static str, identity: String },
-    SubjectPackageAmbiguous { side: &'static str, identity: String },
-    ArtifactMissing { side: &'static str, file: String },
-    ArtifactAmbiguous { side: &'static str, file: String },
-    ConflictingResourceFilename { resource: String, side: &'static str },
-    InconsistentResolvedReference { side: &'static str, canonical: String, candidates: usize },
+    UnsupportedDiffSchema {
+        found: u32,
+    },
+    UnsupportedContextSchema {
+        side: &'static str,
+        found: u32,
+    },
+    UnsupportedLockSchema {
+        side: &'static str,
+        found: u32,
+    },
+    SubjectPackageMissing {
+        side: &'static str,
+        identity: String,
+    },
+    SubjectPackageAmbiguous {
+        side: &'static str,
+        identity: String,
+    },
+    ArtifactMissing {
+        side: &'static str,
+        file: String,
+    },
+    ArtifactAmbiguous {
+        side: &'static str,
+        file: String,
+    },
+    ConflictingResourceFilename {
+        resource: String,
+        side: &'static str,
+    },
+    InconsistentResolvedReference {
+        side: &'static str,
+        canonical: String,
+        candidates: usize,
+    },
 }
 
 impl fmt::Display for ImpactError {
