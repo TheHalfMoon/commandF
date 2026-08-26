@@ -23,6 +23,9 @@ mod context;
 mod context_error;
 mod context_model;
 mod error;
+mod impact;
+mod impact_error;
+mod impact_model;
 mod lock;
 mod model;
 mod oracle_error;
@@ -74,6 +77,13 @@ pub use context_model::{
     ContextPackageDependencyEdge, ContextPackageIdentity, ContextPackageNode,
 };
 pub use error::PackageError;
+pub use impact::build_impact_report;
+pub use impact_error::ImpactError;
+pub use impact_model::{
+    ImpactArtifactPathStep, ImpactArtifactRelation, ImpactCoverage, ImpactGraphEvidence,
+    ImpactPackagePathStep, ImpactPackageRelation, ImpactReport, ImpactSeed, ImpactSeedKind,
+    ImpactSide, ImpactSubject, ImpactUnresolvedBoundary,
+};
 pub use lock::{LockedPackage, Lockfile, ResolvedDependency};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
 pub use oracle_error::OracleError;
