@@ -60,7 +60,7 @@ No checked-in configuration/workflow currently exists for:
 - cargo-audit;
 - zizmor;
 - OpenSSF Scorecard;
-- repository-owned verification that all workflow references stay immutable/credential-minimal.
+- repository-owned verification that all workflow references, permission grants, checkout credentials, and proof-container identities remain within explicit policy.
 
 ## Implementation architecture
 
@@ -75,9 +75,13 @@ Expected responsibilities:
 3. permit local `./` references;
 4. require external action refs to end in a full 40-hex commit SHA;
 5. inspect checkout steps and require `persist-credentials: false` unless the policy file names a specific bounded exception;
-6. flag proof-critical `*-latest` runner labels according to the AF-01 policy;
-7. ensure newly added workflow files cannot escape the audit by using a complete tracked-file enumeration rather than a hard-coded subset;
-8. emit deterministic machine-readable result plus a concise human-readable failure report.
+6. normalize effective workflow/job permissions and compare them against a checked-in machine-readable allowlist/need declaration; fail when a workflow or job requests broader authority than declared, including inherited/default authority that is not explicitly accounted for;
+7. inspect proof-critical job and service `container.image` references and require an accepted digest identity rather than a mutable tag/reference; any non-proof exception must be explicit and bounded in policy;
+8. flag proof-critical `*-latest` runner labels according to the AF-01 policy;
+9. ensure newly added workflow files cannot escape the audit by using a complete tracked-file enumeration rather than a hard-coded subset;
+10. emit deterministic machine-readable result plus a concise human-readable failure report.
+
+The checked-in policy must be sufficient for a reviewer and the audit to answer, for every workflow/job, which permissions and container-identity modes are allowed. Prose-only intent is not enough because future permission/container escalation must be mechanically rejected.
 
 Implementation language should minimize new dependencies. A small Python standard-library or shell+Python verifier is acceptable because it is repository CI tooling, not commandF trusted product runtime. The product core remains Rust-owned.
 
@@ -85,7 +89,9 @@ Workflow updates in the same stack must:
 
 - replace mutable external action tags with verified full SHAs;
 - set `persist-credentials: false` on read-only checkout;
+- make top-level/job permissions explicit and no broader than the checked-in need declaration;
 - change proof-critical runner labels from `*-latest` to explicit supported labels such as `ubuntu-24.04` where the job semantics allow it;
+- require digest-pinned proof-critical job/service containers when a container is part of the execution proof;
 - preserve all existing steps/assertions/path filters;
 - add timeouts if a touched job lacks one and an appropriate bound can be established;
 - keep `cargo --locked` semantics.
@@ -145,7 +151,7 @@ If the first real run shows a different severity calibration is appropriate, upd
 
 #### OpenSSF Scorecard
 
-Add Scorecard in the least-authority supported mode for this public repository. Pin the action to a verified full commit SHA. If publishing results requires `id-token: write` or `security-events: write`, scope those permissions only to the Scorecard job.
+Add Scorecard in the least-authority supported mode for this public repository. Pin the action to a verified full commit SHA. If publishing results requires `id-token: write` or `security-events: write`, scope those permissions only to the Scorecard job and add the exact need to the AF-01 machine-checkable permission policy.
 
 Do not gate on a single aggregate score. Retain per-check evidence and specifically inspect at least:
 
@@ -168,7 +174,7 @@ Add `.github/workflows/af01-assurance-proof.yml` with complete path coverage for
 - `deny.toml` and any AF-01 policy/config files;
 - AGENTS/constitution when they affect authority.
 
-Proof should run in a pinned environment consistent with the best existing commandF proof workflows.
+Proof should run in a pinned environment consistent with the best existing commandF proof workflows. Any proof-critical job/service container must be digest-pinned and its digest retained in proof evidence; a mutable image tag is never sufficient proof identity.
 
 Expected retained artifact contents:
 
@@ -219,6 +225,8 @@ AF-01 security tooling runs against repository source/dependency metadata only.
 - no CF-06 production identity mutation;
 - no code execution from untrusted PR-supplied arbitrary scripts beyond the repository's existing CI model;
 - third-party actions/tools are pinned and least-authority;
+- workflow/job permissions are checked against explicit machine-readable need;
+- proof-critical container identities are digest-bound;
 - network access used for advisory databases/Scorecard is explicit and bounded.
 
 Fork PR security must be considered before any workflow is granted write permissions or secrets. `pull_request_target` is not introduced by AF-01 unless a separate threat-model amendment proves it necessary.
@@ -228,6 +236,7 @@ Fork PR security must be considered before any workflow is granted write permiss
 ### Fully deterministic inputs
 
 - repository workflow trust audit;
+- checked-in permission/container policy;
 - exact `Cargo.lock` graph inspection when dependency/advisory external state is excluded;
 - source/config hashes;
 - proof summary construction over retained normalized inputs.
@@ -248,6 +257,8 @@ These must record version/commit/update identity where available. Their results 
 - local `uses: ./` accepted;
 - full 40-hex refs accepted;
 - credentialless checkout accepted;
+- exact declared read-only permission set accepted;
+- digest-pinned proof-critical job/service container accepted;
 - fixed proof runner accepted.
 
 ### Workflow-trust audit negative
@@ -257,6 +268,10 @@ These must record version/commit/update identity where available. Their results 
 - branch ref rejected;
 - tag ref rejected;
 - checkout without explicit `persist-credentials: false` rejected;
+- workflow/job permission broader than the checked-in need declaration rejected;
+- omitted/inherited permission state that cannot be reconciled to declared need fails closed rather than being assumed safe;
+- proof-critical mutable `container.image` tag rejected;
+- proof-critical mutable service-container image tag rejected;
 - new unscanned workflow path causes coverage test failure;
 - proof-critical `ubuntu-latest` rejected according to policy;
 - malformed workflow input fails closed rather than being skipped.
@@ -299,7 +314,8 @@ and every path-applicable existing proof/oracle workflow must remain green on ea
 
 Developer-visible changes:
 
-- CI will reject mutable Action references and new unreviewed workflow authority;
+- CI will reject mutable Action/container references and new unreviewed workflow authority;
+- permission expansion requires a reviewed checked-in need/policy update and corresponding audit evidence;
 - dependency additions may require license/source/advisory policy updates;
 - canonical main will require PR/check/review policy once the ruleset is applied;
 - emergency/break-glass changes become explicit governance events rather than ordinary direct pushes.
