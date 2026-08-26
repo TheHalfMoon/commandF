@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "rules": {
+    "cargo_locked_subcommands": [
+      "bench",
+      "build",
+      "check",
+      "clippy",
+      "doc",
+      "metadata",
+      "run",
+      "test"
+    ],
+    "require_container_digest": true,
+    "require_checkout_credentials_disabled": true,
+    "require_external_uses_full_sha": true
+  },
+  "workflows": {
+    ".github/workflows/cf06-oracle.yml": {
+      "jobs": {
+        "oracle-changed-profile": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 25
+        },
+        "oracle-proof": {
+          "permissions": {},
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 5
+        },
+        "oracle-self-smoke": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 20
+        }
+      }
+    },
+    ".github/workflows/cf11-multi-version-proof.yml": {
+      "jobs": {
+        "real-package-graph": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 20
+        }
+      }
+    },
+    ".github/workflows/cf11g-context-proof.yml": {
+      "jobs": {
+        "deterministic-context-cli": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    },
+    ".github/workflows/cf12-impact-proof.yml": {
+      "jobs": {
+        "deterministic-impact-cli": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    },
+    ".github/workflows/cf13-quality-gate-proof.yml": {
+      "jobs": {
+        "deterministic-quality-gate": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    },
+    ".github/workflows/ci.yml": {
+      "jobs": {
+        "rust": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 30
+        }
+      }
+    },
+    ".github/workflows/registry-download-smoke.yml": {
+      "jobs": {
+        "registry-download": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    }
+  },
+  "exceptions": []
+}
