@@ -95,14 +95,24 @@ fn impact_reports_reverse_package_exposure_for_changed_dependency() {
         .expect("unresolved boundaries field after package impacts");
     let package_impacts = &json[package_impacts_start..package_impacts_start + unresolved_offset];
 
+    let before_relation = package_impact_relation(package_impacts, "acme.subject", "1.0.0");
     assert!(
-        package_impacts.contains("\"name\": \"acme.subject\""),
-        "changed dependency must expose its reverse dependent package"
+        before_relation.contains("\"side\": \"before\""),
+        "before dependent relation must retain its side"
     );
     assert!(
-        package_impacts.contains("\"declared_constraint\": \"1.0.0\"")
-            && package_impacts.contains("\"declared_constraint\": \"2.0.0\""),
-        "package exposure must preserve exact before/after dependency constraints"
+        before_relation.contains("\"declared_constraint\": \"1.0.0\""),
+        "before dependent relation must retain its exact declared constraint"
+    );
+
+    let after_relation = package_impact_relation(package_impacts, "acme.subject", "2.0.0");
+    assert!(
+        after_relation.contains("\"side\": \"after\""),
+        "after dependent relation must retain its side"
+    );
+    assert!(
+        after_relation.contains("\"declared_constraint\": \"2.0.0\""),
+        "after dependent relation must retain its exact declared constraint"
     );
 
     let _ = fs::remove_dir_all(root);
@@ -142,6 +152,25 @@ fn impact_rejects_schema_v1_and_corrupt_cache_without_stdout() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     let _ = fs::remove_dir_all(corrupt_root);
+}
+
+fn package_impact_relation<'a>(
+    package_impacts: &'a str,
+    impacted_name: &str,
+    impacted_version: &str,
+) -> &'a str {
+    let marker = format!(
+        "\"impacted\": {{\n        \"name\": \"{impacted_name}\",\n        \"version\": \"{impacted_version}\""
+    );
+    let start = package_impacts.find(&marker).unwrap_or_else(|| {
+        panic!("missing package impact for {impacted_name}@{impacted_version}")
+    });
+    let remainder_start = start + marker.len();
+    let end = package_impacts[remainder_start..]
+        .find("\"impacted\": {")
+        .map(|offset| remainder_start + offset)
+        .unwrap_or(package_impacts.len());
+    &package_impacts[start..end]
 }
 
 fn write_impact_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
