@@ -179,3 +179,36 @@ fn persisted_report_decoder_rejects_unknown_disposition_value() {
 
     assert!(QualityGateReport::from_json_slice(tampered.as_bytes()).is_err());
 }
+
+#[test]
+fn suppression_decoder_rejects_unknown_policy_fields() {
+    let payload = json!({
+        "schema": 1,
+        "suppressions": [{
+            "finding_fingerprint": {
+                "schema": 1,
+                "digest": fingerprint().digest,
+                "algorithm": "sha256"
+            },
+            "rationale": "approved",
+            "expires_at": "2099-01-01T00:00:00Z"
+        }]
+    });
+    let bytes = serde_json::to_vec(&payload).unwrap();
+
+    assert!(GateSuppressions::from_json_slice(&bytes).is_err());
+}
+
+#[test]
+fn persisted_report_decoder_rejects_unknown_gate_fields() {
+    let current = check("1.0.0", "1.1.0");
+    let report = evaluate_quality_gate(&current, None, None).unwrap();
+    let mut value = serde_json::to_value(&report).unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .insert("future_policy".to_owned(), json!(true));
+    let bytes = serde_json::to_vec(&value).unwrap();
+
+    assert!(QualityGateReport::from_json_slice(&bytes).is_err());
+}
