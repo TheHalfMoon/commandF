@@ -162,9 +162,9 @@ fn package_impact_relation<'a>(
     let marker = format!(
         "\"impacted\": {{\n        \"name\": \"{impacted_name}\",\n        \"version\": \"{impacted_version}\""
     );
-    let start = package_impacts.find(&marker).unwrap_or_else(|| {
-        panic!("missing package impact for {impacted_name}@{impacted_version}")
-    });
+    let start = package_impacts
+        .find(&marker)
+        .unwrap_or_else(|| panic!("missing package impact for {impacted_name}@{impacted_version}"));
     let remainder_start = start + marker.len();
     let end = package_impacts[remainder_start..]
         .find("\"impacted\": {")
