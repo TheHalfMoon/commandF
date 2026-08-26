@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -16,10 +17,29 @@ FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 DIGEST_IMAGE_RE = re.compile(r"@sha256:[0-9a-fA-F]{64}$")
 JOB_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):\s*(?:#.*)?$")
 USES_RE = re.compile(r"^(\s*)(?:-\s*)?uses:\s*(.+?)\s*$")
-STEP_USES_RE = re.compile(r"^(\s*)-\s+uses:\s*(.+?)\s*$")
+STEP_LIST_RE = re.compile(r"^(\s*)-\s+\S")
 PERMISSION_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(read|write|none)\s*$")
-CARGO_RE = re.compile(r"\bcargo\s+(bench|build|check|clippy|doc|metadata|run|test)\b")
+FLOW_USES_RE = re.compile(r"[\[{,]\s*[\"']?uses[\"']?\s*:")
+BLOCK_SCALAR_RE = re.compile(r":\s*[|>][+-]?\s*(?:#.*)?$")
 SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
+
+LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
+    {"bench", "build", "check", "clippy", "doc", "metadata", "run", "test"}
+)
+BOOLEAN_RULES = frozenset(
+    {
+        "require_container_digest",
+        "require_checkout_credentials_disabled",
+        "require_external_uses_full_sha",
+    }
+)
+SUPPORTED_RULE_KEYS = frozenset({"cargo_locked_subcommands", *BOOLEAN_RULES})
+SUPPORTED_RUNNERS = frozenset({"ubuntu-24.04"})
+MAX_JOB_TIMEOUT_MINUTES = 30
+SUPPORTED_JOB_POLICY_KEYS = frozenset({"permissions", "runner", "timeout_minutes"})
+SUPPORTED_TOP_LEVEL_POLICY_KEYS = frozenset(
+    {"schema", "rules", "rationales", "workflows", "exceptions"}
+)
 
 
 @dataclass(frozen=True, order=True)
@@ -208,6 +228,39 @@ def _all_uses(
     return result
 
 
+def _block_scalar_line_indexes(lines: list[str]) -> set[int]:
+    indexes: set[int] = set()
+    for index, line in enumerate(lines):
+        if not BLOCK_SCALAR_RE.search(line):
+            continue
+        indent = _indent(line)
+        cursor = index + 1
+        while cursor < len(lines):
+            child = lines[cursor]
+            if child.strip() and _indent(child) <= indent:
+                break
+            indexes.add(cursor)
+            cursor += 1
+    return indexes
+
+
+def _unsupported_flow_uses(lines: list[str]) -> list[str]:
+    """Reject flow-style uses keys instead of silently under-parsing them."""
+    block_lines = _block_scalar_line_indexes(lines)
+    unsupported: list[str] = []
+    for index, line in enumerate(lines):
+        if index in block_lines:
+            continue
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("run:") or re.match(r"^-\s+run:\s*", stripped):
+            continue
+        if FLOW_USES_RE.search(line):
+            unsupported.append(line.strip())
+    return unsupported
+
+
 def _external_ref_is_immutable(reference: str) -> bool:
     if reference.startswith("./"):
         return True
@@ -219,21 +272,70 @@ def _external_ref_is_immutable(reference: str) -> bool:
     return bool(FULL_SHA_RE.fullmatch(revision))
 
 
-def _checkout_has_credentials_disabled(lines: list[str], uses_index: int) -> bool:
-    matched = STEP_USES_RE.match(lines[uses_index])
-    if not matched:
-        return False
-    step_indent = len(matched.group(1))
+def _step_bounds(lines: list[str], uses_index: int) -> tuple[int, int, int] | None:
+    uses_line = lines[uses_index]
+    uses_indent = _indent(uses_line)
+    if STEP_LIST_RE.match(uses_line) and uses_line.lstrip().startswith("- uses:"):
+        start = uses_index
+        step_indent = uses_indent
+    else:
+        start = -1
+        step_indent = -1
+        for index in range(uses_index - 1, -1, -1):
+            line = lines[index]
+            if not line.strip():
+                continue
+            indent = _indent(line)
+            if indent >= uses_indent:
+                continue
+            if STEP_LIST_RE.match(line):
+                start = index
+                step_indent = indent
+                break
+            if indent < uses_indent and line.strip().endswith(":"):
+                break
+        if start < 0:
+            return None
+
     end = len(lines)
-    for index in range(uses_index + 1, len(lines)):
+    for index in range(start + 1, len(lines)):
         line = lines[index]
-        if re.match(rf"^ {{{step_indent}}}-\s+", line):
+        if not line.strip():
+            continue
+        if _indent(line) == step_indent and STEP_LIST_RE.match(line):
             end = index
             break
-    for line in lines[uses_index + 1 : end]:
-        if re.match(r"^\s*persist-credentials:\s*false\s*(?:#.*)?$", line):
-            return True
-    return False
+        if _indent(line) < step_indent:
+            end = index
+            break
+    return start, end, step_indent
+
+
+def _checkout_has_credentials_disabled(lines: list[str], uses_index: int) -> bool:
+    bounds = _step_bounds(lines, uses_index)
+    if bounds is None:
+        return False
+    start, end, step_indent = bounds
+    with_indexes = [
+        index
+        for index in range(start + 1, end)
+        if _indent(lines[index]) == step_indent + 2 and lines[index].strip() == "with:"
+    ]
+    if len(with_indexes) != 1:
+        return False
+
+    with_index = with_indexes[0]
+    entries: list[str] = []
+    for index in range(with_index + 1, end):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = _indent(line)
+        if indent <= step_indent + 2:
+            break
+        if indent == step_indent + 4 and line.strip().startswith("persist-credentials:"):
+            entries.append(_scalar(line.strip().split(":", 1)[1]))
+    return entries == ["false"]
 
 
 def _run_scripts(lines: list[str], start: int, end: int) -> list[str]:
@@ -290,24 +392,66 @@ def _cargo_findings(
     findings: list[Finding] = []
     for script in _run_scripts(lines, start, end):
         for segment in _logical_shell_segments(script):
-            matches = list(CARGO_RE.finditer(segment))
-            for position, match in enumerate(matches):
-                subcommand = match.group(1)
+            if "cargo" not in segment:
+                continue
+            try:
+                tokens = shlex.split(segment, comments=True, posix=True)
+            except ValueError as error:
+                findings.append(
+                    Finding(
+                        "unsupported_shell_syntax",
+                        path,
+                        job,
+                        f"cannot safely parse Cargo-containing shell segment: {error}: {segment}",
+                    )
+                )
+                continue
+
+            for index, token in enumerate(tokens):
+                if token != "cargo":
+                    continue
+                command_index = index + 1
+                if command_index < len(tokens) and tokens[command_index].startswith("+"):
+                    command_index += 1
+                if command_index >= len(tokens):
+                    findings.append(
+                        Finding(
+                            "unsupported_cargo_syntax",
+                            path,
+                            job,
+                            f"cannot identify Cargo subcommand: {segment}",
+                        )
+                    )
+                    continue
+                subcommand = tokens[command_index]
+                if subcommand.startswith("-"):
+                    findings.append(
+                        Finding(
+                            "unsupported_cargo_syntax",
+                            path,
+                            job,
+                            f"Cargo global-option syntax requires explicit auditor support: {segment}",
+                        )
+                    )
+                    continue
                 if subcommand not in locked_subcommands:
                     continue
-                invocation_end = (
-                    matches[position + 1].start()
-                    if position + 1 < len(matches)
-                    else len(segment)
+                next_cargo = next(
+                    (
+                        position
+                        for position in range(command_index + 1, len(tokens))
+                        if tokens[position] == "cargo"
+                    ),
+                    len(tokens),
                 )
-                invocation = segment[match.start() : invocation_end].strip()
+                invocation = tokens[index:next_cargo]
                 if "--locked" not in invocation:
                     findings.append(
                         Finding(
                             "cargo_unlocked",
                             path,
                             job,
-                            f"cargo {subcommand} invocation omits --locked: {invocation}",
+                            f"cargo {subcommand} invocation omits --locked: {' '.join(invocation)}",
                         )
                     )
     return findings
@@ -323,6 +467,11 @@ def _valid_exception(exception: object) -> bool:
         isinstance(exception[key], str) and exception[key].strip() for key in required
     ):
         return False
+    for optional in ("job", "detail"):
+        if optional in exception and (
+            not isinstance(exception[optional], str) or not exception[optional].strip()
+        ):
+            return False
     if len(exception["reason"].strip()) < 10 or len(exception["revisit"].strip()) < 5:
         return False
     return set(exception).issubset(required | {"job", "detail"})
@@ -350,6 +499,17 @@ def _uses_findings(path: str, lines: list[str], policy: dict) -> list[Finding]:
     rules = policy.get("rules", {})
     if not isinstance(rules, dict):
         return findings
+
+    for syntax in _unsupported_flow_uses(lines):
+        findings.append(
+            Finding(
+                "unsupported_uses_syntax",
+                path,
+                "",
+                f"flow-style uses syntax is not supported by the trust parser: {syntax}",
+            )
+        )
+
     for index, reference in _all_uses(lines):
         if rules.get("require_external_uses_full_sha", False) and not _external_ref_is_immutable(
             reference
@@ -366,7 +526,7 @@ def _uses_findings(path: str, lines: list[str], policy: dict) -> list[Finding]:
                         "checkout_credentials",
                         path,
                         "",
-                        "checkout step does not set persist-credentials: false",
+                        "checkout step does not set with.persist-credentials: false exactly once",
                     )
                 )
     return findings
@@ -439,7 +599,7 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
         except ValueError:
             timeout_value = None
         timeout_limit = expected_job.get("timeout_minutes")
-        if not isinstance(timeout_limit, int) or timeout_limit <= 0:
+        if not isinstance(timeout_limit, int) or isinstance(timeout_limit, bool) or timeout_limit <= 0:
             findings.append(
                 Finding("invalid_policy", path, job, "timeout_minutes must be a positive integer")
             )
@@ -520,12 +680,174 @@ def _policy_errors(policy: object) -> list[Finding]:
     policy_path = ".github/workflow-trust-policy.json"
     if not isinstance(policy, dict):
         return [Finding("invalid_policy", policy_path, "", "policy root must be an object")]
+
+    unknown_top = set(policy) - SUPPORTED_TOP_LEVEL_POLICY_KEYS
+    if unknown_top:
+        findings.append(
+            Finding(
+                "invalid_policy",
+                policy_path,
+                "",
+                f"unsupported top-level policy keys: {sorted(unknown_top)!r}",
+            )
+        )
     if policy.get("schema") != 1:
         findings.append(Finding("invalid_policy", policy_path, "", "unsupported policy schema"))
-    if not isinstance(policy.get("rules"), dict):
+
+    rules = policy.get("rules")
+    if not isinstance(rules, dict):
         findings.append(Finding("invalid_policy", policy_path, "", "rules must be an object"))
-    if not isinstance(policy.get("workflows"), dict):
-        findings.append(Finding("invalid_policy", policy_path, "", "workflows must be an object"))
+    else:
+        if set(rules) != SUPPORTED_RULE_KEYS:
+            findings.append(
+                Finding(
+                    "invalid_policy",
+                    policy_path,
+                    "",
+                    f"rules must contain exactly {sorted(SUPPORTED_RULE_KEYS)!r}",
+                )
+            )
+        cargo_rules = rules.get("cargo_locked_subcommands")
+        if (
+            not isinstance(cargo_rules, list)
+            or any(not isinstance(item, str) for item in cargo_rules)
+            or len(cargo_rules) != len(set(cargo_rules))
+            or set(cargo_rules) != LOCKFILE_CARGO_SUBCOMMANDS
+        ):
+            findings.append(
+                Finding(
+                    "invalid_policy",
+                    policy_path,
+                    "",
+                    "cargo_locked_subcommands must list the complete supported lockfile-consuming command set exactly once",
+                )
+            )
+        for key in BOOLEAN_RULES:
+            if rules.get(key) is not True:
+                findings.append(
+                    Finding(
+                        "invalid_policy",
+                        policy_path,
+                        "",
+                        f"security rule {key!r} must be boolean true; use a reviewed exception for a narrow waiver",
+                    )
+                )
+
+    rationales = policy.get("rationales")
+    if not isinstance(rationales, dict):
+        findings.append(
+            Finding("invalid_policy", policy_path, "", "rationales must be an object")
+        )
+    elif set(rationales) != SUPPORTED_RULE_KEYS or any(
+        not isinstance(value, str) or len(value.strip()) < 20 for value in rationales.values()
+    ):
+        findings.append(
+            Finding(
+                "invalid_policy",
+                policy_path,
+                "",
+                "rationales must provide a substantive string for every supported rule",
+            )
+        )
+
+    workflows = policy.get("workflows")
+    if not isinstance(workflows, dict) or not workflows:
+        findings.append(
+            Finding("invalid_policy", policy_path, "", "workflows must be a non-empty object")
+        )
+    else:
+        for workflow_path, workflow_policy in workflows.items():
+            if not isinstance(workflow_path, str) or not workflow_path:
+                findings.append(
+                    Finding("invalid_policy", policy_path, "", "workflow paths must be non-empty strings")
+                )
+                continue
+            if not isinstance(workflow_policy, dict) or set(workflow_policy) != {"jobs"}:
+                findings.append(
+                    Finding(
+                        "invalid_policy",
+                        policy_path,
+                        "",
+                        f"workflow {workflow_path!r} policy must contain only a jobs object",
+                    )
+                )
+                continue
+            jobs = workflow_policy.get("jobs")
+            if not isinstance(jobs, dict) or not jobs:
+                findings.append(
+                    Finding(
+                        "invalid_policy",
+                        policy_path,
+                        "",
+                        f"workflow {workflow_path!r} jobs must be a non-empty object",
+                    )
+                )
+                continue
+            for job_name, job_policy in jobs.items():
+                if not isinstance(job_name, str) or not job_name:
+                    findings.append(
+                        Finding("invalid_policy", policy_path, "", "job names must be non-empty strings")
+                    )
+                    continue
+                if not isinstance(job_policy, dict) or set(job_policy) != SUPPORTED_JOB_POLICY_KEYS:
+                    findings.append(
+                        Finding(
+                            "invalid_policy",
+                            policy_path,
+                            job_name,
+                            f"job policy must contain exactly {sorted(SUPPORTED_JOB_POLICY_KEYS)!r}",
+                        )
+                    )
+                    continue
+                permissions = job_policy.get("permissions")
+                if not isinstance(permissions, dict) or any(
+                    not isinstance(key, str)
+                    or not key
+                    or value not in {"read", "write", "none"}
+                    for key, value in permissions.items()
+                ):
+                    findings.append(
+                        Finding(
+                            "invalid_policy",
+                            policy_path,
+                            job_name,
+                            "permissions must be a string-to-read/write/none object",
+                        )
+                    )
+                elif permissions not in ({}, {"contents": "read"}):
+                    findings.append(
+                        Finding(
+                            "invalid_policy",
+                            policy_path,
+                            job_name,
+                            "AF-01 Stack A permits only no token permissions or contents: read",
+                        )
+                    )
+                runner = job_policy.get("runner")
+                if runner not in SUPPORTED_RUNNERS:
+                    findings.append(
+                        Finding(
+                            "invalid_policy",
+                            policy_path,
+                            job_name,
+                            f"runner must be one of {sorted(SUPPORTED_RUNNERS)!r}",
+                        )
+                    )
+                timeout = job_policy.get("timeout_minutes")
+                if (
+                    type(timeout) is not int
+                    or timeout <= 0
+                    or timeout > MAX_JOB_TIMEOUT_MINUTES
+                ):
+                    findings.append(
+                        Finding(
+                            "invalid_policy",
+                            policy_path,
+                            job_name,
+                            f"timeout_minutes must be 1..{MAX_JOB_TIMEOUT_MINUTES}",
+                        )
+                    )
+
     exceptions = policy.get("exceptions", [])
     if not isinstance(exceptions, list) or any(not _valid_exception(item) for item in exceptions):
         findings.append(
