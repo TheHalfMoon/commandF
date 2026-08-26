@@ -1,0 +1,70 @@
+name: cf12-impact-proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf12-impact-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/013-cf-12-impact/**
+  push:
+    branches:
+      - impl/cf12-impact-cli
+    paths:
+      - .github/workflows/cf12-impact-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/013-cf-12-impact/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF12_PROOF_CONTAINER: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+
+jobs:
+  deterministic-impact-cli:
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Assert pinned execution toolchain
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          test "$(rustc --version | awk '{print $2}')" = "1.97.1"
+
+      - name: Prove byte-identical commandf impact output
+        run: |
+          set -euo pipefail
+          cargo test --locked -p commandf --test impact_determinism_proof -- --nocapture \
+            | tee /tmp/cf12-impact-proof.log
+          grep -oE 'CF12_IMPACT_SHA256=[0-9a-f]{64}' /tmp/cf12-impact-proof.log \
+            | tail -n 1 \
+            | tee /tmp/cf12-impact.sha256
+          test -s /tmp/cf12-impact.sha256
+
+      - name: Assert repository remains clean
+        run: |
+          set -euo pipefail
+          status="$(git -c safe.directory="$GITHUB_WORKSPACE" status --porcelain)"
+          test -z "$status"
+
+      - name: Upload impact determinism evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cf12-impact-proof
+          path: /tmp/cf12-impact.sha256
+          if-no-files-found: error
+          retention-days: 3

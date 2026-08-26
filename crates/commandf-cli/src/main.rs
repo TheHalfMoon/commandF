@@ -1,3 +1,4 @@
+mod impact;
 mod oracle;
 
 use std::ffi::OsStr;
@@ -57,6 +58,19 @@ enum Command {
         format: OutputFormat,
     },
     Diff {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+    Impact {
         package: String,
         #[arg(long)]
         before_lock: PathBuf,
@@ -351,6 +365,19 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 build_diff_report(package, before_lock, before_cache, after_lock, after_cache)?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
+            }
+        }
+        Command::Impact {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            format,
+        } => {
+            let bytes = impact::run(package, before_lock, before_cache, after_lock, after_cache)?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&bytes)?,
             }
         }
         Command::Classify {
