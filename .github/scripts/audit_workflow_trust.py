@@ -19,6 +19,7 @@ USES_RE = re.compile(r"^(\s*)(?:-\s*)?uses:\s*(.+?)\s*$")
 STEP_USES_RE = re.compile(r"^(\s*)-\s+uses:\s*(.+?)\s*$")
 PERMISSION_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(read|write|none)\s*$")
 CARGO_RE = re.compile(r"\bcargo\s+(bench|build|check|clippy|doc|metadata|run|test)\b")
+SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
 
 
 @dataclass(frozen=True, order=True)
@@ -235,6 +236,83 @@ def _checkout_has_credentials_disabled(lines: list[str], uses_index: int) -> boo
     return False
 
 
+def _run_scripts(lines: list[str], start: int, end: int) -> list[str]:
+    """Extract inline and block step `run:` scripts from a statically structured job."""
+    scripts: list[str] = []
+    index = start + 1
+    while index < end:
+        line = lines[index]
+        stripped = line.strip()
+        indent = _indent(line)
+        if indent < 6 or not stripped.startswith("run:"):
+            index += 1
+            continue
+
+        value = _scalar(stripped.split(":", 1)[1])
+        if value in {"|", "|-", "|+", ">", ">-", ">+"}:
+            block: list[str] = []
+            cursor = index + 1
+            while cursor < end:
+                child = lines[cursor]
+                if child.strip() and _indent(child) <= indent:
+                    break
+                if not child.strip():
+                    block.append("")
+                else:
+                    child_indent = _indent(child)
+                    if child_indent < indent + 2:
+                        break
+                    block.append(child[indent + 2 :])
+                cursor += 1
+            scripts.append("\n".join(block))
+            index = cursor
+            continue
+        if value:
+            scripts.append(value)
+        index += 1
+    return scripts
+
+
+def _logical_shell_segments(script: str) -> list[str]:
+    """Join backslash continuations, then split at shell command boundaries."""
+    joined = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", script)
+    return [segment.strip() for segment in SHELL_SEPARATOR_RE.split(joined) if segment.strip()]
+
+
+def _cargo_findings(
+    path: str,
+    job: str,
+    lines: list[str],
+    start: int,
+    end: int,
+    locked_subcommands: set[str],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for script in _run_scripts(lines, start, end):
+        for segment in _logical_shell_segments(script):
+            matches = list(CARGO_RE.finditer(segment))
+            for position, match in enumerate(matches):
+                subcommand = match.group(1)
+                if subcommand not in locked_subcommands:
+                    continue
+                invocation_end = (
+                    matches[position + 1].start()
+                    if position + 1 < len(matches)
+                    else len(segment)
+                )
+                invocation = segment[match.start() : invocation_end].strip()
+                if "--locked" not in invocation:
+                    findings.append(
+                        Finding(
+                            "cargo_unlocked",
+                            path,
+                            job,
+                            f"cargo {subcommand} invocation omits --locked: {invocation}",
+                        )
+                    )
+    return findings
+
+
 def _valid_exception(exception: object) -> bool:
     if not isinstance(exception, dict):
         return False
@@ -411,19 +489,9 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
                     )
 
         locked_subcommands = set(rules.get("cargo_locked_subcommands", []))
-        for line in lines[start + 1 : end]:
-            command = line.strip()
-            for match in CARGO_RE.finditer(command):
-                subcommand = match.group(1)
-                if subcommand in locked_subcommands and "--locked" not in command[match.start() :]:
-                    findings.append(
-                        Finding(
-                            "cargo_unlocked",
-                            path,
-                            job,
-                            f"cargo {subcommand} invocation omits --locked: {command}",
-                        )
-                    )
+        findings.extend(
+            _cargo_findings(path, job, lines, start, end, locked_subcommands)
+        )
 
     findings.extend(_uses_findings(path, lines, policy))
     return [finding for finding in findings if not _excepted(policy, finding)]
