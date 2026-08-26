@@ -9,6 +9,7 @@ use commandf_pkg::{LockedPackage, Lockfile, PackageCache};
 const PROOF_ARCHIVE: &[u8] = include_bytes!("fixtures/proof.tgz");
 const GATE_LOCKFILE_LIMIT: u64 = 16 * 1024 * 1024;
 const GATE_BASELINE_LIMIT: u64 = 64 * 1024 * 1024;
+const GATE_SUPPRESSIONS_LIMIT: u64 = 64 * 1024 * 1024;
 
 fn commandf() -> Command {
     Command::new(env!("CARGO_BIN_EXE_commandf"))
@@ -93,6 +94,29 @@ fn oversized_baseline_is_operational_exit_one() {
         &[
             "--baseline".to_owned(),
             baseline.to_str().expect("UTF-8 path").to_owned(),
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("exceeds"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn oversized_suppressions_is_operational_exit_one() {
+    let root = unique_temp_dir("gate-oversized-suppressions");
+    let (lock, cache) = write_valid_state(&root.join("state"));
+    let suppressions = root.join("oversized-suppressions.json");
+    create_sparse_file(&suppressions, GATE_SUPPRESSIONS_LIMIT + 1);
+
+    let output = run_gate(
+        &lock,
+        &cache,
+        &lock,
+        &cache,
+        &[
+            "--suppressions".to_owned(),
+            suppressions.to_str().expect("UTF-8 path").to_owned(),
         ],
     );
 
