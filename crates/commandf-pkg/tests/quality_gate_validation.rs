@@ -1,9 +1,9 @@
 use commandf_pkg::{
     evaluate_compatibility_policy, evaluate_quality_gate, finding_fingerprint_v1,
-    validate_quality_gate_report, CheckPolicy, CompatibilityDirection, CompatibilityFinding,
-    CompatibilityReport, CompatibilitySeverity, ElementView, FindingFingerprint, GateSuppression,
-    GateSuppressions, PackageEvidence, QualityGateError, QualityGateReport, ResourceKey,
-    ResourceKeyKind, StructuralChangeKind, MAX_GATE_SUPPRESSIONS,
+    validate_quality_gate_report, CheckError, CheckPolicy, CompatibilityDirection,
+    CompatibilityFinding, CompatibilityReport, CompatibilitySeverity, ElementView,
+    FindingFingerprint, GateSuppression, GateSuppressions, PackageEvidence, QualityGateError,
+    QualityGateReport, ResourceKey, ResourceKeyKind, StructuralChangeKind, MAX_GATE_SUPPRESSIONS,
     MAX_GATE_SUPPRESSION_REFERENCE_CHARS,
 };
 use serde_json::json;
@@ -125,6 +125,20 @@ fn suppression_entry_and_reference_bounds_fail_closed() {
             field: "reference",
             ..
         })
+    ));
+}
+
+#[test]
+fn baseline_with_unsupported_ruleset_fails_through_cf05_authority() {
+    let current = check("1.0.0", "1.1.0");
+    let mut baseline = check("0.8.0", "0.9.0");
+    baseline.compatibility.ruleset = "cf04-rules-v2".to_owned();
+
+    assert!(matches!(
+        evaluate_quality_gate(&current, Some(&baseline), None),
+        Err(QualityGateError::Check(
+            CheckError::UnsupportedCompatibilityRuleset { found, expected }
+        )) if found == "cf04-rules-v2" && expected == CompatibilityReport::RULESET_V1
     ));
 }
 
