@@ -47,7 +47,7 @@ jobs:
       - name: Assert exact source checkout
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$CF13_SOURCE_SHA"
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$CF13_SOURCE_SHA"
 
       - name: Assert pinned execution toolchain
         run: |
@@ -73,21 +73,24 @@ jobs:
       - name: Record immutable repository evidence
         run: |
           set -euo pipefail
+          git_safe() {
+            git -c safe.directory="$GITHUB_WORKSPACE" "$@"
+          }
           {
             echo "CF13_SOURCE_SHA=$CF13_SOURCE_SHA"
-            echo "CF13_SOURCE_TREE=$(git rev-parse 'HEAD^{tree}')"
-            echo "CF13_WORKFLOW_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:.github/workflows/cf13-quality-gate-proof.yml")"
-            echo "CF13_AGENTS_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:AGENTS.md")"
-            echo "CF13_CONSTITUTION_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:.specify/memory/constitution.md")"
-            echo "CF13_SPEC_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/spec.md")"
-            echo "CF13_PLAN_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/plan.md")"
-            echo "CF13_TASKS_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/tasks.md")"
-            echo "CF13_CARGO_LOCK_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:Cargo.lock")"
-            echo "CF13_CF04_COMPATIBILITY_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/compatibility.rs")"
-            echo "CF13_CF05_CHECK_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/check.rs")"
-            echo "CF13_GATE_LIBRARY_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/gate.rs")"
-            echo "CF13_GATE_CLI_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:crates/commandf-cli/src/gate.rs")"
-            echo "CF13_PROOF_TEST_BLOB=$(git rev-parse "$CF13_SOURCE_SHA:crates/commandf-cli/tests/gate_determinism_proof.rs")"
+            echo "CF13_SOURCE_TREE=$(git_safe rev-parse 'HEAD^{tree}')"
+            echo "CF13_WORKFLOW_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:.github/workflows/cf13-quality-gate-proof.yml")"
+            echo "CF13_AGENTS_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:AGENTS.md")"
+            echo "CF13_CONSTITUTION_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:.specify/memory/constitution.md")"
+            echo "CF13_SPEC_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/spec.md")"
+            echo "CF13_PLAN_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/plan.md")"
+            echo "CF13_TASKS_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:specs/014-cf-13-baselines-suppression-quality-gates/tasks.md")"
+            echo "CF13_CARGO_LOCK_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:Cargo.lock")"
+            echo "CF13_CF04_COMPATIBILITY_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/compatibility.rs")"
+            echo "CF13_CF05_CHECK_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/check.rs")"
+            echo "CF13_GATE_LIBRARY_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:crates/commandf-pkg/src/gate.rs")"
+            echo "CF13_GATE_CLI_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:crates/commandf-cli/src/gate.rs")"
+            echo "CF13_PROOF_TEST_BLOB=$(git_safe rev-parse "$CF13_SOURCE_SHA:crates/commandf-cli/tests/gate_determinism_proof.rs")"
             echo "CF13_WORKFLOW_SHA256=$(sha256sum .github/workflows/cf13-quality-gate-proof.yml | awk '{print $1}')"
             echo "CF13_CARGO_LOCK_SHA256=$(sha256sum Cargo.lock | awk '{print $1}')"
             echo "CF13_SPEC_SHA256=$(sha256sum specs/014-cf-13-baselines-suppression-quality-gates/spec.md | awk '{print $1}')"
