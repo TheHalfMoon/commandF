@@ -22,13 +22,13 @@ Status: PLANNING_CANDIDATE
 
 Depends on T005.
 
-- [ ] **T010** Inventory every tracked `.github/workflows/*.yml|*.yaml`, repository composite Action, external `uses:` reference, runner label, job permission, checkout credential setting, and cargo lockfile-consuming command on canonical planning main.
-- [ ] **T011** Define a minimal checked-in AF-01 workflow-trust policy format, including any narrowly scoped exception schema with reason/revisit condition.
-- [ ] **T012** Implement repository-owned deterministic workflow-trust audit with complete tracked-workflow discovery, local-action allowance, full-40-hex external action requirement, checkout credential check, and proof-runner policy.
-- [ ] **T013** Add positive and counterexample tests for T012, including tag/branch/short-SHA rejection, missing `persist-credentials: false`, new-workflow coverage, malformed input fail-closed behavior, and deterministic repeat output.
-- [ ] **T014** Harden `.github/workflows/ci.yml` to full-SHA external Actions, credentialless checkout, explicit least permissions, fixed supported runner label, bounded timeout, and preserved existing semantic/test steps.
-- [ ] **T015** Reconcile every other existing workflow to the AF-01 baseline without changing its product/oracle/proof semantics or path-filter authority.
-- [ ] **T016** Add a regression that scans all tracked workflow/action files and fails if a future workflow escapes AF-01 trust auditing.
+- [ ] **T010** Inventory every tracked `.github/workflows/*.yml|*.yaml`, repository composite Action, external `uses:` reference, runner label, workflow/job permission, checkout credential setting, job/service container image identity, and cargo lockfile-consuming command on canonical planning main.
+- [ ] **T011** Define a minimal checked-in AF-01 workflow-trust policy format that makes allowed workflow/job permissions and proof-container identity modes machine-checkable, including any narrowly scoped exception schema with reason/revisit condition.
+- [ ] **T012** Implement repository-owned deterministic workflow-trust audit with complete tracked-workflow discovery, local-action allowance, full-40-hex external action requirement, checkout credential check, effective workflow/job permission normalization plus allowlist enforcement, proof-critical job/service container digest enforcement, and proof-runner policy.
+- [ ] **T013** Add positive and counterexample tests for T012, including tag/branch/short-SHA rejection, missing `persist-credentials: false`, overbroad permission rejection, unresolved inherited/default permission rejection, proof-critical mutable job/service container rejection, new-workflow coverage, malformed input fail-closed behavior, and deterministic repeat output.
+- [ ] **T014** Harden `.github/workflows/ci.yml` to full-SHA external Actions, credentialless checkout, explicit machine-checkable least permissions, fixed supported runner label, bounded timeout, and preserved existing semantic/test steps.
+- [ ] **T015** Reconcile every other existing workflow to the AF-01 baseline, including permission declarations and proof-critical container digest identity, without changing its product/oracle/proof semantics or path-filter authority.
+- [ ] **T016** Add a regression that scans all tracked workflow/action files and fails if a future workflow, permission grant, external Action ref, checkout credential setting, or proof-critical container identity escapes AF-01 trust auditing.
 - [ ] **T017** Run mandatory workspace gates and every path-applicable existing proof/oracle workflow on the exact Stack A head.
 - [ ] **T018** Request CodeRabbit and Qodo on exact Stack A head; disposition every substantive returned finding and require zero unresolved material review threads.
 - [ ] **T019** Merge Stack A only from its exact qualified head and record canonical merge/main/tree.
@@ -52,11 +52,11 @@ Depends on canonical T019.
 
 Depends on canonical T029.
 
-- [ ] **T030** Add pinned OpenSSF Scorecard integration in least-authority mode appropriate for this public repository; retain per-check evidence and do not use aggregate score as commandF correctness authority.
+- [ ] **T030** Add pinned OpenSSF Scorecard integration in least-authority mode appropriate for this public repository; retain per-check evidence and do not use aggregate score as commandF correctness authority. Any required write/id-token permission must be scoped to the exact Scorecard job and added to the checked-in permission policy.
 - [ ] **T031** Inspect Scorecard results for at least Branch-Protection, Dangerous-Workflow, Pinned-Dependencies, Token-Permissions, Security-Policy where applicable, and Vulnerabilities; disposition material findings.
-- [ ] **T032** Implement `.github/workflows/af01-assurance-proof.yml` with complete AF-01 path coverage and immutable/pinned execution inputs consistent with commandF proof policy.
-- [ ] **T033** Define stable `assurance-summary.json` schema and deterministic `AF01_ASSURANCE_SHA256`, binding exact source/tree, policy/config blobs, workflow audit, dependency audit, RustSec audit, zizmor evidence, and tool identities.
-- [ ] **T034** Add proof tests for repeated summary equality, source/tree mismatch, missing required evidence, malformed evidence, and dirty/unexpected source where applicable.
+- [ ] **T032** Implement `.github/workflows/af01-assurance-proof.yml` with complete AF-01 path coverage and immutable/pinned execution inputs consistent with commandF proof policy, including digest-pinned proof-critical job/service containers where containers are used.
+- [ ] **T033** Define stable `assurance-summary.json` schema and deterministic `AF01_ASSURANCE_SHA256`, binding exact source/tree, policy/config blobs, workflow audit, dependency audit, RustSec audit, zizmor evidence, and tool/action/container identities.
+- [ ] **T034** Add proof tests for repeated summary equality, source/tree mismatch, missing required evidence, malformed evidence, permission-policy mismatch, mutable proof-container identity, and dirty/unexpected source where applicable.
 - [ ] **T035** Determine final required status-check names from canonical implementation workflows; do not guess names before they exist.
 - [ ] **T036** Prepare exact `main` ruleset configuration: PR required, at least one review, required conversations resolved, stale/latest-push review protection, selected status checks required, branch deletion/force-push blocked, and narrowly documented bypass actors only.
 - [ ] **T037** Apply T036 through an authorized GitHub administrator path. Current connector read capability does not count as mutation authority.
