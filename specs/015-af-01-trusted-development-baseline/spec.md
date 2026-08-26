@@ -26,8 +26,8 @@ The result is a mismatch: commandF can prove interoperability evidence more stro
 
 After AF-01 closes, commandF has an independently executable and reviewable trusted-development baseline that:
 
-1. detects mutable or unsafe GitHub Actions references;
-2. minimizes workflow token/checkout authority;
+1. detects mutable or unsafe GitHub Actions references and mutable proof execution-container identities;
+2. minimizes workflow token/checkout authority and rejects permissions broader than a checked-in documented need;
 3. audits Rust dependency vulnerabilities, licenses, sources, and banned/duplicate dependency policy;
 4. statically audits workflow definitions for known CI/CD security hazards;
 5. records exact-head assurance evidence;
@@ -42,11 +42,12 @@ Provide a repository-owned deterministic audit that scans tracked GitHub workflo
 The audit must also detect at least:
 
 - checkout steps that persist credentials without an explicit reviewed exception;
-- workflow/job permissions broader than their documented need where mechanically detectable;
+- workflow/job permissions broader than their documented need, using checked-in AF-01 policy metadata that makes the allowed permission set machine-checkable rather than relying on prose-only review;
+- proof-critical job or service container images that use a mutable tag/reference instead of an accepted digest identity, unless an explicit bounded exception is recorded;
 - use of `ubuntu-latest`, `windows-latest`, or `macos-latest` in proof-critical jobs where AF-01 requires a fixed runner label;
 - new workflow files that are outside the audit scope.
 
-The audit result must be deterministic for the same repository tree.
+The audit result must be deterministic for the same repository tree and the same checked-in AF-01 policy.
 
 ### FR-002 — workflow hardening
 
@@ -54,8 +55,9 @@ All existing commandF workflows must be reconciled to a documented minimum basel
 
 - external Actions use full commit SHAs;
 - checkout uses `persist-credentials: false` unless a documented write operation requires otherwise;
-- top-level/job `permissions` are explicit and least-privilege for the workflow purpose;
+- top-level/job `permissions` are explicit and no broader than the machine-checkable documented need for the workflow/job;
 - proof-critical workflows use fixed runner labels and retain or improve digest-pinned execution containers where already present;
+- proof-critical job/service containers use digest identities when a container is part of proof identity; mutable tags alone are insufficient;
 - `cargo` commands that consume the lockfile use `--locked`;
 - no product semantic gate is removed or weakened to make hardening pass.
 
@@ -93,7 +95,7 @@ Absence of a vulnerability finding is not a claim that the dependency graph is g
 
 Add a pinned `zizmor` audit over repository workflow/composite-action definitions.
 
-The commandF-owned workflow-trust audit remains authoritative for commandF's explicit pinning/credential rules. `zizmor` is an independent static-analysis signal and does not replace repository-owned policy.
+The commandF-owned workflow-trust audit remains authoritative for commandF's explicit pinning/credential/permission/container-identity rules. `zizmor` is an independent static-analysis signal and does not replace repository-owned policy.
 
 ### FR-006 — OpenSSF Scorecard evidence
 
@@ -163,7 +165,7 @@ When an advisory database or external security service is used, its identity/upd
 
 ### NFR-002 Least authority
 
-Security workflows must not receive write permissions merely to report read-only findings unless the reporting mechanism itself requires a narrowly scoped write permission.
+Security workflows must not receive write permissions merely to report read-only findings unless the reporting mechanism itself requires a narrowly scoped write permission. Checked-in AF-01 policy must make intended workflow/job permissions reviewable and machine-checkable so later permission expansion cannot pass merely because the YAML remains syntactically valid.
 
 ### NFR-003 Bounded execution
 
@@ -181,18 +183,22 @@ Implementation is split into independently reviewable stacks; a single monolithi
 
 1. A workflow changes `actions/checkout@<full-sha>` to `actions/checkout@v5` -> repository workflow-trust audit fails.
 2. A new workflow uses credential-persisting checkout without an allowed exception -> fails.
-3. A dependency is added from an unapproved git source -> `cargo-deny` fails.
-4. A dependency introduces a RustSec advisory -> vulnerability gate fails unless an explicit reviewed waiver exists.
-5. A workflow contains a security issue detected by the configured `zizmor` severity policy -> audit fails or is explicitly dispositioned according to the frozen policy.
-6. The same tree is audited twice with the same pinned tool/advisory inputs -> commandF-owned assurance summary bytes are identical.
-7. Product test suites and all path-applicable existing proof workflows remain green.
-8. Live GitHub query confirms the intended `main` source-control policy before AF-01 claims canonical closure.
+3. A workflow/job requests `contents: write` when checked-in AF-01 policy permits only `contents: read` -> fails.
+4. A proof-critical job/service changes a digest-pinned container image to `image:vendor/tool:latest` or another mutable tag -> fails.
+5. A dependency is added from an unapproved git source -> `cargo-deny` fails.
+6. A dependency introduces a RustSec advisory -> vulnerability gate fails unless an explicit reviewed waiver exists.
+7. A workflow contains a security issue detected by the configured `zizmor` severity policy -> audit fails or is explicitly dispositioned according to the frozen policy.
+8. The same tree is audited twice with the same pinned tool/advisory inputs -> commandF-owned assurance summary bytes are identical.
+9. Product test suites and all path-applicable existing proof workflows remain green.
+10. Live GitHub query confirms the intended `main` source-control policy before AF-01 claims canonical closure.
 
 ## Edge cases
 
 - GitHub Actions referenced through local `./` paths are local source, not external mutable tags.
-- Docker images referenced by digest are acceptable immutable identities; mutable image tags alone are not proof identity.
+- Docker/OCI job or service images referenced by digest are acceptable immutable identities; mutable image tags alone are not proof identity.
+- A non-proof workflow may use a container only under the explicit AF-01 container policy; omission from proof identity must be deliberate and machine-checkable rather than accidental.
 - Reusable workflows require the same immutable-reference discipline as third-party Actions where GitHub supports commit-SHA references.
+- Workflow/job permission inheritance and omission must be normalized by the audit so an absent local `permissions` block cannot silently gain broader authority from an unexamined parent/default.
 - Scorecard or advisory-service unavailability must be distinguished from a clean security result.
 - A security tool finding that is not applicable may be dispositioned, but the disposition and rationale become retained evidence.
 - `cargo-deny` duplicate-version policy must not blindly reject legitimate unavoidable transitive duplication without review; exceptions are explicit and narrow.
