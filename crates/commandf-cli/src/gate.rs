@@ -4,8 +4,8 @@ use std::process::ExitCode;
 use clap::{Args, ValueEnum};
 use commandf_pkg::{
     classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
-    evaluate_quality_gate, CheckDirection, CheckFailOn, CheckPolicy, CheckReport,
-    GateSuppressions, Lockfile, PackageCache, PackageName, StructuralDiffReport,
+    evaluate_quality_gate, CheckDirection, CheckFailOn, CheckPolicy, CheckReport, GateSuppressions,
+    Lockfile, PackageCache, PackageName, StructuralDiffReport,
 };
 
 use super::{read_bounded_file, select_locked_package, write_check_output};
@@ -147,8 +147,8 @@ fn build_gate_diff_report(
 
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
-    let before_bytes = before_cache
-        .read_verified_bounded(&before_locked.sha256, MAX_GATE_ARCHIVE_INPUT_BYTES)?;
+    let before_bytes =
+        before_cache.read_verified_bounded(&before_locked.sha256, MAX_GATE_ARCHIVE_INPUT_BYTES)?;
     let after_bytes =
         after_cache.read_verified_bounded(&after_locked.sha256, MAX_GATE_ARCHIVE_INPUT_BYTES)?;
 
