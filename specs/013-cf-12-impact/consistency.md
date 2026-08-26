@@ -1,157 +1,101 @@
 # CF-12 Consistency Analysis — Deterministic Impact Analysis
 
-Status: planning consistency candidate; independent review still required before T004 closes.
+Status: CONSISTENT / PLANNING_REVIEW_CLOSED — final PR-head requalification still required before merge.
 
 ## Inputs checked
 
-This analysis reconciles:
-
-- `AGENTS.md`;
-- `.specify/memory/constitution.md`;
-- `docs/COMMAND_F_MASTER_ARCHITECTURE_V2.md`;
-- canonical CF-11G `spec.md` and convergence evidence;
-- CF-12 `spec.md`;
-- CF-12 `plan.md`;
-- CF-12 `tasks.md`;
-- the current CLI conventions for `diff`, `classify`, `check`, and `context`.
+This analysis reconciles `AGENTS.md`, the commandF constitution, Master Architecture V2, canonical CF-11G specification/convergence, CF-12 `spec.md`, `plan.md`, `tasks.md`, and current `diff` / `classify` / `check` / `context` CLI conventions.
 
 ## Result
 
-No blocking internal contradiction is known in the planning candidate.
+No blocking internal contradiction is known.
 
-The implementation MUST NOT begin until T004 is closed through exact-head planning review/CI and this package becomes canonical.
+The first complete planning head `1bee6f3651fa686f03902f3d86761736d4844513` passed:
+
+```text
+ci            32928525763 SUCCESS
+cf06-oracle   32928525784 SUCCESS
+CodeRabbit                 SUCCESS / no review thread returned
+Qodo                       unavailable/not observed; no PASS claimed
+```
+
+Updating T004 and this close record moves the PR head, so implementation MUST remain blocked until the final planning head repeats applicable CI/review and the planning PR merges.
 
 ## Consistency checks
 
-### 1. Roadmap dependency
+### Roadmap and vertical slice
 
-Master Architecture requires:
-
-```text
-CF-12 = commandf impact
-CF-12 depends on CF-11G
-```
-
-CF-11G is now canonically closed. The planning package therefore satisfies the entry dependency without making CF-06/CF-10 upstream governance a new prerequisite.
+`CF-12 = commandf impact` depends on canonical CF-11G. The plan ends in a shipped CLI plus deterministic proof, not a scaffold. CF-06/CF-10 upstream governance is not imported as an independent graph-plane dependency.
 
 Result: CONSISTENT.
 
-### 2. Vertical-slice rule
+### CLI shape and evidence identity
 
-The constitution prohibits a scaffold-only slice. The plan ends in a shipped user-visible `commandf impact` CLI plus deterministic proof rather than a library-only endpoint.
-
-Result: CONSISTENT.
-
-### 3. Existing CLI shape
-
-Current `diff`, `classify`, and `check` accept a selected package plus explicit before/after lock/cache paths. CF-12 adopts the same shape instead of inventing repository/branch/network inputs.
+CF-12 reuses the existing selected-package + explicit before/after lock/cache convention. It introduces no branch, mutable registry, or implicit network evidence.
 
 Result: CONSISTENT.
 
-### 4. Determinism
+### Determinism
 
-The specification requires byte-identical JSON for identical pinned inputs. The plan defines canonical sorting, shortest-path normalization, lexicographic tie-breaking, exact-identity visited state, and a dedicated repeat-run proof workflow.
-
-Result: CONSISTENT.
-
-### 5. Fail-closed ambiguity
-
-CF-11G freezes canonical target states as `resolved`, `external`, and `ambiguous`. CF-12 traverses only `resolved` edges and retains the other two states as explicit unresolved boundaries.
-
-No task adds a preferred-candidate heuristic or network lookup.
+The specification requires byte-identical JSON for identical pinned inputs. Canonical sorting, shortest-path normalization, lexicographic equal-length tie-breaking, and exact-identity visited state make traversal/reporting independent of hash/traversal order.
 
 Result: CONSISTENT.
 
-### 6. Compatibility authority
+### Fail-closed graph semantics
 
-AGENTS/constitution require precision and prohibit invented compatibility states. CF-12 defines impact as reachability/exposure evidence and explicitly separates it from CF-04/CF-05 BREAKING/RISKY/ADDITIVE authority.
-
-An impacted node without an existing compatibility finding remains impact evidence only.
+CF-11G `resolved` edges alone are traversable. `external` and `ambiguous` remain explicit unresolved boundaries; no preferred candidate or network completion is allowed.
 
 Result: CONSISTENT.
 
-### 7. Multi-version package identity
+### Compatibility authority
 
-Canonical CF-11 and CF-11G require exact multi-version identities. CF-12 package traversal consumes schema-v2 exact package edges and forbids name-only collapse.
-
-Result: CONSISTENT.
-
-### 8. Added/removed evidence
-
-A single after-only graph would erase dependents of removed artifacts; a single before-only graph would erase newly introduced dependency evidence. The specification therefore requires side-aware before and after graph analysis, with `both` normalization only for exact identical evidence.
+Impact is reachability/exposure evidence, not BREAKING/RISKY/ADDITIVE severity. CF-12 does not recreate CF-03/04/05 authority or infer runtime/clinical breakage from graph reachability.
 
 Result: CONSISTENT.
 
-### 9. Path semantics
+### Multi-version exactness
 
-Transitive blast radius can have multiple valid paths. Returning all paths would increase output/noise and complicate determinism; returning arbitrary first traversal would violate determinism. V1 therefore returns one canonical shortest path per exact `(impacted, seed, side)` relation, with lexicographic stable-identity tie-breaking.
-
-This is a reporting normalization and does not discard unresolved-boundary entries.
+Package traversal consumes schema-v2 exact parent/child identities and never collapses same-name concrete versions.
 
 Result: CONSISTENT.
 
-### 10. Coverage truth
+### Side-aware change evidence
 
-CF-11G V1 does not extract every possible FHIR relation. CF-12 carries graph extraction coverage forward and makes no exhaustive artifact-impact claim outside supported relation kinds. Package-level exposure remains separately representable.
-
-Result: CONSISTENT.
-
-### 11. Archive/cache trust boundary
-
-The plan reuses existing lock parsing, verified cache reads, bounded package inspection, and Context Graph construction. It does not introduce a second archive reader or mutable registry dependency.
+Before and after graphs are analyzed independently so removed-before and added-after dependency evidence cannot disappear. `both` is only a normalization for exactly identical evidence.
 
 Result: CONSISTENT.
 
-### 12. Oracle boundary
+### Path reporting
 
-CF-12 neither changes CF-06 oracle identity nor requires resolution of the separate CF-10 production-oracle governance blocker. Existing oracle workflow regression remains a repository gate where applicable.
-
-Result: CONSISTENT.
-
-### 13. Dependency additions
-
-No new Rust crate is planned. If implementation later proves a dependency necessary, the relevant task and plan must be amended before adding it, with an immediate shipped/tested consumer.
+One canonical shortest path per exact `(impacted, seed, side)` relation gives deterministic actionable evidence. Equal-length ties use stable lexicographic identity. Unresolved boundaries remain separately retained.
 
 Result: CONSISTENT.
 
-## Risks requiring reviewer attention
+### Coverage and trust boundaries
 
-Independent review should challenge these specific planning choices:
+CF-12 carries CF-11G extraction coverage forward and does not claim exhaustive artifact impact beyond supported relations. Existing bounded archive inspection and verified cache reads remain authoritative; no second archive reader, PHI path, graph database, model, or network resolver is planned.
 
-1. whether the existing structural diff provides a sufficiently stable canonical artifact seed identity for added/removed/modified resources;
-2. whether package-level exposure should include only dependency reachability to the selected changed package or require additional artifact evidence before presentation;
-3. whether canonical shortest-path reporting preserves enough evidence for actionable review UX;
-4. whether an `external`/`ambiguous` edge from an impacted artifact is the correct V1 boundary for unresolved-impact reporting;
-5. whether side normalization can accidentally erase changed edge provenance;
-6. whether any report field would be interpreted as compatibility severity despite the explicit authority separation.
+Result: CONSISTENT.
 
-A substantive reviewer finding on any of these points reopens the corresponding planning contract and prevents T004 closure until dispositioned.
+## Reviewer-risk areas retained for implementation review
 
-## Explicit deferrals
+Implementation review must challenge:
 
-The following remain outside CF-12 V1 and are not planning gaps:
+1. structural-diff seed identity for add/remove/modify cases;
+2. separation of package exposure from artifact exposure;
+3. shortest-path evidence sufficiency;
+4. unresolved-boundary collection semantics;
+5. before/after normalization and provenance retention;
+6. accidental presentation of reachability as compatibility severity.
 
-- SQL-on-FHIR ViewDefinition impact;
-- CQL impact;
-- SearchParameter-expression impact;
-- FHIRPath invariant impact;
-- persistent relational/graph storage;
-- graph database adoption;
-- network completion of external canonical references;
-- model/AI-generated impact claims;
-- clinical/runtime breakage claims;
-- changes to CF-06 production oracle identity;
-- changes to the frozen CF-10 corpus.
+A substantive implementation finding reopens the corresponding task; this planning close does not waive future findings.
 
-These require later separately specified slices or measured evidence.
+## Explicit V1 deferrals
 
-## Planning close rule
+SQL-on-FHIR, CQL, SearchParameter expressions, FHIRPath invariants, persistent graph storage, graph databases, network canonical completion, AI/model impact claims, clinical/runtime breakage claims, CF-06 production-pin changes, and frozen CF-10 corpus changes remain outside CF-12 V1.
 
-T004 may be marked complete only when:
+## Final planning merge rule
 
-- exact-head planning CI is green for applicable repository gates;
-- independent review is inspected;
-- every substantive returned planning finding is fixed or explicitly rejected against canonical governance with evidence;
-- the planning PR merges without unresolved contradiction.
+The planning package is eligible to merge only if the final exact PR head passes all applicable configured gates, CodeRabbit/reviewer truth remains free of unresolved substantive findings, and no content mutation occurs after that qualification.
 
-Only then may Stack A implementation begin.
+Only after that merge may T010 implementation begin.
