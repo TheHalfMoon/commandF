@@ -48,9 +48,8 @@ pub fn run(
     let before_bytes = before_cache.read_verified(&before_locked.sha256)?;
     let after_bytes = after_cache.read_verified(&after_locked.sha256)?;
     let core_bytes = before_cache.read_verified(&before_core.sha256)?;
-    after_cache.read_verified(&after_core.sha256)?;
+    let _after_core_bytes = after_cache.read_verified(&after_core.sha256)?;
 
-    let staged = Hl7OracleStagedArchives::new(&core_bytes, &before_bytes, &after_bytes)?;
     let structural_diff = diff_package_archives(
         package_name.to_string(),
         &before_locked.version,
@@ -63,6 +62,7 @@ pub fn run(
 
     let mut observations = Vec::new();
     if before_locked.sha256 != after_locked.sha256 {
+        let staged = Hl7OracleStagedArchives::new(&core_bytes, &before_bytes, &after_bytes)?;
         let pairs = matched_structure_definition_pairs(
             package_name.as_str(),
             &before_locked.version,
