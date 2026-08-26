@@ -71,6 +71,54 @@ fn impact_is_byte_identical_and_reports_dependency_evidence_without_severity() {
 }
 
 #[test]
+fn impact_reports_reverse_package_exposure_for_changed_dependency() {
+    let root = unique_temp_dir("package-exposure");
+    let (before_lock, before_cache, after_lock, after_cache) = write_impact_state(&root);
+
+    let output = run_impact_for(
+        "acme.shared",
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+    );
+    assert_success(&output);
+
+    let json = String::from_utf8(output.stdout).expect("UTF-8 impact JSON");
+    assert!(json.contains("\"package_name\": \"acme.shared\""));
+
+    let package_impacts_start = json
+        .find("\"package_impacts\": [")
+        .expect("package impacts field");
+    let unresolved_offset = json[package_impacts_start..]
+        .find("\"unresolved_boundaries\":")
+        .expect("unresolved boundaries field after package impacts");
+    let package_impacts = &json[package_impacts_start..package_impacts_start + unresolved_offset];
+
+    let before_relation = package_impact_relation(package_impacts, "acme.subject", "1.0.0");
+    assert!(
+        before_relation.contains("\"side\": \"before\""),
+        "before dependent relation must retain its side"
+    );
+    assert!(
+        before_relation.contains("\"declared_constraint\": \"1.0.0\""),
+        "before dependent relation must retain its exact declared constraint"
+    );
+
+    let after_relation = package_impact_relation(package_impacts, "acme.subject", "2.0.0");
+    assert!(
+        after_relation.contains("\"side\": \"after\""),
+        "after dependent relation must retain its side"
+    );
+    assert!(
+        after_relation.contains("\"declared_constraint\": \"2.0.0\""),
+        "after dependent relation must retain its exact declared constraint"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn impact_rejects_schema_v1_and_corrupt_cache_without_stdout() {
     let schema_root = unique_temp_dir("schema-v1");
     let (before_lock, before_cache, after_lock, after_cache) = write_impact_state(&schema_root);
@@ -104,6 +152,25 @@ fn impact_rejects_schema_v1_and_corrupt_cache_without_stdout() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     let _ = fs::remove_dir_all(corrupt_root);
+}
+
+fn package_impact_relation<'a>(
+    package_impacts: &'a str,
+    impacted_name: &str,
+    impacted_version: &str,
+) -> &'a str {
+    let marker = format!(
+        "\"impacted\": {{\n        \"name\": \"{impacted_name}\",\n        \"version\": \"{impacted_version}\""
+    );
+    let start = package_impacts
+        .find(&marker)
+        .unwrap_or_else(|| panic!("missing package impact for {impacted_name}@{impacted_version}"));
+    let remainder_start = start + marker.len();
+    let end = package_impacts[remainder_start..]
+        .find("\"impacted\": {")
+        .map(|offset| remainder_start + offset)
+        .unwrap_or(package_impacts.len());
+    &package_impacts[start..end]
 }
 
 fn write_impact_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
@@ -180,10 +247,26 @@ fn run_impact(
     after_lock: &Path,
     after_cache: &Path,
 ) -> Output {
+    run_impact_for(
+        "acme.subject",
+        before_lock,
+        before_cache,
+        after_lock,
+        after_cache,
+    )
+}
+
+fn run_impact_for(
+    package: &str,
+    before_lock: &Path,
+    before_cache: &Path,
+    after_lock: &Path,
+    after_cache: &Path,
+) -> Output {
     commandf()
         .args([
             "impact",
-            "acme.subject",
+            package,
             "--before-lock",
             before_lock.to_str().unwrap(),
             "--before-cache",
