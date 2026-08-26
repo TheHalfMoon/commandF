@@ -108,13 +108,7 @@ fn oversized_primary_lockfile_is_operational_exit_one() {
     let oversized_lock = root.join("oversized.lock");
     create_sparse_file(&oversized_lock, GATE_LOCKFILE_LIMIT + 1);
 
-    let output = run_gate(
-        &oversized_lock,
-        &cache,
-        &valid_lock,
-        &cache,
-        &[],
-    );
+    let output = run_gate(&oversized_lock, &cache, &valid_lock, &cache, &[]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("exceeds"));
