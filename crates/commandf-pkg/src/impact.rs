@@ -5,9 +5,8 @@ use crate::{
     ContextCanonicalReferenceEdge, ContextGraphReport, ContextPackageDependencyEdge,
     ContextPackageIdentity, ContextPackageNode, ImpactArtifactPathStep, ImpactArtifactRelation,
     ImpactCoverage, ImpactError, ImpactGraphEvidence, ImpactPackagePathStep, ImpactPackageRelation,
-    ImpactReport, ImpactSeed, ImpactSeedKind, ImpactSide, ImpactSubject,
-    ImpactUnresolvedBoundary, Lockfile, ResourceKey, ResourceKeyKind, StructuralChangeKind,
-    StructuralDiffReport,
+    ImpactReport, ImpactSeed, ImpactSeedKind, ImpactSide, ImpactSubject, ImpactUnresolvedBoundary,
+    Lockfile, ResourceKey, ResourceKeyKind, StructuralChangeKind, StructuralDiffReport,
 };
 
 #[derive(Default)]
@@ -324,7 +323,9 @@ fn artifact_for_filename(
     let matches = graph
         .artifacts
         .iter()
-        .filter(|artifact| artifact.identity.package == *package && artifact.identity.filename == filename)
+        .filter(|artifact| {
+            artifact.identity.package == *package && artifact.identity.filename == filename
+        })
         .collect::<Vec<_>>();
     match matches.as_slice() {
         [artifact] => Ok(Some((*artifact).clone())),
@@ -359,7 +360,8 @@ fn collect_artifact_side(
     }
 
     for edge in &graph.canonical_reference_edges {
-        if !sources.contains(&edge.source) || edge.resolution == CanonicalResolutionStatus::Resolved {
+        if !sources.contains(&edge.source) || edge.resolution == CanonicalResolutionStatus::Resolved
+        {
             continue;
         }
         boundaries.push(ImpactUnresolvedBoundary {
@@ -383,7 +385,8 @@ fn artifact_paths(
     side: ImpactSide,
 ) -> Result<BTreeMap<ContextArtifactIdentity, Vec<ImpactArtifactPathStep>>, ImpactError> {
     let label = side_label(side);
-    let mut reverse = BTreeMap::<ContextArtifactIdentity, Vec<ContextCanonicalReferenceEdge>>::new();
+    let mut reverse =
+        BTreeMap::<ContextArtifactIdentity, Vec<ContextCanonicalReferenceEdge>>::new();
     for edge in &graph.canonical_reference_edges {
         if edge.resolution != CanonicalResolutionStatus::Resolved {
             continue;
@@ -459,7 +462,10 @@ fn package_paths(
 ) -> BTreeMap<ContextPackageIdentity, Vec<ImpactPackagePathStep>> {
     let mut reverse = BTreeMap::<ContextPackageIdentity, Vec<ContextPackageDependencyEdge>>::new();
     for edge in &graph.package_dependency_edges {
-        reverse.entry(edge.to.clone()).or_default().push(edge.clone());
+        reverse
+            .entry(edge.to.clone())
+            .or_default()
+            .push(edge.clone());
     }
     for edges in reverse.values_mut() {
         edges.sort();
@@ -504,7 +510,11 @@ fn is_better_path<T: Ord>(existing: Option<&Vec<T>>, candidate: &Vec<T>) -> bool
 
 fn normalize_artifact_sides(input: Vec<ImpactArtifactRelation>) -> Vec<ImpactArtifactRelation> {
     let mut grouped = BTreeMap::<
-        (ContextArtifactIdentity, ContextArtifactIdentity, Vec<ImpactArtifactPathStep>),
+        (
+            ContextArtifactIdentity,
+            ContextArtifactIdentity,
+            Vec<ImpactArtifactPathStep>,
+        ),
         BTreeSet<ImpactSide>,
     >::new();
     for relation in input {
@@ -528,7 +538,11 @@ fn normalize_artifact_sides(input: Vec<ImpactArtifactRelation>) -> Vec<ImpactArt
 
 fn normalize_package_sides(input: Vec<ImpactPackageRelation>) -> Vec<ImpactPackageRelation> {
     let mut grouped = BTreeMap::<
-        (ContextPackageIdentity, ContextPackageIdentity, Vec<ImpactPackagePathStep>),
+        (
+            ContextPackageIdentity,
+            ContextPackageIdentity,
+            Vec<ImpactPackagePathStep>,
+        ),
         BTreeSet<ImpactSide>,
     >::new();
     for relation in input {
