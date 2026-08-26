@@ -10,7 +10,7 @@ The commandF plan therefore consists of the following layers.
 
 `docs/COMMAND_F_MASTER_ARCHITECTURE_V2.md`
 
-Defines product boundary, architecture planes, first execution stack, trust boundaries, and mandatory gates. When it conflicts with older bootstrap planning, V2 controls execution order.
+Defines product boundary, architecture planes, first execution stack, trust boundaries, mandatory gates, and the relationship between cross-cutting Assurance Foundation work and CF product slices. When it conflicts with older bootstrap planning, V2 controls execution order.
 
 ## B. Discovery coverage authority
 
@@ -92,17 +92,51 @@ Master's priority remains R1–R4. Research hypotheses never become product guar
 
 ## G. Feature execution units
 
-Every `CF-*` slice is a Spec Kit-style feature unit:
+Every `CF-*` product slice is a Spec Kit-style feature unit:
 
 ```text
 spec.md -> plan.md -> tasks.md -> implementation -> deterministic validation -> convergence.md
 ```
 
-CF-01 is the current feature unit under `specs/001-cf-01-package-resolution/`.
+The same process is used for an `AF-*` Assurance Foundation unit when it creates independently executable verification authority around the repository rather than product semantics.
+
+Current canonical execution truth at the creation of the Assurance Program:
+
+```text
+CF-13: CLOSED_CANONICAL
+main: 8a45857bf31c4acae57fdfb1e3cdde3d0f7d0361
+next product identity: CF-14
+current cross-cutting planning unit: AF-01
+```
+
+## H. Assurance-program authority
+
+`docs/COMMAND_F_ASSURANCE_PROGRAM_2026-08-26.md`
+
+Preserves and sequences the cross-cutting work required to make commandF's own development/release evidence as rigorous as its interoperability evidence.
+
+Assurance units use `AF-*` identities and **do not renumber product CF slices**.
+
+Program units retained:
+
+1. **AF-01 Trusted Development Baseline** — source-control enforcement, immutable workflow references, least authority, dependency/license/source/advisory policy, CI/CD static analysis, exact-head assurance proof.
+2. **AF-02 Adversarial Test Strength** — structure-aware/differential fuzzing, property tests, mutation adequacy, coverage diagnostics/floors, flaky-as-failure execution, minimized regression corpus.
+3. **AF-03 Portability and Release Evidence** — Linux/Windows/macOS, MSRV, public API/SemVer guard, SBOM, SLSA-compatible provenance, artifact/signature verification.
+4. **AF-04 Performance and Reliability Evidence** — measured benchmark/resource budgets, large-input stress, external-sentinel separation, retained trends reusable by future commandF Bench.
+
+Immediate authorized planning package once this index update is canonical:
+
+`specs/015-af-01-trusted-development-baseline/`
+
+Ordering rule:
+
+- AF-01 must close before a new post-CF-13 product implementation is merged.
+- CF-14 planning may proceed in parallel under its own Spec Kit authority.
+- AF-02/03/04 remain retained program units and require their own planning packages before implementation.
 
 ## Coverage rule
 
-Before a future architecture supersedes V2, its review must reconcile this entire plan set. A candidate, product capability, gap, or research track may be:
+Before a future architecture supersedes V2, its review must reconcile this entire plan set. A candidate, product capability, gap, assurance unit, or research track may be:
 
 - adopted
 - retained for later
@@ -113,4 +147,6 @@ It may **not** disappear silently.
 
 ## Build-order rule
 
-Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool/capability is activated only when a concrete slice requires it and its provenance/adoption gate is satisfied.
+Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool/capability is activated only when a concrete CF or AF unit requires it and its provenance/adoption gate is satisfied.
+
+Assurance tooling is not exempt from this rule: naming cargo-fuzz, SLSA, Sigstore, Scorecard, cargo-deny, cargo-audit, zizmor, or any other tool in discovery/program documents is not adoption until the relevant AF plan pins the exact implementation identity and acceptance boundary.
