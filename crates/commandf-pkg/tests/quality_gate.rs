@@ -1,9 +1,10 @@
 use commandf_pkg::{
     evaluate_compatibility_policy, evaluate_quality_gate, finding_fingerprint_v1,
     validate_quality_gate_report, CheckDirection, CheckFailOn, CheckPolicy, CompatibilityDirection,
-    CompatibilityFinding, CompatibilityReport, CompatibilitySeverity, ElementView, FindingFingerprint,
-    GateSuppression, GateSuppressions, PackageEvidence, QualityGateDisposition, QualityGateError,
-    ResourceKey, ResourceKeyKind, StructuralChangeKind, MAX_GATE_SUPPRESSION_RATIONALE_CHARS,
+    CompatibilityFinding, CompatibilityReport, CompatibilitySeverity, ElementView,
+    FindingFingerprint, GateSuppression, GateSuppressions, PackageEvidence, QualityGateDisposition,
+    QualityGateError, ResourceKey, ResourceKeyKind, StructuralChangeKind,
+    MAX_GATE_SUPPRESSION_RATIONALE_CHARS,
 };
 use serde_json::{json, Value};
 
@@ -34,7 +35,11 @@ fn finding(
     }
 }
 
-fn compatibility(findings: Vec<CompatibilityFinding>, before_version: &str, after_version: &str) -> CompatibilityReport {
+fn compatibility(
+    findings: Vec<CompatibilityFinding>,
+    before_version: &str,
+    after_version: &str,
+) -> CompatibilityReport {
     CompatibilityReport {
         schema: CompatibilityReport::SCHEMA_V1,
         ruleset: CompatibilityReport::RULESET_V1.to_owned(),
@@ -104,7 +109,10 @@ fn baseline_membership_is_non_blocking_across_package_versions() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
     let report = evaluate_quality_gate(&current, Some(&baseline), None).unwrap();
 
-    assert_eq!(report.findings[0].disposition, QualityGateDisposition::Baseline);
+    assert_eq!(
+        report.findings[0].disposition,
+        QualityGateDisposition::Baseline
+    );
     assert_eq!(report.decision.baseline_findings, 1);
     assert_eq!(report.decision.blocking_findings, 0);
     assert!(report.decision.passed);
@@ -113,7 +121,10 @@ fn baseline_membership_is_non_blocking_across_package_versions() {
     assert_eq!(evidence.before.version, "0.8.0");
     assert_eq!(evidence.after.version, "0.9.0");
     assert_eq!(evidence.finding_count, 1);
-    assert_eq!(evidence.fingerprints, vec![report.findings[0].fingerprint.clone()]);
+    assert_eq!(
+        evidence.fingerprints,
+        vec![report.findings[0].fingerprint.clone()]
+    );
     validate_quality_gate_report(&report).unwrap();
 }
 
@@ -121,7 +132,8 @@ fn baseline_membership_is_non_blocking_across_package_versions() {
 fn exact_suppression_precedes_baseline_and_unused_suppressions_are_retained() {
     let baseline = check(vec![breaking()], "0.8.0", "0.9.0", default_policy());
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint =
+        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let unused = FindingFingerprint {
         schema: FindingFingerprint::SCHEMA_V1,
         digest: format!("sha256:{}", "c".repeat(64)),
@@ -135,7 +147,7 @@ fn exact_suppression_precedes_baseline_and_unused_suppressions_are_retained() {
                 reference: None,
             },
             GateSuppression {
-                finding_fingerprint: fingerprint.clone(),
+                finding_fingerprint: fingerprint,
                 rationale: "Accepted interoperability exception".to_owned(),
                 reference: Some("INT-123".to_owned()),
             },
@@ -143,7 +155,10 @@ fn exact_suppression_precedes_baseline_and_unused_suppressions_are_retained() {
     };
 
     let report = evaluate_quality_gate(&current, Some(&baseline), Some(&suppressions)).unwrap();
-    assert_eq!(report.findings[0].disposition, QualityGateDisposition::Suppressed);
+    assert_eq!(
+        report.findings[0].disposition,
+        QualityGateDisposition::Suppressed
+    );
     assert_eq!(
         report.findings[0]
             .matched_suppression
@@ -189,7 +204,10 @@ fn direction_and_threshold_semantics_match_cf05_for_new_findings() {
         },
     );
     let gate = evaluate_quality_gate(&consumer_breaking, None, None).unwrap();
-    assert_eq!(gate.decision.selected_findings, consumer_breaking.decision.selected_findings);
+    assert_eq!(
+        gate.decision.selected_findings,
+        consumer_breaking.decision.selected_findings
+    );
     assert_eq!(gate.decision.blocking_findings, 0);
     assert!(gate.decision.passed);
 
@@ -203,7 +221,10 @@ fn direction_and_threshold_semantics_match_cf05_for_new_findings() {
         },
     );
     let gate = evaluate_quality_gate(&consumer_risky, None, None).unwrap();
-    assert_eq!(gate.decision.blocking_findings, consumer_risky.decision.blocking_findings);
+    assert_eq!(
+        gate.decision.blocking_findings,
+        consumer_risky.decision.blocking_findings
+    );
     assert_eq!(gate.decision.blocking_findings, 1);
 
     let none = check(
@@ -309,7 +330,8 @@ fn baseline_canonical_digest_is_invariant_to_nested_object_key_order() {
 #[test]
 fn suppression_order_is_canonical_and_report_bytes_are_repeatable() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let current_fp = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let current_fp =
+        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let unused_fp = FindingFingerprint {
         schema: 1,
         digest: format!("sha256:{}", "d".repeat(64)),
@@ -336,18 +358,33 @@ fn suppression_order_is_canonical_and_report_bytes_are_repeatable() {
     let report_a = evaluate_quality_gate(&current, None, Some(&first)).unwrap();
     let report_b = evaluate_quality_gate(&current, None, Some(&second)).unwrap();
     assert_eq!(
-        report_a.suppression_evidence.as_ref().unwrap().canonical_sha256,
-        report_b.suppression_evidence.as_ref().unwrap().canonical_sha256
+        report_a
+            .suppression_evidence
+            .as_ref()
+            .unwrap()
+            .canonical_sha256,
+        report_b
+            .suppression_evidence
+            .as_ref()
+            .unwrap()
+            .canonical_sha256
     );
-    assert_eq!(report_a.to_json_bytes().unwrap(), report_b.to_json_bytes().unwrap());
+    assert_eq!(
+        report_a.to_json_bytes().unwrap(),
+        report_b.to_json_bytes().unwrap()
+    );
     let repeated = evaluate_quality_gate(&current, None, Some(&first)).unwrap();
-    assert_eq!(report_a.to_json_bytes().unwrap(), repeated.to_json_bytes().unwrap());
+    assert_eq!(
+        report_a.to_json_bytes().unwrap(),
+        repeated.to_json_bytes().unwrap()
+    );
 }
 
 #[test]
 fn invalid_or_ambiguous_suppression_state_fails_closed() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint =
+        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
 
     let unsupported = GateSuppressions {
         schema: 1,
@@ -362,7 +399,10 @@ fn invalid_or_ambiguous_suppression_state_fails_closed() {
     };
     assert!(matches!(
         evaluate_quality_gate(&current, None, Some(&unsupported)),
-        Err(QualityGateError::UnsupportedFingerprintSchema { found: 2, expected: 1 })
+        Err(QualityGateError::UnsupportedFingerprintSchema {
+            found: 2,
+            expected: 1
+        })
     ));
 
     let malformed = GateSuppressions {
@@ -409,7 +449,10 @@ fn invalid_or_ambiguous_suppression_state_fails_closed() {
     };
     assert!(matches!(
         evaluate_quality_gate(&current, None, Some(&oversized)),
-        Err(QualityGateError::SuppressionStringTooLong { field: "rationale", .. })
+        Err(QualityGateError::SuppressionStringTooLong {
+            field: "rationale",
+            ..
+        })
     ));
 }
 
@@ -500,7 +543,8 @@ fn persisted_report_validation_rejects_missing_baseline_membership() {
 #[test]
 fn persisted_report_validation_rejects_suppression_metadata_tampering() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint =
+        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let suppressions = GateSuppressions {
         schema: 1,
         suppressions: vec![GateSuppression {
@@ -543,6 +587,9 @@ fn persisted_report_rejects_unknown_fingerprint_version() {
     report.findings[0].fingerprint.schema = 2;
     assert!(matches!(
         validate_quality_gate_report(&report),
-        Err(QualityGateError::UnsupportedFingerprintSchema { found: 2, expected: 1 })
+        Err(QualityGateError::UnsupportedFingerprintSchema {
+            found: 2,
+            expected: 1
+        })
     ));
 }
