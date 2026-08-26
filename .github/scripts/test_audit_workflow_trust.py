@@ -158,9 +158,7 @@ class WorkflowTrustAuditTests(unittest.TestCase):
     def test_short_sha_and_branch_refs_are_rejected(self) -> None:
         for reference in ("owner/action@abc1234", "owner/action@main"):
             with self.subTest(reference=reference):
-                workflow = valid_workflow(
-                    f"      - uses: {reference}\n"
-                )
+                workflow = valid_workflow(f"      - uses: {reference}\n")
                 result = self.run_repo(workflow)
                 self.assertIn("mutable_uses", self.codes(result))
 
@@ -189,10 +187,32 @@ runs:
         result = self.run_repo(workflow)
         self.assertIn("checkout_credentials", self.codes(result))
 
+    def test_action_metadata_checkout_credentials_must_be_disabled(self) -> None:
+        action = f"""name: nested
+description: fixture
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@{CHECKOUT_SHA}
+"""
+        result = self.run_repo(valid_workflow(), action)
+        self.assertIn("checkout_credentials", self.codes(result))
+
+    def test_action_metadata_checkout_with_credentials_disabled_passes(self) -> None:
+        action = f"""name: nested
+description: fixture
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@{CHECKOUT_SHA}
+      with:
+        persist-credentials: false
+"""
+        result = self.run_repo(valid_workflow(), action)
+        self.assertTrue(result["ok"], result)
+
     def test_unresolved_default_permissions_fail_closed(self) -> None:
-        workflow = valid_workflow().replace(
-            "permissions:\n  contents: read\n", ""
-        )
+        workflow = valid_workflow().replace("permissions:\n  contents: read\n", "")
         result = self.run_repo(workflow)
         self.assertIn("unresolved_permissions", self.codes(result))
 
@@ -234,6 +254,14 @@ runs:
         result = self.run_repo(mutable_service)
         self.assertIn("mutable_container", self.codes(result))
 
+    def test_non_container_image_key_does_not_false_positive(self) -> None:
+        workflow = valid_workflow().replace(
+            "    steps:\n",
+            "    env:\n      image: mutable-but-not-a-container-authority\n    steps:\n",
+        )
+        result = self.run_repo(workflow)
+        self.assertTrue(result["ok"], result)
+
     def test_unlocked_cargo_command_is_rejected(self) -> None:
         workflow = valid_workflow().replace(
             "cargo test --locked --workspace", "cargo test --workspace"
@@ -257,6 +285,13 @@ runs:
         ]
         result = self.run_repo(valid_workflow(), audit_policy=broken)
         self.assertIn("invalid_policy", self.codes(result))
+
+    def test_invalid_policy_root_fails_closed_without_exception(self) -> None:
+        result = self.run_repo(valid_workflow(), audit_policy={"schema": 1})
+        self.assertFalse(result["ok"])
+        self.assertIn("invalid_policy", self.codes(result))
+        self.assertEqual(result["workflows"], [])
+        self.assertEqual(result["action_metadata"], [])
 
 
 if __name__ == "__main__":
