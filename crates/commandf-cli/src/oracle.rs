@@ -5,8 +5,9 @@ use std::time::Duration;
 
 use commandf_pkg::{
     diff_package_archives, matched_structure_definition_pairs, reconcile_hl7_oracle,
-    run_hl7_oracle_adapter, validate_hl7_oracle_adapter, Hl7OracleInvocation, LockedPackage,
-    Lockfile, PackageCache, PackageName, ResourceKey, ResourceKeyKind, DEFAULT_ORACLE_TIMEOUT_SECS,
+    run_hl7_oracle_adapter, validate_hl7_oracle_adapter, Hl7OracleInvocation,
+    Hl7OracleStagedArchives, LockedPackage, Lockfile, PackageCache, PackageName, ResourceKey,
+    ResourceKeyKind, DEFAULT_ORACLE_TIMEOUT_SECS,
 };
 
 const ORACLE_CORE_PACKAGE: &str = "hl7.fhir.r4.core";
@@ -44,17 +45,12 @@ pub fn run(
 
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
-    before_cache.verify(&before_locked.sha256)?;
-    after_cache.verify(&after_locked.sha256)?;
-    before_cache.verify(&before_core.sha256)?;
-    after_cache.verify(&after_core.sha256)?;
+    let before_bytes = before_cache.read_verified(&before_locked.sha256)?;
+    let after_bytes = after_cache.read_verified(&after_locked.sha256)?;
+    let core_bytes = before_cache.read_verified(&before_core.sha256)?;
+    after_cache.read_verified(&after_core.sha256)?;
 
-    let before_archive = archive_path(&before_cache, before_locked);
-    let after_archive = archive_path(&after_cache, after_locked);
-    let core_archive = archive_path(&before_cache, before_core);
-    let before_bytes = fs::read(&before_archive)?;
-    let after_bytes = fs::read(&after_archive)?;
-
+    let staged = Hl7OracleStagedArchives::new(&core_bytes, &before_bytes, &after_bytes)?;
     let structural_diff = diff_package_archives(
         package_name.to_string(),
         &before_locked.version,
@@ -83,9 +79,9 @@ pub fn run(
             }
             let (url, version) = canonical_parts(&pair.resource)?;
             let invocation = Hl7OracleInvocation {
-                core_package: &core_archive,
-                left_package: &before_archive,
-                right_package: &after_archive,
+                core_package: staged.core_package(),
+                left_package: staged.left_package(),
+                right_package: staged.right_package(),
                 left_url: url,
                 left_version: version,
                 right_url: url,
@@ -140,13 +136,6 @@ fn select_locked_package<'a>(
         ));
     }
     Ok(selected)
-}
-
-fn archive_path(cache: &PackageCache, package: &LockedPackage) -> PathBuf {
-    cache
-        .root()
-        .join("sha256")
-        .join(format!("{}.tgz", package.sha256))
 }
 
 fn canonical_parts(resource: &ResourceKey) -> Result<(&str, Option<&str>), io::Error> {
