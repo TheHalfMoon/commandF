@@ -64,7 +64,7 @@ pub use compatibility_model::{
 };
 pub use compatibility_validate::classify_structural_diff;
 pub use error::PackageError;
-pub use lock::{LockedPackage, Lockfile};
+pub use lock::{LockedPackage, Lockfile, ResolvedDependency};
 pub use model::{PackageName, PackageRequest, VersionConstraint};
 pub use oracle_error::OracleError;
 pub use oracle_model::{
