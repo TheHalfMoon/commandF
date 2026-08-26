@@ -90,8 +90,7 @@ fn changed_states(
     let after = decode_hex(AFTER_HEX);
     let (before_lock, before_cache) =
         write_locked_state(&dir.join("before"), &before, before_version);
-    let (after_lock, after_cache) =
-        write_locked_state(&dir.join("after"), &after, after_version);
+    let (after_lock, after_cache) = write_locked_state(&dir.join("after"), &after, after_version);
     (before_lock, before_cache, after_lock, after_cache)
 }
 
@@ -282,8 +281,11 @@ fn exact_suppression_passes_and_stale_suppression_does_not_hide_blocker() {
             reference: Some("TEST-1".to_owned()),
         }],
     };
-    fs::write(&exact_path, exact.to_json_bytes().expect("suppression JSON"))
-        .expect("write exact suppression");
+    fs::write(
+        &exact_path,
+        exact.to_json_bytes().expect("suppression JSON"),
+    )
+    .expect("write exact suppression");
 
     let exact_output = run_command(
         "gate",
@@ -363,7 +365,8 @@ fn malformed_mismatched_and_version_incompatible_inputs_exit_one() {
     );
     assert_eq!(malformed.status.code(), Some(1));
 
-    let mut mismatched = current_check_report(&before_lock, &before_cache, &after_lock, &after_cache);
+    let mut mismatched =
+        current_check_report(&before_lock, &before_cache, &after_lock, &after_cache);
     mismatched.compatibility.package_name = "other.package".to_owned();
     let mismatched_path = dir.join("mismatched-baseline.json");
     fs::write(
