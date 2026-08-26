@@ -119,6 +119,8 @@ Any future source profiler that touches instances must be a separate on-premises
 
 Each CF slice is a Spec Kit-style feature unit with `spec.md`, `plan.md`, and `tasks.md`, followed by consistency analysis, implementation, deterministic evidence, and a convergence pass. The specification states **what/why**; the plan states **how**; tasks are independently verifiable work items. Feature architecture must not be smuggled into the constitution or treated as completed merely because documentation exists.
 
+Cross-cutting Assurance Foundation units use the same workflow when they create independently executable verification authority around commandF's source, CI, dependencies, testing, release, or performance evidence. They use `AF-*` identities and do not renumber product CF slices.
+
 ## Roadmap identity reconciliation
 
 Canonical execution used `CF-11` for the multi-version package-graph foundation correction required to represent real transitive FHIR package closures. That completed history is retained exactly and is not renamed.
@@ -132,6 +134,32 @@ CF-11G = ecosystem Context Graph + `commandf context`
 `CF-11G` is a product slice identity. Its Spec Kit package uses sequence `012` only because that is the next available spec-directory sequence. CF-12 and later product identifiers remain unchanged.
 
 The graph slice consumes exact multi-version package identity from canonical CF-11 and canonical artifact inspection from CF-02. It does not depend on the external CF-06/CF-10 HL7-maintainer gate.
+
+## Assurance Foundation reconciliation
+
+After CF-13 became canonical, a repository-wide review found that commandF's product proof was stronger than its uniformly enforced development/release baseline. In particular, canonical `main` was not protected by a ruleset, the general CI workflow retained mutable action/tool references, and the repository had no uniform dependency/license/source/advisory policy, workflow static analysis, fuzz/mutation adequacy program, cross-platform release matrix, or signed build-provenance path.
+
+These are cross-cutting assurance gaps rather than new interoperability product commands. They therefore use a separate identity family:
+
+```text
+AF-01 = Trusted Development Baseline
+AF-02 = Adversarial Test Strength
+AF-03 = Portability and Release Evidence
+AF-04 = Performance and Reliability Evidence
+```
+
+Detailed authority and sequencing live in:
+
+`docs/COMMAND_F_ASSURANCE_PROGRAM_2026-08-26.md`
+
+Rules:
+
+1. AF identities do not consume or rename CF-14/15/16.
+2. AF-01 is the immediate post-CF-13 cross-cutting prerequisite and must close before a new post-CF-13 product implementation is merged.
+3. CF-14 planning may proceed in parallel because planning creates no runtime authority.
+4. AF-02/03/04 require their own Spec Kit packages before implementation.
+5. Third-party assurance tools remain evidence inputs; no external score silently becomes commandF correctness authority.
+6. The CF-06/CF-10 production-oracle governance path remains separate and unchanged.
 
 ## First execution stack
 
@@ -151,9 +179,12 @@ The graph slice consumes exact multi-version package identity from canonical CF-
 | CF-11G | ecosystem Context Graph + `commandf context` | CF-02, CF-11 |
 | CF-12 | `commandf impact` | CF-11G |
 | CF-13 | baselines/suppression/quality gates | CF-05 |
-| CF-14 | on-prem aggregate-only source profiler | CF-02 |
+| AF-01 | trusted-development verification evidence | post-CF-13 cross-cutting prerequisite |
+| CF-14 | on-prem aggregate-only source profiler | CF-02, AF-01 before implementation merge |
 | CF-15 | verified dry-run recipes | CF-04, CF-09 |
 | CF-16 | mapping analysis IR, parse-only | CF-11G |
+
+AF-02/03/04 are assurance-program units rather than product-stack identifiers and are sequenced in the Assurance Program document. Their completion rules are tied to the claims/features they protect rather than used to renumber the product roadmap.
 
 ## Mandatory acceptance gates
 
@@ -171,6 +202,8 @@ Every PR must satisfy:
 - Qodo review when connected/available
 - no merge of a stack whose exact candidate state is not green
 
+AF-01 strengthens these repository gates rather than replacing them. Once an AF gate becomes canonical, future PRs must also satisfy the applicable canonical AF policy.
+
 ## CF-01 authority
 
 CF-01 owns only FHIR package acquisition, dependency resolution, content-addressed caching, and deterministic locking.
@@ -185,5 +218,8 @@ It does not validate FHIR resources, build snapshots, index canonicals, diff art
 - SQL-on-FHIR v2: https://sql-on-fhir.org/ig/2.0.0/
 - GitHub Spec Kit: https://github.com/github/spec-kit
 - DeepSeek Harness: https://github.com/deepseek-ai/deepseek-harness
+- GitHub Actions secure use: https://docs.github.com/en/actions/reference/security/secure-use
+- SLSA v1.2: https://slsa.dev/spec/v1.2/
+- Rust Fuzz Book: https://rust-fuzz.github.io/book/
 
 Research hypotheses remain separate from product guarantees.
