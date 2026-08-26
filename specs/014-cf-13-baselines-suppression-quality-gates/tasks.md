@@ -18,44 +18,54 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
   - exit 0 pass / 1 operational-or-input / 2 completed gate failure.
 
 - [x] T003 — Freeze baseline, fingerprint, suppression, and evidence semantics.
-  - exact unique SHA-256 finding fingerprints;
+  - exact unique SHA-256 finding fingerprints with explicit persisted fingerprint schema `1`;
   - valid same-package/same-ruleset CF-05 baseline;
-  - exact non-wildcard suppressions with mandatory rationale;
+  - recursive canonical JSON object-key normalization for semantic digests/fingerprints while preserving array order;
+  - baseline evidence retains exact before/after package identities plus complete sorted fingerprint membership;
+  - suppression evidence retains complete normalized membership with mandatory rationale;
+  - exact non-wildcard suppressions only;
   - `suppressed > baseline > new` disposition precedence;
-  - full current CF-05 evidence preserved.
+  - full current CF-05 evidence preserved;
+  - canonical digests bind retained evidence but never substitute for membership needed to revalidate dispositions.
 
 - [ ] T004 — Complete planning consistency, exact-head CI, and independent planning review; merge planning before implementation.
 
 ## Stack A — deterministic quality-gate library
 
 - [ ] T010 — Add CF-13 V1 public models.
+  - explicit-version `FindingFingerprint { schema, digest }`;
   - quality-gate report/decision/finding/disposition;
-  - baseline/suppression evidence;
+  - membership-bearing baseline/suppression evidence;
   - suppression input schema v1;
   - deterministic JSON serialization.
 
 - [ ] T011 — Implement deterministic finding fingerprint V1.
   - fixed semantic key fields from `spec.md`;
   - recursive JSON object-key canonicalization;
-  - SHA-256 `sha256:<lowercase hex>` output;
+  - SHA-256 `sha256:<lowercase hex>` digest inside explicit schema `1` identity;
   - message excluded;
-  - positive and counterexample fingerprint tests.
+  - positive and counterexample fingerprint tests;
+  - unsupported/cross-version fingerprint identities rejected before matching.
 
 - [ ] T012 — Validate and normalize CF-05 baselines.
   - existing `validate_check_report` authority;
   - exact package/ruleset compatibility;
   - duplicate fingerprint rejection;
-  - canonical baseline digest/evidence.
+  - recursively canonical baseline digest;
+  - retain exact baseline before/after `PackageEvidence`;
+  - retain complete lexicographically sorted unique baseline fingerprint membership.
 
 - [ ] T013 — Validate and normalize suppression files.
-  - schema, syntax, bounds, non-empty rationale;
+  - suppression schema and fingerprint schema validation;
+  - digest syntax, bounds, non-empty rationale;
   - duplicate rejection;
-  - deterministic order and canonical digest;
+  - deterministic order and recursively canonical digest;
+  - retain complete normalized suppression membership;
   - unmatched suppression retention.
 
 - [ ] T014 — Implement deterministic finding disposition.
-  - suppression precedence;
-  - baseline matching;
+  - same-version suppression precedence;
+  - baseline membership matching;
   - new finding classification;
   - original current finding order preserved.
 
@@ -65,17 +75,32 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
   - only selected `new` findings can block;
   - baseline/suppressed evidence retained but non-blocking.
 
-- [ ] T016 — Implement CF-13 report validation/invariant checks.
+- [ ] T016 — Implement CF-13 persisted-report validation/invariant checks.
   - current CF-05 report validity;
-  - fingerprint/disposition/count consistency;
+  - supported report/suppression/fingerprint schema validation;
+  - recomputed current fingerprints;
+  - baseline membership/count/package/ruleset/before/after identity validation;
+  - suppression membership/count/rationale/reference validation;
+  - every `baseline` disposition must match retained baseline membership;
+  - every `suppressed` disposition must match retained suppression membership and metadata;
+  - recomputed unused suppressions, disposition counts, and decision;
   - unique identities;
-  - fail closed on unknown/inconsistent state.
+  - fail closed on unknown/inconsistent/insufficient evidence.
 
-- [ ] T017 — Prove library determinism and bounds.
-  - repeated bytes;
-  - semantic JSON key-order invariance;
+- [ ] T017 — Prove library determinism, tamper resistance, and bounds.
+  - legitimate serialized report validates successfully;
+  - repeated report/validation results are deterministic;
+  - semantic top-level and nested JSON object-key invariance;
+  - meaningful array-order differences remain identity-bearing;
   - suppression order invariance;
   - duplicate/invalid/bounded-input failures;
+  - unsupported fingerprint schema rejected;
+  - forged `baseline` disposition without retained membership rejected;
+  - forged `suppressed` disposition or altered waiver metadata rejected;
+  - altered current fingerprint rejected;
+  - baseline/suppression membership count mismatch rejected;
+  - decision/count mismatch rejected;
+  - unknown disposition/report/fingerprint schema values rejected;
   - no silent evidence deletion.
 
 - [ ] T018 — Prove CF-05 behavior remains unchanged by Stack A refactors.
@@ -93,6 +118,7 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
 - [ ] T021 — Add bounded baseline/suppression file loading and fail-closed CLI errors.
   - explicit byte limits;
   - bounded diagnostic behavior;
+  - unsupported fingerprint versions fail closed;
   - no network acquisition added.
 
 - [ ] T022 — Preserve atomic output and gate exit semantics.
@@ -106,22 +132,30 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
   - baseline pass;
   - suppression pass;
   - stale suppression cannot hide blocker;
-  - malformed/mismatched inputs exit 1;
+  - malformed/mismatched/version-incompatible inputs exit 1;
   - deterministic repeated bytes.
 
 - [ ] T024 — Add dedicated `cf13-quality-gate-proof` workflow.
   - pinned toolchain/actions;
   - complete CF-13 path filters;
   - baseline + new + suppression proof;
+  - persisted-report validation;
   - repeated byte equality;
   - clean repository;
-  - retained digest artifact.
+  - retained deterministic evidence artifact.
 
-- [ ] T025 — Record exact CF-13 deterministic proof identity.
+- [ ] T025 — Record exact CF-13 deterministic proof identity and immutable provenance.
   - exact head/tree;
   - run/job/artifact ids;
   - artifact digest;
-  - `CF13_GATE_SHA256`.
+  - `CF13_GATE_SHA256`;
+  - repository-relative paths plus immutable blob/content identities for CF-13 spec/plan/tasks, constitution, AGENTS.md, and relevant CF-04/CF-05 implementation authorities;
+  - pinned Rust/toolchain and GitHub Action identities;
+  - `Cargo.lock` path/blob identity plus exact-byte SHA-256;
+  - exact synthetic source/fixture relative paths and content SHA-256 values;
+  - exact before/after package name/version/archive SHA-256 identities;
+  - baseline and suppression canonical evidence digests;
+  - no host-local path/timestamp/floating-ref substituted for immutable identity.
 
 - [ ] T026 — Prove existing user-visible command behavior remains unchanged.
   - `commandf check` JSON/SARIF/exit semantics;
@@ -157,6 +191,7 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
 2. T010 precedes T011-T016; T011 precedes baseline/suppression matching; T012/T013 precede T014; T014 precedes T015; T015 precedes T016/T017.
 3. Stack A must merge before Stack B starts unless the canonical planning merge explicitly authorizes a stacked implementation base.
 4. `commandf check` remains CF-05 authority and must not be silently changed to new-change-first semantics.
-5. Baseline/suppression matching is exact; no wildcard or inferred waiver authority is allowed.
-6. No time/network/model authority is introduced.
-7. No CF-06 production pin, frozen CF-10 corpus, or lock-schema mutation is authorized by CF-13.
+5. Baseline/suppression matching is exact and fingerprint-version-aware; no wildcard or inferred waiver authority is allowed.
+6. A persisted baseline/suppressed disposition is not authoritative unless the report retains membership evidence sufficient to revalidate it.
+7. No time/network/model authority is introduced.
+8. No CF-06 production pin, frozen CF-10 corpus, or lock-schema mutation is authorized by CF-13.
