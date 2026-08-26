@@ -15,12 +15,19 @@ permissions:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
         with:
           components: rustfmt, clippy
+      - name: AF-01 workflow trust audit tests
+        run: python3 .github/scripts/test_audit_workflow_trust.py
+      - name: AF-01 repository workflow trust audit
+        run: python3 .github/scripts/audit_workflow_trust.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
