@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -67,23 +67,52 @@ impl PackageCache {
     pub fn read_verified(&self, digest: &str) -> Result<Vec<u8>, PackageError> {
         validate_digest(digest)?;
         let path = self.object_path(digest);
-        let bytes = fs::read(&path).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                PackageError::CacheMissing(digest.to_owned())
-            } else {
-                PackageError::Io(error)
-            }
-        })?;
-        let found = Self::digest(&bytes);
-        if found != digest {
-            return Err(PackageError::CacheDigestMismatch {
-                path,
-                expected: digest.to_owned(),
-                found,
-            });
-        }
-        Ok(bytes)
+        let bytes = fs::read(&path).map_err(|error| map_cache_read_error(error, digest))?;
+        verify_cache_bytes(path, digest, bytes)
     }
+
+    pub fn read_verified_bounded(
+        &self,
+        digest: &str,
+        max_bytes: u64,
+    ) -> Result<Vec<u8>, PackageError> {
+        validate_digest(digest)?;
+        let path = self.object_path(digest);
+        let file = fs::File::open(&path).map_err(|error| map_cache_read_error(error, digest))?;
+        let read_limit = max_bytes.saturating_add(1);
+        let mut bytes = Vec::new();
+        file.take(read_limit).read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > max_bytes {
+            return Err(PackageError::InvalidRequest(format!(
+                "cache object exceeds the maximum supported size of {max_bytes} bytes"
+            )));
+        }
+        verify_cache_bytes(path, digest, bytes)
+    }
+}
+
+fn map_cache_read_error(error: std::io::Error, digest: &str) -> PackageError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        PackageError::CacheMissing(digest.to_owned())
+    } else {
+        PackageError::Io(error)
+    }
+}
+
+fn verify_cache_bytes(
+    path: PathBuf,
+    expected: &str,
+    bytes: Vec<u8>,
+) -> Result<Vec<u8>, PackageError> {
+    let found = PackageCache::digest(&bytes);
+    if found != expected {
+        return Err(PackageError::CacheDigestMismatch {
+            path,
+            expected: expected.to_owned(),
+            found,
+        });
+    }
+    Ok(bytes)
 }
 
 fn validate_digest(digest: &str) -> Result<(), PackageError> {
@@ -95,5 +124,34 @@ fn validate_digest(digest: &str) -> Result<(), PackageError> {
         Ok(())
     } else {
         Err(PackageError::InvalidDigest(digest.to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_verified_read_rejects_oversized_cache_object() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = PackageCache::new(directory.path());
+        let digest = cache.put(b"abcd").expect("cache object");
+
+        let error = cache
+            .read_verified_bounded(&digest, 3)
+            .expect_err("oversized cache object must fail closed");
+        assert!(matches!(error, PackageError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn bounded_verified_read_returns_the_bytes_it_verified() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = PackageCache::new(directory.path());
+        let digest = cache.put(b"abcd").expect("cache object");
+
+        let bytes = cache
+            .read_verified_bounded(&digest, 4)
+            .expect("bounded verified bytes");
+        assert_eq!(bytes, b"abcd");
     }
 }
