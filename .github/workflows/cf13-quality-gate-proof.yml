@@ -1,0 +1,97 @@
+name: cf13-quality-gate-proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf13-quality-gate-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/014-cf-13-baselines-suppression-quality-gates/**
+      - .specify/memory/constitution.md
+      - AGENTS.md
+  push:
+    branches:
+      - feat/cf13-quality-gate-cli
+    paths:
+      - .github/workflows/cf13-quality-gate-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/014-cf-13-baselines-suppression-quality-gates/**
+      - .specify/memory/constitution.md
+      - AGENTS.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF13_PROOF_CONTAINER: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+  CF13_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  deterministic-quality-gate:
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Assert pinned execution toolchain
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          test "$(rustc --version | awk '{print $2}')" = "1.97.1"
+
+      - name: Prove CF-13 CLI contract and deterministic evidence
+        run: |
+          set -euo pipefail
+          cargo test --locked -p commandf --test gate_behavior --test gate_exit_contract
+          cargo test --locked -p commandf --test gate_determinism_proof -- --nocapture --test-threads=1 \
+            | tee /tmp/cf13-quality-gate-proof.log
+          grep -oE 'CF13_(GATE|BASELINE_CANONICAL|SUPPRESSION_CANONICAL|BEFORE_ARCHIVE|AFTER_ARCHIVE)_SHA256=(sha256:)?[0-9a-f]{64}' \
+            /tmp/cf13-quality-gate-proof.log \
+            | sort \
+            | tee /tmp/cf13-quality-gate-proof.env
+          grep -q '^CF13_GATE_SHA256=[0-9a-f]\{64\}$' /tmp/cf13-quality-gate-proof.env
+          grep -q '^CF13_BASELINE_CANONICAL_SHA256=sha256:[0-9a-f]\{64\}$' /tmp/cf13-quality-gate-proof.env
+          grep -q '^CF13_SUPPRESSION_CANONICAL_SHA256=sha256:[0-9a-f]\{64\}$' /tmp/cf13-quality-gate-proof.env
+
+      - name: Record immutable repository evidence
+        run: |
+          set -euo pipefail
+          {
+            echo "CF13_SOURCE_SHA=$CF13_SOURCE_SHA"
+            echo "CF13_WORKFLOW_SHA=$(sha256sum .github/workflows/cf13-quality-gate-proof.yml | awk '{print $1}')"
+            echo "CF13_CARGO_LOCK_SHA256=$(sha256sum Cargo.lock | awk '{print $1}')"
+            echo "CF13_SPEC_SHA256=$(sha256sum specs/014-cf-13-baselines-suppression-quality-gates/spec.md | awk '{print $1}')"
+            echo "CF13_PLAN_SHA256=$(sha256sum specs/014-cf-13-baselines-suppression-quality-gates/plan.md | awk '{print $1}')"
+            echo "CF13_TASKS_SHA256=$(sha256sum specs/014-cf-13-baselines-suppression-quality-gates/tasks.md | awk '{print $1}')"
+            echo "CF13_PROOF_TEST_SHA256=$(sha256sum crates/commandf-cli/tests/gate_determinism_proof.rs | awk '{print $1}')"
+            echo "CF13_RUSTC=$(rustc --version)"
+            echo "CF13_CONTAINER=$CF13_PROOF_CONTAINER"
+            echo "CF13_CHECKOUT_ACTION=fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
+            echo "CF13_UPLOAD_ACTION=ea165f8d65b6e75b540449e92b4886f43607fa02"
+          } >> /tmp/cf13-quality-gate-proof.env
+          sort -o /tmp/cf13-quality-gate-proof.env /tmp/cf13-quality-gate-proof.env
+
+      - name: Assert repository remains clean
+        run: |
+          set -euo pipefail
+          status="$(git -c safe.directory="$GITHUB_WORKSPACE" status --porcelain)"
+          test -z "$status"
+
+      - name: Upload CF-13 deterministic evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cf13-quality-gate-proof
+          path: /tmp/cf13-quality-gate-proof.env
+          if-no-files-found: error
+          retention-days: 3
