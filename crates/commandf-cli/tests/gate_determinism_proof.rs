@@ -94,7 +94,10 @@ fn gate_cli_proof_is_deterministic_and_covers_new_baseline_suppression() {
     validate_quality_gate_report(&suppression_report).unwrap();
     assert!(suppression_report.decision.passed);
 
-    println!("CF13_GATE_SHA256={}", PackageCache::digest(&new_first.stdout));
+    println!(
+        "CF13_GATE_SHA256={}",
+        PackageCache::digest(&new_first.stdout)
+    );
     println!(
         "CF13_BASELINE_CANONICAL_SHA256={}",
         baseline_report.baseline.as_ref().unwrap().canonical_sha256
@@ -204,5 +207,8 @@ fn unique_temp_dir() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock after epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!("commandf-cf13-proof-{}-{nonce}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "commandf-cf13-proof-{}-{nonce}",
+        std::process::id()
+    ))
 }
