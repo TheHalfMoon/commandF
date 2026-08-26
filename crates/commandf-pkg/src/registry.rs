@@ -335,7 +335,7 @@ mod tests {
         assert!(archive.bytes.starts_with(&GZIP_MAGIC));
         assert_eq!(
             archive.source,
-            "https://packages.fhir.org/hl7.fhir.r4.core/4.0.1"
+            "https://packages.fhir.org/hl7.fhir.us.core/8.0.1"
         );
     }
 
