@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ MODULE_PATH = Path(__file__).with_name("audit_workflow_trust.py")
 SPEC = importlib.util.spec_from_file_location("audit_workflow_trust", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 AUDIT = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = AUDIT
 SPEC.loader.exec_module(AUDIT)
 
 WORKFLOW = ".github/workflows/example.yml"
