@@ -23,6 +23,9 @@ mod context;
 mod context_error;
 mod context_model;
 mod error;
+mod gate;
+mod gate_error;
+mod gate_model;
 mod impact;
 mod impact_error;
 mod impact_model;
@@ -77,6 +80,17 @@ pub use context_model::{
     ContextPackageDependencyEdge, ContextPackageIdentity, ContextPackageNode,
 };
 pub use error::PackageError;
+pub use gate::{
+    evaluate_quality_gate, finding_fingerprint_v1, validate_quality_gate_report,
+    MAX_GATE_SUPPRESSIONS, MAX_GATE_SUPPRESSION_RATIONALE_CHARS,
+    MAX_GATE_SUPPRESSION_REFERENCE_CHARS,
+};
+pub use gate_error::QualityGateError;
+pub use gate_model::{
+    FindingFingerprint, GateSuppression, GateSuppressions, QualityGateBaselineEvidence,
+    QualityGateDecision, QualityGateDisposition, QualityGateFinding, QualityGateReport,
+    QualityGateSuppressionEvidence,
+};
 pub use impact::build_impact_report;
 pub use impact_error::ImpactError;
 pub use impact_model::{

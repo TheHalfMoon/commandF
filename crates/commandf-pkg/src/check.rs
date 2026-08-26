@@ -90,7 +90,7 @@ pub(crate) fn direction_selected(policy: CheckDirection, finding: CompatibilityD
     }
 }
 
-fn severity_blocks(policy: CheckFailOn, severity: CompatibilitySeverity) -> bool {
+pub(crate) fn severity_blocks(policy: CheckFailOn, severity: CompatibilitySeverity) -> bool {
     match policy {
         CheckFailOn::Breaking => severity == CompatibilitySeverity::Breaking,
         CheckFailOn::Risky => matches!(
