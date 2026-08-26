@@ -5,13 +5,14 @@ use semver::Version;
 use serde::Deserialize;
 use ureq::Agent;
 
-use crate::{PackageArchive, PackageError, PackageName, PackageSource};
+use crate::{
+    source::MAX_PACKAGE_ARCHIVE_BYTES, PackageArchive, PackageError, PackageName, PackageSource,
+};
 
 const PRIMARY: &str = "https://packages.fhir.org";
 const SECONDARY: &str = "https://packages2.fhir.org/packages";
 const SECONDARY_TARBALL_BASE: &str = "https://packages2.fhir.org/web";
 const METADATA_LIMIT: u64 = 4 * 1024 * 1024;
-const ARCHIVE_LIMIT: u64 = 128 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
@@ -147,7 +148,7 @@ fn read_archive_body(
     response
         .body_mut()
         .with_config()
-        .limit(ARCHIVE_LIMIT)
+        .limit(MAX_PACKAGE_ARCHIVE_BYTES)
         .read_to_vec()
         .map_err(|error| format!("registry archive body from {url} failed: {error}"))
 }
@@ -334,7 +335,7 @@ mod tests {
         assert!(archive.bytes.starts_with(&GZIP_MAGIC));
         assert_eq!(
             archive.source,
-            "https://packages.fhir.org/hl7.fhir.us.core/8.0.1"
+            "https://packages.fhir.org/hl7.fhir.r4.core/4.0.1"
         );
     }
 
