@@ -19,6 +19,9 @@ mod compatibility;
 mod compatibility_error;
 mod compatibility_model;
 mod compatibility_validate;
+mod context;
+mod context_error;
+mod context_model;
 mod error;
 mod lock;
 mod model;
@@ -63,6 +66,13 @@ pub use compatibility_model::{
     CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
 };
 pub use compatibility_validate::classify_structural_diff;
+pub use context::build_context_graph;
+pub use context_error::ContextGraphError;
+pub use context_model::{
+    CanonicalReferenceRelation, CanonicalResolutionStatus, ContextArtifactIdentity,
+    ContextArtifactNode, ContextCanonicalReferenceEdge, ContextCoverage, ContextGraphReport,
+    ContextPackageDependencyEdge, ContextPackageIdentity, ContextPackageNode,
+};
 pub use error::PackageError;
 pub use lock::{LockedPackage, Lockfile, ResolvedDependency};
 pub use model::{PackageName, PackageRequest, VersionConstraint};

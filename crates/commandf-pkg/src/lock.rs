@@ -164,7 +164,7 @@ impl Lockfile {
         Ok(())
     }
 
-    fn validate_v2(&self) -> Result<(), PackageError> {
+    pub(crate) fn validate_v2(&self) -> Result<(), PackageError> {
         let mut canonical_roots = self.roots.clone();
         canonical_roots.sort();
         canonical_roots.dedup();
