@@ -1,6 +1,6 @@
 # CF-11G Tasks — Ecosystem Context Graph
 
-Status: implementation proven; final convergence gates pending
+Status: CLOSED_CANONICAL — effective only after this closeout PR passes exact-head gates/review and merges without content changes.
 
 Tasks are dependency ordered. A task is complete only with executable evidence on the exact candidate state.
 
@@ -18,138 +18,105 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
   - Graph build is offline and evidence-only.
 
 - [x] T003 — Close spec/plan/tasks consistency before implementation.
-  - Record analysis in `consistency.md`.
-  - Any contradiction discovered during review reopens this task.
+  - Recorded in `consistency.md` and made canonical through PR #20.
 
 ## Stack A — explicit resolved package-edge evidence
 
 - [x] T010 — Introduce explicit lock schema v2 model and version-aware decoding.
-  - Preserve roots, packages, digests, source provenance, and declared manifest dependency constraints.
-  - Add deterministic exact resolved dependency edge relation.
-  - Existing commands continue accepting valid schema-v1 locks.
-  - New resolver output writes schema v2.
-  - Malformed or unsupported schema states fail closed.
-
 - [x] T011 — Capture exact parent→child dependency edges during resolver traversal.
-  - Record edge after concrete child selection and before expansion dedup short-circuit.
-  - Preserve declared constraint on edge evidence.
-  - Shared exact child identities remain one node with multiple parent edges.
-  - Cycle closing edges are retained while exact-identity expansion remains bounded.
-
 - [x] T012 — Prove lock v2 determinism and v1 compatibility.
-  - Multi-version branch-local edge fixture.
-  - Shared-child fixture.
-  - Cycle fixture.
-  - Equivalent root-order byte identity.
-  - v1 read + verify regression.
-  - Existing inspect/diff/check/terminology/oracle v1 behavior remains supported.
+
+Canonical Stack A evidence:
+
+```text
+PR #21 head:  40983be3bbd6aed098c18cae8f381cab0ed1826e
+PR #21 merge: 4bc5df2cfcb9437e1d4d84b19bc7ddca556d6996
+ci:                    32843594591 SUCCESS
+cf06-oracle:           32843594634 SUCCESS
+cf11-multi-version:    32843594609 SUCCESS
+```
 
 ## Stack B — deterministic Context Graph library
 
 - [x] T020 — Add library-owned Context Graph schema v1.
-  - Deterministic package nodes.
-  - Deterministic artifact nodes.
-  - Package dependency edges.
-  - Canonical reference edges.
-  - Explicit target resolution state.
-  - Explicit extraction coverage metadata.
-  - Stable pretty-JSON bytes with trailing newline.
-
 - [x] T021 — Build artifact nodes through the existing bounded CF-02 inspection boundary.
-  - Verify each lock digest before reading archive bytes.
-  - Preserve exact owner package identity, archive digest, filename, resource type, canonical URL/version, resource SHA.
-  - No second unbounded archive path.
-
 - [x] T022 — Implement StructureDefinition V1 reference extraction.
-  - top-level `baseDefinition`;
-  - differential `element[].type[].profile[]`;
-  - differential `element[].type[].targetProfile[]`;
-  - differential `element[].binding.valueSet`;
-  - cover both profile and extension StructureDefinitions.
-
 - [x] T023 — Implement ValueSet and CodeSystem V1 reference extraction.
-  - ValueSet include/exclude `system` and imported `valueSet[]`;
-  - CodeSystem `supplements`.
-
 - [x] T024 — Implement deterministic in-closure canonical target resolution.
-  - exact versioned unique target → `resolved`;
-  - unique unversioned target → `resolved`;
-  - no target → `external`;
-  - multiple eligible targets → `ambiguous` with sorted candidate identities;
-  - source canonical string retained exactly;
-  - no network lookup or preferred-candidate heuristic.
-
 - [x] T025 — Expose explicit extraction coverage.
-  - Supported source resource types/extractor version.
-  - Present-but-unsupported resource types sorted deterministically.
-  - Unsupported types remain artifact nodes.
-
 - [x] T026 — Prove Context Graph byte determinism and graph invariants.
-  - Repeat build on identical lock/cache bytes is byte-identical.
-  - Package/artifact/edge input-order permutations do not affect output.
-  - Duplicate identical edges deduplicate deterministically.
-  - No ambiguous target is serialized as resolved.
+
+Canonical Stack B evidence:
+
+```text
+PR #22 head:  1dce479f7e2b548109e8d2b99a928353639be4b6
+PR #22 merge: 8b93a04d573f182e902d21d42ad54180d36d5223
+ci:                    32843690946 SUCCESS
+cf06-oracle:           32843690704 SUCCESS
+cf11-multi-version:    32843690836 SUCCESS
+```
 
 ## Stack C — shipped `commandf context`
 
 - [x] T030 — Add `commandf context` CLI command.
-  - `--lock` path.
-  - `--cache` path.
-  - JSON-only format in V1.
-  - Canonical JSON to stdout.
-  - No package acquisition or registry access.
-
 - [x] T031 — Enforce lock/cache fail-closed behavior at CLI boundary.
-  - schema-v1 context request rejects with stable migration diagnostic;
-  - missing archive rejects;
-  - corrupted archive rejects;
-  - malformed graph-required resource input rejects according to existing bounded parser policy;
-  - runtime diagnostic sanitization remains intact.
-
 - [x] T032 — Add end-to-end graph fixtures.
-  - exact multi-version package edges;
-  - StructureDefinition profile + extension edges;
-  - ValueSet/CodeSystem edges;
-  - resolved/external/ambiguous canonical states;
-  - unsupported resource type coverage.
-
 - [x] T033 — Add exact-head deterministic CLI proof.
-  - run `commandf context` twice from identical pinned fixture inputs;
-  - compare output bytes exactly;
-  - retain SHA-256 evidence in CI logs or artifact metadata.
+
+Canonical Stack C evidence:
+
+```text
+PR #23 final reviewed head: 1475a9d117f11dd5af3de6b118cd72fc8ccdfebd
+PR #23 merge:               7579309d6298998a0bad47bac080be156b4d80df
+canonical tree:             160df0b89642e2588fddc17b5daed517c3689857
+ci:                         32844511038 SUCCESS
+cf06-oracle:                32844511085 SUCCESS
+cf11-multi-version-proof:   32844511014 SUCCESS
+cf11g-context-proof:        32844511055 SUCCESS
+```
+
+Deterministic output evidence:
+
+```text
+CF11G_CONTEXT_SHA256=cbc08088a858ca12af0a2a773be5f4b02a03bc099442e59f7300f5edaca069c0
+artifact id: 9561791650
+artifact digest: sha256:f4134aef0acfd3dff671d6219ee3a2d80dd73a5dbb33312c2ff97a9135f5b421
+```
 
 ## Regression, review, and convergence
 
-- [ ] T040 — Run mandatory workspace gates on the exact final stack head.
-  - `cargo fmt --all -- --check`.
-  - `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-  - `cargo test --workspace --all-features`.
+- [x] T040 — Run mandatory workspace gates on the exact final implementation head.
+  - `cargo fmt --all -- --check` covered by final `ci`.
+  - Clippy with warnings denied covered by final `ci`.
+  - workspace tests covered by final `ci`.
 
-- [ ] T041 — Preserve existing workflow gates.
-  - `ci`.
-  - `cf06-oracle`.
-  - `cf11-multi-version-proof`.
-  - existing real FHIR smoke and CF-08/CF-09 security regressions.
+- [x] T041 — Preserve existing workflow gates.
+  - `ci` — SUCCESS on `1475a9d117f11dd5af3de6b118cd72fc8ccdfebd`.
+  - `cf06-oracle` — SUCCESS on the same head.
+  - `cf11-multi-version-proof` — SUCCESS on the same head.
+  - `cf11g-context-proof` — SUCCESS on the same head.
+  - real FHIR smoke and CF-08/CF-09 security regressions remain inside the successful `ci` job.
 
-- [ ] T042 — Independent review.
-  - CodeRabbit review when available.
-  - Qodo review when connected/available.
-  - Every substantive finding dispositioned on the exact candidate head.
+- [x] T042 — Independent review.
+  - Every substantive finding actually returned on PRs #21–#23 is fixed or explicitly rejected against the frozen Spec 012 contract with CodeRabbit confirmation and resolved threads.
+  - PR #20 review availability/rate-limit truth is recorded; no PASS is invented.
+  - Qodo was not observed connected/available; no Qodo PASS is invented.
 
-- [ ] T043 — Run convergence pass.
-  - Record final heads/trees/workflow runs.
-  - Record lock schema migration evidence.
-  - Record Context Graph output SHA-256/repeat equality.
-  - Append every remaining gap as a task or explicit deferral.
-  - Confirm `CF-12` is either eligible or blocked by an explicit remaining CF-11G gap.
+- [x] T043 — Run convergence pass.
+  - final planning/Stack A/B/C heads and merge commits recorded in `convergence.md`;
+  - lock schema migration evidence recorded;
+  - Context Graph repeat-equality SHA-256 and artifact digest recorded;
+  - reviewer findings and availability limitations dispositioned explicitly;
+  - no untracked CF-11G implementation blocker remains;
+  - `CF-12` becomes eligible only after this closeout PR itself passes exact-head configured gates/review and merges without content changes.
 
 ## Hard sequencing rules
 
-1. T010–T012 precede graph consumption because schema-v1 does not contain sufficient exact edge evidence.
-2. T020 precedes extractor tasks.
-3. T021 precedes graph-wide canonical resolution.
-4. T022/T023 precede T024 because target resolution consumes extracted reference edges.
-5. T020–T026 precede CLI shipping.
-6. T030–T033 precede final regression/review/convergence.
-7. `CF-12 commandf impact` MUST NOT begin implementation until T043 closes CF-11G canonical convergence.
-8. The blocked external HL7 maintainer path does not block these independent tasks and must not be used to alter CF-06 production semantics implicitly.
+1. T010–T012 preceded graph consumption because schema-v1 does not contain sufficient exact edge evidence.
+2. T020 preceded extractor tasks.
+3. T021 preceded graph-wide canonical resolution.
+4. T022/T023 preceded T024.
+5. T020–T026 preceded CLI shipping.
+6. T030–T033 preceded final regression/review/convergence.
+7. `CF-12 commandf impact` MUST NOT begin implementation until this T043 closeout record passes exact-head PR qualification and becomes canonical on `main`.
+8. The blocked external HL7 maintainer path does not alter CF-11G closure and must not be used to change CF-06 production semantics implicitly.
