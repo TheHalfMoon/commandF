@@ -91,7 +91,7 @@ AF-01 uses per-check posture evidence. Aggregate score is not a commandF correct
 
 No.
 
-Connector capability is an execution limitation, not a waiver of the requirement. T037 is an external authorized administrator action and T038 requires a live read proving the resulting policy before AF-01 can close.
+Connector capability is an execution limitation, not a waiver of the requirement. T038 is an external authorized administrator action and T039 requires a live read proving the resulting policy before AF-01 can close.
 
 ### 12. Does AF-01 authorize CF-14 implementation?
 
@@ -123,6 +123,28 @@ No.
 
 The research correction (R5 published current; R6 `6.0.0-ballot5` draft as of 2026-07-17) informs future version-readiness assurance. AF-01 does not expand FHIR semantic support.
 
+### 17. Is scanning only `action.yml` complete GitHub Action metadata coverage?
+
+No.
+
+GitHub supports both `action.yml` and `action.yaml`. AF-01 therefore requires recursive tracked-tree discovery of both names in T010/T012/T016 and AF-01 proof coverage. A future composite/JavaScript/Docker Action must not evade trust auditing merely by using the other supported filename.
+
+### 18. Can a path-filtered workflow be selected directly as a required `main` check?
+
+Not safely when the whole workflow may be skipped.
+
+GitHub documents that a workflow skipped by path/branch filtering or commit-message skip can leave the associated required check pending and block merging. A skipped job inside an always-triggered workflow can reach a terminal conclusion, which is a different topology.
+
+AF-01 therefore requires T035/T036 to prove that every check selected by the ruleset is universally terminal for every protected-branch PR at its latest candidate SHA. Heavy path-specific validation may remain conditional, but an always-triggered lightweight aggregation gate must represent it if it contributes to universal merge policy. Otherwise the path-filtered check remains non-required.
+
+### 19. Did the first Qodo planning review findings remain unaddressed?
+
+No.
+
+The first Qodo review found missing task enforcement for machine-checkable workflow/job permissions and missing audit coverage for proof-critical container identities. Both were accepted and amended into `spec.md`, `plan.md`, and `tasks.md` with positive/negative tests.
+
+The re-review then found the `action.yaml` metadata-name gap and required-check/path-filter topology gap. Those were also accepted and added to the planning contract. Any CI/review state from heads before these amendments is superseded.
+
 ## Requirement-to-task trace
 
 | Requirement | Tasks |
@@ -133,12 +155,12 @@ The research correction (R5 published current; R6 `6.0.0-ballot5` draft as of 20
 | FR-004 cargo-audit | T023-T024, T028-T029 |
 | FR-005 zizmor | T025-T029 |
 | FR-006 Scorecard | T030-T031 |
-| FR-007 main source-control enforcement | T035-T039, T042 |
-| FR-008 exact-head assurance proof | T032-T034, T040-T042 |
-| FR-009 product authority unchanged | T014-T019, T028-T029, T040, T052 |
-| FR-010 reviewer truth | T005, T018, T029, T041, T054 |
-| NFR-001 determinism | T012-T013, T033-T034, T040 |
-| NFR-002 least authority | T014-T015, T030-T032 |
+| FR-007 main source-control enforcement + universally terminal required checks | T035-T040, T043 |
+| FR-008 exact-head assurance proof | T032-T034, T041-T043 |
+| FR-009 product authority unchanged | T014-T019, T028-T029, T041, T052 |
+| FR-010 reviewer truth | T005, T018, T029, T042, T054 |
+| NFR-001 determinism | T012-T013, T033-T034, T041 |
+| NFR-002 least authority | T011-T016, T030-T032 |
 | NFR-003 bounded execution | T014-T015, T022-T025, T030-T032 |
 | NFR-004 no PHI | all implementation tasks |
 | NFR-005 stackability | phase ordering T010-T056 |
@@ -151,10 +173,11 @@ The research correction (R5 published current; R6 `6.0.0-ballot5` draft as of 20
 4. **Initial zizmor severity threshold may need calibration from real findings.** Any change is an explicit plan/task amendment, not silent weakening.
 5. **Scorecard external availability/authentication can fail independently of repository correctness.** Operational failure is reported separately from clean posture.
 6. **Fixed GitHub runner labels still drift internally.** Strong proof continues to prefer digest-pinned environments.
+7. **Required-check topology can deadlock merges if whole path-filtered workflows are selected directly.** T035/T036 require a universal terminal-result proof before ruleset selection.
 
 ## Final planning consistency result
 
-No unresolved architecture contradiction is known in the authored package.
+No unresolved architecture contradiction is known in the authored package after the accepted planning-review corrections.
 
 ```text
 AF-01 PLANNING CONSISTENCY: CANDIDATE / REQUIRES EXACT-HEAD CI + INDEPENDENT REVIEW
