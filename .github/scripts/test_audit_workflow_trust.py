@@ -270,9 +270,14 @@ runs:
         self.assertIn("cargo_unlocked", self.codes(result))
 
     def test_multiline_locked_cargo_command_is_accepted(self) -> None:
+        continuation = chr(92)
+        replacement = (
+            "        run: |\n"
+            f"          cargo test {continuation}\n"
+            "            --locked --workspace"
+        )
         workflow = valid_workflow().replace(
-            "        run: cargo test --locked --workspace",
-            "        run: |\n          cargo test \\\n            --locked --workspace",
+            "        run: cargo test --locked --workspace", replacement
         )
         result = self.run_repo(workflow)
         self.assertTrue(result["ok"], result)
