@@ -60,7 +60,7 @@ No checked-in configuration/workflow currently exists for:
 - cargo-audit;
 - zizmor;
 - OpenSSF Scorecard;
-- repository-owned verification that all workflow references, permission grants, checkout credentials, and proof-container identities remain within explicit policy.
+- repository-owned verification that all workflow references, permission grants, checkout credentials, Action metadata files, and proof-container identities remain within explicit policy.
 
 ## Implementation architecture
 
@@ -70,15 +70,15 @@ Add a small repository-owned audit script, preferably under `.github/scripts/`, 
 
 Expected responsibilities:
 
-1. enumerate tracked `.github/workflows/*.yml|*.yaml` and repository composite `action.yml` files;
-2. parse or conservatively inspect all external `uses:` references;
+1. enumerate tracked `.github/workflows/*.yml|*.yaml` and **all** tracked Action metadata files named either `action.yml` or `action.yaml`, including subdirectory Actions;
+2. parse or conservatively inspect all external `uses:` references in workflows and Action metadata;
 3. permit local `./` references;
-4. require external action refs to end in a full 40-hex commit SHA;
+4. require external action/reusable-workflow refs to end in a full 40-hex commit SHA;
 5. inspect checkout steps and require `persist-credentials: false` unless the policy file names a specific bounded exception;
 6. normalize effective workflow/job permissions and compare them against a checked-in machine-readable allowlist/need declaration; fail when a workflow or job requests broader authority than declared, including inherited/default authority that is not explicitly accounted for;
 7. inspect proof-critical job and service `container.image` references and require an accepted digest identity rather than a mutable tag/reference; any non-proof exception must be explicit and bounded in policy;
 8. flag proof-critical `*-latest` runner labels according to the AF-01 policy;
-9. ensure newly added workflow files cannot escape the audit by using a complete tracked-file enumeration rather than a hard-coded subset;
+9. ensure newly added workflows or either supported Action metadata filename cannot escape the audit by using complete tracked-file discovery rather than a hard-coded subset;
 10. emit deterministic machine-readable result plus a concise human-readable failure report.
 
 The checked-in policy must be sufficient for a reviewer and the audit to answer, for every workflow/job, which permissions and container-identity modes are allowed. Prose-only intent is not enough because future permission/container escalation must be mechanically rejected.
@@ -92,7 +92,7 @@ Workflow updates in the same stack must:
 - make top-level/job permissions explicit and no broader than the checked-in need declaration;
 - change proof-critical runner labels from `*-latest` to explicit supported labels such as `ubuntu-24.04` where the job semantics allow it;
 - require digest-pinned proof-critical job/service containers when a container is part of the execution proof;
-- preserve all existing steps/assertions/path filters;
+- preserve all existing steps/assertions/path filters unless a later required-check design deliberately wraps a path-filtered heavy workflow behind an always-triggered gate;
 - add timeouts if a touched job lacks one and an appropriate bound can be established;
 - keep `cargo --locked` semantics.
 
@@ -169,7 +169,8 @@ Add `.github/workflows/af01-assurance-proof.yml` with complete path coverage for
 - AF-01 spec package;
 - assurance program/index/architecture documents;
 - workflow files;
-- action.yml and repository CI scripts;
+- both `action.yml` and `action.yaml` Action metadata anywhere in the repository;
+- repository CI scripts;
 - Cargo manifests/lockfile;
 - `deny.toml` and any AF-01 policy/config files;
 - AGENTS/constitution when they affect authority.
@@ -196,6 +197,19 @@ AF01_ASSURANCE_SHA256=<64 lowercase hex>
 
 Live GitHub ruleset state is kept separately because hosting-platform metadata can change without changing the repository tree. The convergence record binds the exact live observation used for closure.
 
+#### Required-check topology
+
+A GitHub ruleset required check must have a terminal result on every protected-branch pull request at the latest candidate SHA. A workflow skipped entirely by `paths`, `branches`, or commit-message filtering can leave its associated required check pending and block merging.
+
+Therefore T035 must classify each candidate check as one of:
+
+1. **always-triggered required check** — its workflow runs for every protected-branch PR; heavy jobs may be conditionally skipped, but a lightweight `always()`/aggregation gate reaches a terminal conclusion; or
+2. **path-filtered/non-universal check** — remains informative/path-applicable and is not selected directly as a repository required check.
+
+If an existing path-filtered proof must contribute to universal merge policy, introduce an always-triggered lightweight gate that reports a terminal result and correctly reflects whether applicable heavy jobs succeeded. Never select a path-filtered whole workflow as required merely because it is important when it runs.
+
+Add a negative fixture/governance test proving a docs-only or otherwise nonmatching PR still receives terminal results for every check selected in the planned ruleset.
+
 #### Main ruleset
 
 Target source-control policy:
@@ -207,11 +221,11 @@ Target source-control policy:
 - required review count at least 1 unless governance specifies stronger;
 - required conversations resolved;
 - stale approvals dismissed or latest-push approval semantics configured so moved heads cannot inherit stale approval;
-- required status checks include the AF-01-selected canonical checks;
+- required status checks include only AF-01-selected checks proven to report a terminal result for every protected-branch PR;
 - administrator/bypass actors minimized and documented;
 - no broad bypass based solely on actor type.
 
-Exact check names must be derived from the final implementation workflows after they are canonical; do not guess names before jobs exist.
+Exact check names and trigger topology must be derived from the final implementation workflows after they are canonical; do not guess names before jobs exist.
 
 The current connector exposes ruleset/branch-protection reads but not writes. Therefore this configuration is an explicit external operational task. AF-01 cannot mark it complete until a live read proves it.
 
@@ -256,6 +270,7 @@ These must record version/commit/update identity where available. Their results 
 - all existing hardened workflows pass;
 - local `uses: ./` accepted;
 - full 40-hex refs accepted;
+- both `action.yml` and `action.yaml` discovered and inspected;
 - credentialless checkout accepted;
 - exact declared read-only permission set accepted;
 - digest-pinned proof-critical job/service container accepted;
@@ -267,14 +282,22 @@ These must record version/commit/update identity where available. Their results 
 - shortened SHA rejected;
 - branch ref rejected;
 - tag ref rejected;
+- mutable external `uses:` inside a newly added `action.yaml` rejected;
 - checkout without explicit `persist-credentials: false` rejected;
 - workflow/job permission broader than the checked-in need declaration rejected;
 - omitted/inherited permission state that cannot be reconciled to declared need fails closed rather than being assumed safe;
 - proof-critical mutable `container.image` tag rejected;
 - proof-critical mutable service-container image tag rejected;
-- new unscanned workflow path causes coverage test failure;
+- new unscanned workflow or Action metadata path causes coverage test failure;
 - proof-critical `ubuntu-latest` rejected according to policy;
-- malformed workflow input fails closed rather than being skipped.
+- malformed workflow/action metadata input fails closed rather than being skipped.
+
+### Required-check topology
+
+- every check proposed by T035 as required is shown to produce a terminal result on a PR whose changed paths do not match the heavy proof workflows;
+- a fixture/configuration representing a whole workflow skipped by `paths` is rejected as a direct required-check candidate;
+- conditionally skipped heavy jobs are acceptable only when the always-triggered required aggregation job reaches the correct terminal conclusion;
+- moved PR heads cannot reuse a terminal result from an older SHA.
 
 ### Dependency policy
 
@@ -315,9 +338,11 @@ and every path-applicable existing proof/oracle workflow must remain green on ea
 Developer-visible changes:
 
 - CI will reject mutable Action/container references and new unreviewed workflow authority;
+- both supported Action metadata filenames are governed;
 - permission expansion requires a reviewed checked-in need/policy update and corresponding audit evidence;
 - dependency additions may require license/source/advisory policy updates;
 - canonical main will require PR/check/review policy once the ruleset is applied;
+- required-check design will use only universal terminal checks, with path-applicable heavy validation represented through safe aggregation rather than a pending skipped workflow;
 - emergency/break-glass changes become explicit governance events rather than ordinary direct pushes.
 
 No commandF CLI or report schema changes are planned.
@@ -329,6 +354,7 @@ AF-01 adds CI work. Keep it bounded:
 - workflow-trust audit should complete in seconds;
 - cargo-deny/audit may use caching but cache identity must not make the result authoritative;
 - Scorecard/zizmor should be separate jobs so they can be diagnosed independently;
+- always-triggered required gates should remain lightweight and should not force irrelevant heavy path-specific work to execute;
 - do not put long-running AF-02 fuzz/mutation work into AF-01.
 
 ## Stack ordering
@@ -350,7 +376,7 @@ AF-01 is `CLOSED_CANONICAL` only when:
 1. planning package canonical;
 2. every implementation stack merged from an exact green/reviewed head;
 3. all AF-01 functional requirements proven or explicitly deferred by an amended canonical plan with rationale;
-4. live `main` ruleset/branch-policy query proves required enforcement;
+4. live `main` ruleset/branch-policy query proves required enforcement and every selected required check is universally terminal at the latest PR head;
 5. final AF-01 proof artifact retained with exact identities;
 6. zero unresolved substantive review findings;
 7. convergence document merged without semantic substitution;
