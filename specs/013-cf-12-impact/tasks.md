@@ -1,6 +1,6 @@
 # CF-12 Tasks — Deterministic Impact Analysis
 
-Status: PLANNING_CANDIDATE — no CF-12 implementation is authorized by task text alone; planning must pass exact-head review and merge first.
+Status: PLANNING_READY_FOR_MERGE — T004 is closed by the first exact-head planning qualification; implementation remains blocked until this planning PR itself passes final-head requalification and merges.
 
 Tasks are dependency ordered. A task is complete only with executable evidence on the exact candidate state.
 
@@ -23,158 +23,79 @@ Tasks are dependency ordered. A task is complete only with executable evidence o
   - no PHI/instance data;
   - no graph database/model/agent authority.
 
-- [ ] T004 — Close planning consistency and independent review.
-  - `spec.md`, `plan.md`, `tasks.md`, and `consistency.md` contain no unresolved contradiction;
-  - CodeRabbit reviewed when available;
-  - Qodo reviewed when connected/available;
-  - every substantive planning finding dispositioned before implementation branch creation.
+- [x] T004 — Close planning consistency and independent review.
+  - `spec.md`, `plan.md`, `tasks.md`, and `consistency.md` contain no known unresolved contradiction;
+  - first exact planning head `1bee6f3651fa686f03902f3d86761736d4844513` passed `ci` run `32928525763` and `cf06-oracle` run `32928525784`;
+  - CodeRabbit status was `success` and no review thread/substantive finding was returned on that planning head;
+  - Qodo was not observed connected/available; no Qodo PASS is claimed;
+  - this T004 state change moves the head, so the planning PR MUST rerun applicable exact-head gates/review before merge.
 
 ## Stack A — library model and deterministic traversal
 
 - [ ] T010 — Add library-owned CF-12 impact report schema v1.
-  - subject package identity;
-  - before/after evidence identities;
-  - seeds;
-  - artifact impacts;
-  - package impacts;
-  - unresolved boundaries;
-  - extraction coverage;
-  - stable canonical JSON serialization.
+  - subject/evidence identity, seeds, artifact impacts, package impacts, unresolved boundaries, coverage, canonical JSON.
 
 - [ ] T011 — Build deterministic change seeds from the existing package structural-diff pipeline.
-  - added canonical artifacts;
-  - removed canonical artifacts;
-  - modified canonical artifacts with non-empty structural delta;
-  - preserve exact side-specific artifact/package/digest identity;
-  - do not implement a second diff engine.
+  - added, removed, and modified canonical artifacts with exact side-specific identity;
+  - no second diff engine.
 
 - [ ] T012 — Build side-specific reverse indexes over resolved CF-11G canonical-reference edges.
   - only `resolved` edges are traversable;
-  - exact artifact identities remain version-aware;
-  - external/ambiguous states excluded from traversal.
+  - exact artifact identities remain version-aware.
 
 - [ ] T013 — Implement deterministic transitive reverse artifact traversal.
-  - direct dependents;
-  - transitive dependents;
-  - cycle termination;
-  - exact `(side, impacted identity, seed identity)` visited state;
-  - canonical shortest evidence path.
+  - direct/transitive dependents, cycle termination, exact visited state, canonical shortest path.
 
 - [ ] T014 — Implement equal-length path tie-breaking.
-  - minimum edge count first;
-  - lexicographically smallest stable exact path among equal lengths;
-  - traversal/hash-map order cannot affect output.
+  - minimum edge count, then lexicographically smallest stable exact path.
 
 - [ ] T015 — Implement exact reverse package-dependency exposure.
-  - consume schema-v2 resolved dependency edges;
-  - preserve exact package name/version/digest identity;
-  - preserve declared dependency constraints;
-  - never collapse same-name package versions.
+  - schema-v2 exact edges, exact version/digest identity, declared constraints, no name-only collapse.
 
 - [ ] T016 — Collect unresolved impact boundaries.
-  - retain `external` edges originating from seeds/impacted artifacts;
-  - retain `ambiguous` edges and all sorted candidates;
-  - no network lookup;
-  - no preferred-candidate heuristic.
+  - preserve `external` and `ambiguous` edges/candidates;
+  - no network lookup or preferred-candidate heuristic.
 
 - [ ] T017 — Normalize before/after evidence without losing side-only state.
-  - removed before-only dependencies remain visible;
-  - added after-only dependencies remain visible;
+  - preserve removed-before and added-after evidence;
   - use `both` only for exact normalized identical evidence.
 
 - [ ] T018 — Prove library invariants and byte determinism.
-  - direct + transitive fixtures;
-  - cycles;
-  - added/removed target fixtures;
-  - multi-version package fixture;
-  - ambiguous/external boundaries;
-  - equal-length path tie fixture;
-  - input-order permutation fixture;
-  - repeat serialization byte identity.
+  - direct/transitive, cycles, add/remove, multi-version, ambiguous/external, tie-breaking, permutations, repeat bytes.
 
 ## Stack B — shipped `commandf impact`
 
 - [ ] T020 — Add the `commandf impact` CLI surface.
-  - `package` positional argument;
-  - `--before-lock`;
-  - `--before-cache`;
-  - `--after-lock`;
-  - `--after-cache`;
-  - `--format json`;
-  - canonical JSON to stdout.
+  - package + explicit before/after lock/cache + JSON output.
 
 - [ ] T021 — Enforce CLI fail-closed boundaries.
-  - unsupported/schema-v1 Context Graph input refuses safely;
-  - missing cache archive refuses;
-  - corrupt archive digest refuses;
-  - malformed required artifact input refuses under existing bounded policy;
-  - runtime diagnostics remain sanitized/bounded.
+  - schema-v1/unsupported context refusal, missing/corrupt cache refusal, bounded malformed-input handling, sanitized diagnostics.
 
 - [ ] T022 — Add end-to-end impact fixtures.
-  - direct artifact impact;
-  - transitive artifact impact;
-  - removed-target before-side evidence;
-  - added-target after-side evidence;
-  - exact multi-version package exposure;
-  - ambiguous and external boundaries;
-  - reachability without invented compatibility severity.
+  - direct/transitive, removed/added target, multi-version package exposure, ambiguous/external boundaries, no invented severity.
 
-- [ ] T023 — Add a dedicated `cf12-impact-proof` workflow.
-  - immutable digest-pinned Rust 1.97.1 container;
-  - immutable action SHAs;
-  - `persist-credentials: false`;
-  - complete relevant path filters;
-  - repeated CLI output byte comparison;
-  - clean-tree assertion;
-  - retained checksum artifact.
+- [ ] T023 — Add dedicated `cf12-impact-proof` workflow.
+  - digest-pinned Rust 1.97.1 container, immutable action SHAs, complete path filters, repeat-byte comparison, clean tree, retained artifact.
 
 - [ ] T024 — Record deterministic CLI proof identity.
-  - emit `CF12_IMPACT_SHA256=<sha256>`;
-  - record exact head/tree/run/job;
-  - record artifact id and GitHub artifact digest.
+  - `CF12_IMPACT_SHA256=<sha256>`, exact head/tree/run/job, artifact id/digest.
 
 - [ ] T025 — Prove existing command behavior remains unchanged.
-  - no CLI regression for `diff`, `classify`, `check`, `context`, terminology, oracle, source-map, annotations;
-  - no new compatibility authority;
-  - no lock schema change.
+  - no regression for diff/classify/check/context/terminology/oracle/source-map/annotations;
+  - no compatibility-authority or lock-schema change.
 
 ## Regression, review, and convergence
 
 - [ ] T040 — Run mandatory workspace gates on the exact final implementation head.
-  - `cargo fmt --all -- --check`;
-  - `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
-  - `cargo test --workspace --all-features`.
-
-- [ ] T041 — Preserve applicable repository workflows.
-  - `ci`;
-  - `cf06-oracle`;
-  - `cf11-multi-version-proof` where path-triggered;
-  - `cf11g-context-proof` where path-triggered;
-  - `cf12-impact-proof`;
-  - real FHIR and CF-08/CF-09 security regressions through `ci`.
-
-- [ ] T042 — Independent implementation review.
-  - CodeRabbit when available;
-  - Qodo when connected/available;
-  - every substantive finding fixed or rejected against the frozen contract with evidence;
-  - reviewer unavailability recorded without invented PASS.
-
-- [ ] T043 — Run CF-12 convergence pass.
-  - record final implementation head/tree/run identities;
-  - record `CF12_IMPACT_SHA256` and artifact digest;
-  - record unresolved-boundary behavior and coverage limits;
-  - append any remaining gap as a task or explicit deferral;
-  - merge only when exact final candidate state is green and review-clean.
+- [ ] T041 — Preserve applicable repository workflows including `ci`, `cf06-oracle`, path-triggered CF-11/CF-11G proofs, `cf12-impact-proof`, real FHIR, and security regressions.
+- [ ] T042 — Independent implementation review; disposition every substantive returned finding and record reviewer unavailability without invented PASS.
+- [ ] T043 — Run CF-12 convergence; record final heads/runs, `CF12_IMPACT_SHA256`, artifact digest, coverage limits, and every remaining gap/deferral.
 
 ## Hard sequencing rules
 
-1. T004 MUST close planning before T010 implementation starts.
-2. T010 precedes traversal tasks because output semantics must be frozen before algorithms.
-3. T011/T012 precede T013 because traversal consumes deterministic seeds and reverse indexes.
-4. T013 precedes T014 because tie-breaking normalizes proven paths.
-5. T015/T016/T017 precede T018 full library proof.
-6. T010–T018 precede user-visible CLI shipping.
-7. T020–T025 precede final regression/review/convergence.
-8. No task may traverse CF-11G `external` or `ambiguous` evidence as a resolved edge.
-9. No task may convert reachability into compatibility severity without consuming an existing explicit CF-04/CF-05 authority contract.
-10. No CF-06 production pin, frozen CF-10 case, graph database, AI/model authority, or network resolution is authorized by CF-12 V1.
+1. This planning PR MUST merge cleanly before T010 implementation starts.
+2. T010 precedes traversal tasks; T011/T012 precede T013; T013 precedes T014; T015/T016/T017 precede T018.
+3. T010–T018 precede user-visible CLI shipping; T020–T025 precede final convergence.
+4. No task may traverse CF-11G `external` or `ambiguous` evidence as resolved.
+5. No task may convert reachability into compatibility severity without an existing explicit CF-04/CF-05 authority contract.
+6. No CF-06 production pin, frozen CF-10 case, graph database, AI/model authority, or network resolution is authorized by CF-12 V1.
