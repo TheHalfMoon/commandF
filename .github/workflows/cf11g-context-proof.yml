@@ -1,0 +1,71 @@
+name: cf11g-context-proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cf11g-context-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/012-cf-11g-ecosystem-context-graph/**
+  push:
+    branches:
+      - impl/cf11g-context-cli
+    paths:
+      - .github/workflows/cf11g-context-proof.yml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/commandf-pkg/**
+      - crates/commandf-cli/**
+      - specs/012-cf-11g-ecosystem-context-graph/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF11G_PROOF_CONTAINER: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+
+jobs:
+  deterministic-context-cli:
+    runs-on: ubuntu-24.04
+    container:
+      # Docker Official Image rust:1.97.1-trixie, pinned to the linux/amd64 manifest.
+      image: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+
+      - name: Assert pinned execution toolchain
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          test "$(rustc --version | awk '{print $2}')" = "1.97.1"
+
+      - name: Prove byte-identical commandf context output
+        run: |
+          set -euo pipefail
+          cargo test --locked -p commandf --test context_determinism_proof -- --nocapture \
+            | tee /tmp/cf11g-context-proof.log
+          grep -oE 'CF11G_CONTEXT_SHA256=[0-9a-f]{64}' /tmp/cf11g-context-proof.log \
+            | tail -n 1 \
+            | tee /tmp/cf11g-context.sha256
+          test -s /tmp/cf11g-context.sha256
+
+      - name: Assert repository remains clean
+        run: |
+          set -euo pipefail
+          status="$(git -c safe.directory="$GITHUB_WORKSPACE" status --porcelain)"
+          test -z "$status"
+
+      - name: Upload context determinism evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cf11g-context-proof
+          path: /tmp/cf11g-context.sha256
+          if-no-files-found: error
+          retention-days: 3

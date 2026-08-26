@@ -8,7 +8,7 @@ use std::process::{self, ExitCode};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
-    build_source_mapped_check_report, build_terminology_diff_report,
+    build_context_graph, build_source_mapped_check_report, build_terminology_diff_report,
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
     classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
     inspect_package, source_mapped_check_report_to_github_annotations_bytes, CheckDirection,
@@ -45,6 +45,14 @@ enum Command {
         cache: PathBuf,
         #[arg(long, default_value = "commandf.lock")]
         lock: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
+    Context {
+        #[arg(long, default_value = "commandf.lock")]
+        lock: PathBuf,
+        #[arg(long, default_value = ".commandf/cache")]
+        cache: PathBuf,
         #[arg(long, value_enum, default_value = "json")]
         format: OutputFormat,
     },
@@ -317,6 +325,18 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             )?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&inspection.to_json_bytes()?)?,
+            }
+        }
+        Command::Context {
+            lock,
+            cache,
+            format,
+        } => {
+            let lockfile = Lockfile::from_slice(&fs::read(&lock)?)?;
+            let cache = PackageCache::new(cache);
+            let report = build_context_graph(&lockfile, &cache)?;
+            match format {
+                OutputFormat::Json => io::stdout().write_all(&report.to_json_bytes()?)?,
             }
         }
         Command::Diff {
