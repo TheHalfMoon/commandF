@@ -37,7 +37,7 @@ After AF-01 closes, commandF has an independently executable and reviewable trus
 
 ### FR-001 — repository workflow trust audit
 
-Provide a repository-owned deterministic audit that scans tracked GitHub workflows and composite Actions and fails if an external `uses:` reference is not pinned to a full 40-hex Git commit SHA unless an explicit bounded exception is recorded in the AF-01 policy.
+Provide a repository-owned deterministic audit that scans every tracked GitHub workflow and every tracked Action metadata file, including both supported metadata names `action.yml` and `action.yaml`, and fails if an external `uses:` reference is not pinned to a full 40-hex Git commit SHA unless an explicit bounded exception is recorded in the AF-01 policy.
 
 The audit must also detect at least:
 
@@ -45,7 +45,7 @@ The audit must also detect at least:
 - workflow/job permissions broader than their documented need, using checked-in AF-01 policy metadata that makes the allowed permission set machine-checkable rather than relying on prose-only review;
 - proof-critical job or service container images that use a mutable tag/reference instead of an accepted digest identity, unless an explicit bounded exception is recorded;
 - use of `ubuntu-latest`, `windows-latest`, or `macos-latest` in proof-critical jobs where AF-01 requires a fixed runner label;
-- new workflow files that are outside the audit scope.
+- new workflow files or Action metadata files, regardless of whether they are named `action.yml` or `action.yaml`, that are outside the audit scope.
 
 The audit result must be deterministic for the same repository tree and the same checked-in AF-01 policy.
 
@@ -109,6 +109,8 @@ Canonical `main` must have repository-level branch/ruleset enforcement that, at 
 
 - blocks non-PR direct changes except a narrowly defined administrator/break-glass path;
 - requires the current canonical CI/assurance checks selected by AF-01;
+- selects as required only checks that produce a terminal result for **every** protected-branch pull request at the latest candidate SHA; a workflow-level `paths`, `branches`, or commit-message skip that leaves the required check pending is prohibited for a selected required check;
+- if expensive validation is path-conditional, uses an always-triggered lightweight required gate/job whose terminal conclusion reflects the applicable conditional jobs, or keeps the path-filtered check non-required;
 - requires review according to repository governance;
 - rejects unresolved required review conversations where supported;
 - prevents force-push and branch deletion for `main`;
@@ -182,23 +184,27 @@ Implementation is split into independently reviewable stacks; a single monolithi
 ## Acceptance scenarios
 
 1. A workflow changes `actions/checkout@<full-sha>` to `actions/checkout@v5` -> repository workflow-trust audit fails.
-2. A new workflow uses credential-persisting checkout without an allowed exception -> fails.
-3. A workflow/job requests `contents: write` when checked-in AF-01 policy permits only `contents: read` -> fails.
-4. A proof-critical job/service changes a digest-pinned container image to `image:vendor/tool:latest` or another mutable tag -> fails.
-5. A dependency is added from an unapproved git source -> `cargo-deny` fails.
-6. A dependency introduces a RustSec advisory -> vulnerability gate fails unless an explicit reviewed waiver exists.
-7. A workflow contains a security issue detected by the configured `zizmor` severity policy -> audit fails or is explicitly dispositioned according to the frozen policy.
-8. The same tree is audited twice with the same pinned tool/advisory inputs -> commandF-owned assurance summary bytes are identical.
-9. Product test suites and all path-applicable existing proof workflows remain green.
-10. Live GitHub query confirms the intended `main` source-control policy before AF-01 claims canonical closure.
+2. A new Action metadata file named `action.yaml` contains a mutable external `uses:` ref -> the audit discovers it and fails; `action.yaml` cannot evade a scanner written only for `action.yml`.
+3. A new workflow uses credential-persisting checkout without an allowed exception -> fails.
+4. A workflow/job requests `contents: write` when checked-in AF-01 policy permits only `contents: read` -> fails.
+5. A proof-critical job/service changes a digest-pinned container image to `image:vendor/tool:latest` or another mutable tag -> fails.
+6. A dependency is added from an unapproved git source -> `cargo-deny` fails.
+7. A dependency introduces a RustSec advisory -> vulnerability gate fails unless an explicit reviewed waiver exists.
+8. A workflow contains a security issue detected by the configured `zizmor` severity policy -> audit fails or is explicitly dispositioned according to the frozen policy.
+9. The same tree is audited twice with the same pinned tool/advisory inputs -> commandF-owned assurance summary bytes are identical.
+10. A documentation-only PR that does not match a heavy proof workflow's `paths` still receives a terminal result for every check selected as required by the `main` ruleset; no required check remains indefinitely pending because its entire workflow was skipped.
+11. Product test suites and all path-applicable existing proof workflows remain green.
+12. Live GitHub query confirms the intended `main` source-control policy before AF-01 claims canonical closure.
 
 ## Edge cases
 
 - GitHub Actions referenced through local `./` paths are local source, not external mutable tags.
+- Action metadata discovery covers both GitHub-supported names: `action.yml` and `action.yaml`, including metadata below repository subdirectories rather than only a root file.
 - Docker/OCI job or service images referenced by digest are acceptable immutable identities; mutable image tags alone are not proof identity.
 - A non-proof workflow may use a container only under the explicit AF-01 container policy; omission from proof identity must be deliberate and machine-checkable rather than accidental.
 - Reusable workflows require the same immutable-reference discipline as third-party Actions where GitHub supports commit-SHA references.
 - Workflow/job permission inheritance and omission must be normalized by the audit so an absent local `permissions` block cannot silently gain broader authority from an unexamined parent/default.
+- GitHub distinguishes a skipped **job**, which can report a terminal successful/skipped conclusion, from a skipped **workflow** caused by path/branch/commit-message filtering, whose required check can remain pending. Required-check design must account for that distinction.
 - Scorecard or advisory-service unavailability must be distinguished from a clean security result.
 - A security tool finding that is not applicable may be dispositioned, but the disposition and rationale become retained evidence.
 - `cargo-deny` duplicate-version policy must not blindly reject legitimate unavoidable transitive duplication without review; exceptions are explicit and narrow.
