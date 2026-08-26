@@ -109,7 +109,14 @@ def _parse_permissions(
 
 
 def _job_ranges(lines: list[str]) -> tuple[dict[str, tuple[int, int]], str | None]:
-    jobs_index = next((i for i, line in enumerate(lines) if line.strip() == "jobs:" and _indent(line) == 0), None)
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.strip() == "jobs:" and _indent(line) == 0
+        ),
+        None,
+    )
     if jobs_index is None:
         return {}, "workflow has no top-level jobs mapping"
 
@@ -148,22 +155,48 @@ def _job_scalar(lines: list[str], start: int, end: int, key: str) -> str | None:
 
 
 def _container_images(lines: list[str], start: int, end: int) -> list[str]:
+    """Return job-container and service-container image scalars only."""
     images: list[str] = []
+    service_indent: int | None = None
+    in_job_container = False
+
     for index in range(start + 1, end):
         line = lines[index]
         stripped = line.strip()
-        if _indent(line) == 4 and stripped.startswith("container:"):
+        indent = _indent(line)
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if indent == 4:
+            in_job_container = False
+            service_indent = None
+            if stripped.startswith("container:"):
+                value = _scalar(stripped.split(":", 1)[1])
+                if value:
+                    images.append(value)
+                else:
+                    in_job_container = True
+            elif stripped == "services:":
+                service_indent = 4
+            continue
+
+        if in_job_container and indent == 6 and stripped.startswith("image:"):
             value = _scalar(stripped.split(":", 1)[1])
             if value:
                 images.append(value)
-        if stripped.startswith("image:") and _indent(line) >= 6:
+            continue
+
+        if service_indent is not None and indent == 8 and stripped.startswith("image:"):
             value = _scalar(stripped.split(":", 1)[1])
             if value:
                 images.append(value)
+
     return images
 
 
-def _all_uses(lines: list[str], start: int = 0, end: int | None = None) -> list[tuple[int, str]]:
+def _all_uses(
+    lines: list[str], start: int = 0, end: int | None = None
+) -> list[tuple[int, str]]:
     if end is None:
         end = len(lines)
     result: list[tuple[int, str]] = []
@@ -208,7 +241,9 @@ def _valid_exception(exception: object) -> bool:
     required = {"rule", "path", "reason", "revisit"}
     if not required.issubset(exception):
         return False
-    if not all(isinstance(exception[key], str) and exception[key].strip() for key in required):
+    if not all(
+        isinstance(exception[key], str) and exception[key].strip() for key in required
+    ):
         return False
     if len(exception["reason"].strip()) < 10 or len(exception["revisit"].strip()) < 5:
         return False
@@ -216,7 +251,12 @@ def _valid_exception(exception: object) -> bool:
 
 
 def _excepted(policy: dict, finding: Finding) -> bool:
-    for exception in policy.get("exceptions", []):
+    exceptions = policy.get("exceptions", [])
+    if not isinstance(exceptions, list):
+        return False
+    for exception in exceptions:
+        if not isinstance(exception, dict):
+            continue
         if exception.get("rule") != finding.code or exception.get("path") != finding.path:
             continue
         if exception.get("job", finding.job) != finding.job:
@@ -227,25 +267,59 @@ def _excepted(policy: dict, finding: Finding) -> bool:
     return False
 
 
+def _uses_findings(path: str, lines: list[str], policy: dict) -> list[Finding]:
+    findings: list[Finding] = []
+    rules = policy.get("rules", {})
+    if not isinstance(rules, dict):
+        return findings
+    for index, reference in _all_uses(lines):
+        if rules.get("require_external_uses_full_sha", False) and not _external_ref_is_immutable(
+            reference
+        ):
+            findings.append(
+                Finding("mutable_uses", path, "", f"uses reference is not immutable: {reference}")
+            )
+        if reference.startswith("actions/checkout@") and rules.get(
+            "require_checkout_credentials_disabled", False
+        ):
+            if not _checkout_has_credentials_disabled(lines, index):
+                findings.append(
+                    Finding(
+                        "checkout_credentials",
+                        path,
+                        "",
+                        "checkout step does not set persist-credentials: false",
+                    )
+                )
+    return findings
+
+
 def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[Finding]:
     findings: list[Finding] = []
     if "\t" in text:
-        findings.append(Finding("malformed_yaml", path, "", "tab indentation is not supported"))
-        return findings
+        return [Finding("malformed_yaml", path, "", "tab indentation is not supported")]
     lines = text.splitlines()
     jobs, jobs_error = _job_ranges(lines)
     if jobs_error:
-        findings.append(Finding("malformed_yaml", path, "", jobs_error))
-        return findings
+        return [Finding("malformed_yaml", path, "", jobs_error)]
 
-    expected_jobs = expected.get("jobs")
+    expected_jobs = expected.get("jobs") if isinstance(expected, dict) else None
     if not isinstance(expected_jobs, dict):
-        findings.append(Finding("invalid_policy", path, "", "workflow policy must contain a jobs object"))
-        return findings
+        return [
+            Finding(
+                "invalid_policy",
+                path,
+                "",
+                "workflow policy must contain a jobs object",
+            )
+        ]
+
     actual_names = set(jobs)
     expected_names = set(expected_jobs)
     for name in sorted(actual_names - expected_names):
-        findings.append(Finding("unplanned_job", path, name, "job is not declared in workflow trust policy"))
+        findings.append(
+            Finding("unplanned_job", path, name, "job is not declared in workflow trust policy")
+        )
     for name in sorted(expected_names - actual_names):
         findings.append(Finding("missing_job", path, name, "policy job is missing from workflow"))
 
@@ -253,16 +327,33 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
     if top_permission_error:
         findings.append(Finding("permissions_syntax", path, "", top_permission_error))
 
+    rules = policy.get("rules", {})
+    if not isinstance(rules, dict):
+        rules = {}
+
     for job in sorted(actual_names & expected_names):
         start, end = jobs[job]
         expected_job = expected_jobs[job]
+        if not isinstance(expected_job, dict):
+            findings.append(
+                Finding("invalid_policy", path, job, "job policy must be an object")
+            )
+            continue
+
         runner = _job_scalar(lines, start, end, "runs-on")
         if runner != expected_job.get("runner"):
             findings.append(
-                Finding("runner_mismatch", path, job, f"expected runner {expected_job.get('runner')!r}, found {runner!r}")
+                Finding(
+                    "runner_mismatch",
+                    path,
+                    job,
+                    f"expected runner {expected_job.get('runner')!r}, found {runner!r}",
+                )
             )
         if runner and runner.endswith("-latest"):
-            findings.append(Finding("mutable_runner", path, job, f"runner {runner!r} is a mutable latest label"))
+            findings.append(
+                Finding("mutable_runner", path, job, f"runner {runner!r} is a mutable latest label")
+            )
 
         timeout = _job_scalar(lines, start, end, "timeout-minutes")
         try:
@@ -271,10 +362,17 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
             timeout_value = None
         timeout_limit = expected_job.get("timeout_minutes")
         if not isinstance(timeout_limit, int) or timeout_limit <= 0:
-            findings.append(Finding("invalid_policy", path, job, "timeout_minutes must be a positive integer"))
+            findings.append(
+                Finding("invalid_policy", path, job, "timeout_minutes must be a positive integer")
+            )
         elif timeout_value is None or timeout_value <= 0 or timeout_value > timeout_limit:
             findings.append(
-                Finding("timeout_policy", path, job, f"timeout must be 1..{timeout_limit} minutes, found {timeout!r}")
+                Finding(
+                    "timeout_policy",
+                    path,
+                    job,
+                    f"timeout must be 1..{timeout_limit} minutes, found {timeout!r}",
+                )
             )
 
         job_permissions, job_permission_error = _parse_permissions(lines, start + 1, end, 4)
@@ -283,7 +381,12 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
         effective_permissions = job_permissions if job_permissions is not None else top_permissions
         if effective_permissions is None:
             findings.append(
-                Finding("unresolved_permissions", path, job, "job inherits undocumented GitHub default token permissions")
+                Finding(
+                    "unresolved_permissions",
+                    path,
+                    job,
+                    "job inherits undocumented GitHub default token permissions",
+                )
             )
         elif effective_permissions != expected_job.get("permissions"):
             findings.append(
@@ -295,76 +398,119 @@ def audit_workflow(path: str, text: str, expected: dict, policy: dict) -> list[F
                 )
             )
 
-        if policy["rules"].get("require_container_digest", False):
+        if rules.get("require_container_digest", False):
             for image in _container_images(lines, start, end):
                 if not DIGEST_IMAGE_RE.search(image):
                     findings.append(
-                        Finding("mutable_container", path, job, f"container image is not sha256 digest-bound: {image}")
+                        Finding(
+                            "mutable_container",
+                            path,
+                            job,
+                            f"container image is not sha256 digest-bound: {image}",
+                        )
                     )
 
-        locked_subcommands = set(policy["rules"].get("cargo_locked_subcommands", []))
+        locked_subcommands = set(rules.get("cargo_locked_subcommands", []))
         for line in lines[start + 1 : end]:
             command = line.strip()
             for match in CARGO_RE.finditer(command):
                 subcommand = match.group(1)
                 if subcommand in locked_subcommands and "--locked" not in command[match.start() :]:
                     findings.append(
-                        Finding("cargo_unlocked", path, job, f"cargo {subcommand} invocation omits --locked: {command}")
+                        Finding(
+                            "cargo_unlocked",
+                            path,
+                            job,
+                            f"cargo {subcommand} invocation omits --locked: {command}",
+                        )
                     )
 
-    for index, reference in _all_uses(lines):
-        if policy["rules"].get("require_external_uses_full_sha", False) and not _external_ref_is_immutable(reference):
-            findings.append(Finding("mutable_uses", path, "", f"uses reference is not immutable: {reference}"))
-        if reference.startswith("actions/checkout@") and policy["rules"].get(
-            "require_checkout_credentials_disabled", False
-        ):
-            if not _checkout_has_credentials_disabled(lines, index):
-                findings.append(
-                    Finding("checkout_credentials", path, "", "checkout step does not set persist-credentials: false")
-                )
-
+    findings.extend(_uses_findings(path, lines, policy))
     return [finding for finding in findings if not _excepted(policy, finding)]
 
 
 def audit_action_metadata(path: str, text: str, policy: dict) -> list[Finding]:
-    findings: list[Finding] = []
     if "\t" in text:
         return [Finding("malformed_yaml", path, "", "tab indentation is not supported")]
     lines = text.splitlines()
+    findings: list[Finding] = []
     if not any(line.strip() == "runs:" for line in lines):
-        findings.append(Finding("malformed_action_metadata", path, "", "Action metadata has no runs mapping"))
-    for _, reference in _all_uses(lines):
-        if policy["rules"].get("require_external_uses_full_sha", False) and not _external_ref_is_immutable(reference):
-            findings.append(Finding("mutable_uses", path, "", f"uses reference is not immutable: {reference}"))
+        findings.append(
+            Finding(
+                "malformed_action_metadata",
+                path,
+                "",
+                "Action metadata has no runs mapping",
+            )
+        )
+    findings.extend(_uses_findings(path, lines, policy))
     return [finding for finding in findings if not _excepted(policy, finding)]
 
 
-def audit_repository(root: Path, policy: dict, tracked_files: Iterable[str] | None = None) -> dict:
+def _policy_errors(policy: object) -> list[Finding]:
     findings: list[Finding] = []
-    if policy.get("schema") != 1 or not isinstance(policy.get("rules"), dict):
-        findings.append(Finding("invalid_policy", ".github/workflow-trust-policy.json", "", "unsupported policy schema"))
+    policy_path = ".github/workflow-trust-policy.json"
+    if not isinstance(policy, dict):
+        return [Finding("invalid_policy", policy_path, "", "policy root must be an object")]
+    if policy.get("schema") != 1:
+        findings.append(Finding("invalid_policy", policy_path, "", "unsupported policy schema"))
+    if not isinstance(policy.get("rules"), dict):
+        findings.append(Finding("invalid_policy", policy_path, "", "rules must be an object"))
+    if not isinstance(policy.get("workflows"), dict):
+        findings.append(Finding("invalid_policy", policy_path, "", "workflows must be an object"))
     exceptions = policy.get("exceptions", [])
     if not isinstance(exceptions, list) or any(not _valid_exception(item) for item in exceptions):
         findings.append(
-            Finding("invalid_policy", ".github/workflow-trust-policy.json", "", "every exception requires bounded rule/path/reason/revisit fields")
+            Finding(
+                "invalid_policy",
+                policy_path,
+                "",
+                "every exception requires bounded rule/path/reason/revisit fields",
+            )
         )
+    return findings
+
+
+def audit_repository(
+    root: Path, policy: dict, tracked_files: Iterable[str] | None = None
+) -> dict:
+    findings = _policy_errors(policy)
+    if findings:
+        filtered = sorted(findings)
+        return {
+            "schema": 1,
+            "ok": False,
+            "workflows": [],
+            "action_metadata": [],
+            "findings": [finding.as_dict() for finding in filtered],
+        }
 
     paths = list(tracked_files) if tracked_files is not None else _tracked_files(root)
     workflows, actions = discover_security_files(paths)
-    expected_workflows = policy.get("workflows", {})
-    if not isinstance(expected_workflows, dict):
-        expected_workflows = {}
-        findings.append(Finding("invalid_policy", ".github/workflow-trust-policy.json", "", "workflows must be an object"))
+    expected_workflows = policy["workflows"]
 
     for path in sorted(set(workflows) - set(expected_workflows)):
-        findings.append(Finding("unplanned_workflow", path, "", "tracked workflow is absent from policy"))
+        findings.append(
+            Finding("unplanned_workflow", path, "", "tracked workflow is absent from policy")
+        )
     for path in sorted(set(expected_workflows) - set(workflows)):
-        findings.append(Finding("missing_workflow", path, "", "policy workflow is not tracked"))
+        findings.append(
+            Finding("missing_workflow", path, "", "policy workflow is not tracked")
+        )
 
     for path in sorted(set(workflows) & set(expected_workflows)):
-        findings.extend(audit_workflow(path, (root / path).read_text(encoding="utf-8"), expected_workflows[path], policy))
+        findings.extend(
+            audit_workflow(
+                path,
+                (root / path).read_text(encoding="utf-8"),
+                expected_workflows[path],
+                policy,
+            )
+        )
     for path in actions:
-        findings.extend(audit_action_metadata(path, (root / path).read_text(encoding="utf-8"), policy))
+        findings.extend(
+            audit_action_metadata(path, (root / path).read_text(encoding="utf-8"), policy)
+        )
 
     filtered = sorted(finding for finding in findings if not _excepted(policy, finding))
     return {
@@ -379,7 +525,9 @@ def audit_repository(root: Path, policy: dict, tracked_files: Iterable[str] | No
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("."))
-    parser.add_argument("--policy", type=Path, default=Path(".github/workflow-trust-policy.json"))
+    parser.add_argument(
+        "--policy", type=Path, default=Path(".github/workflow-trust-policy.json")
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
