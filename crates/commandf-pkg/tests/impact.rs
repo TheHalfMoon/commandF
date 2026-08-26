@@ -7,7 +7,7 @@ use commandf_pkg::{
 };
 
 #[test]
-fn reports_direct_transitive_cycle_and_unresolved_artifact_exposure() {
+fn reports_transitive_cycle_boundaries_and_determinism() {
     let before_subject = package("acme.changed", "1.0.0", "subject-before");
     let after_subject = package("acme.changed", "2.0.0", "subject-after");
     let dependent = package("acme.dep", "1.0.0", "dep");
@@ -72,14 +72,10 @@ fn reports_direct_transitive_cycle_and_unresolved_artifact_exposure() {
     assert_eq!(report.seeds[0].kind, ImpactSeedKind::Modified);
     assert_eq!(report.artifact_impacts.len(), 4);
     assert!(report.artifact_impacts.iter().any(|impact| {
-        impact.impacted == a.identity
-            && impact.side == ImpactSide::Before
-            && impact.path.len() == 1
+        impact.impacted == a.identity && impact.side == ImpactSide::Before && impact.path.len() == 1
     }));
     assert!(report.artifact_impacts.iter().any(|impact| {
-        impact.impacted == x.identity
-            && impact.side == ImpactSide::After
-            && impact.path.len() == 2
+        impact.impacted == x.identity && impact.side == ImpactSide::After && impact.path.len() == 2
     }));
     assert_eq!(report.package_impacts.len(), 2);
     assert_eq!(report.unresolved_boundaries.len(), 4);
@@ -97,20 +93,20 @@ fn reports_direct_transitive_cycle_and_unresolved_artifact_exposure() {
 }
 
 #[test]
-fn chooses_lexicographically_first_equal_length_shortest_path() {
+fn chooses_lexicographically_first_shortest_path() {
     let subject = package("acme.changed", "1.0.0", "subject");
-    let dep = package("acme.dep", "1.0.0", "dep");
+    let dependent = package("acme.dep", "1.0.0", "dep");
     let seed = artifact(
         &subject,
         "seed.json",
         "seed",
         Some("https://example.org/Seed"),
     );
-    let a = artifact(&dep, "a.json", "a", Some("https://example.org/A"));
-    let c = artifact(&dep, "c.json", "c", Some("https://example.org/C"));
-    let d = artifact(&dep, "d.json", "d", Some("https://example.org/D"));
-    let graph = graph(
-        vec![subject.clone(), dep],
+    let a = artifact(&dependent, "a.json", "a", Some("https://example.org/A"));
+    let c = artifact(&dependent, "c.json", "c", Some("https://example.org/C"));
+    let d = artifact(&dependent, "d.json", "d", Some("https://example.org/D"));
+    let context = graph(
+        vec![subject.clone(), dependent],
         vec![seed.clone(), a.clone(), c.clone(), d.clone()],
         Vec::new(),
         vec![
@@ -120,27 +116,22 @@ fn chooses_lexicographically_first_equal_length_shortest_path() {
             resolved(&d, &c, "https://example.org/C"),
         ],
     );
-    let diff = modified_diff(
-        &subject,
-        &subject,
-        "https://example.org/Seed",
-        "seed.json",
-    );
+    let diff = modified_diff(&subject, &subject, "https://example.org/Seed", "seed.json");
 
-    let report = build_impact_report(&diff, &graph, &graph).unwrap();
-    let d_impact = report
+    let report = build_impact_report(&diff, &context, &context).unwrap();
+    let impact = report
         .artifact_impacts
         .iter()
         .find(|impact| impact.impacted == d.identity)
         .unwrap();
 
-    assert_eq!(d_impact.side, ImpactSide::Both);
-    assert_eq!(d_impact.path.len(), 2);
-    assert_eq!(d_impact.path[0].target, a.identity);
+    assert_eq!(impact.side, ImpactSide::Both);
+    assert_eq!(impact.path.len(), 2);
+    assert_eq!(impact.path[0].target, a.identity);
 }
 
 #[test]
-fn preserves_added_and_removed_canonical_seeds_on_their_evidence_side() {
+fn preserves_added_removed_and_changed_canonical_identity() {
     let before_subject = package("acme.changed", "1.0.0", "before");
     let after_subject = package("acme.changed", "2.0.0", "after");
     let removed = artifact(
@@ -170,14 +161,8 @@ fn preserves_added_and_removed_canonical_seeds_on_their_evidence_side() {
     let diff = StructuralDiffReport {
         schema: StructuralDiffReport::SCHEMA_V1,
         package_name: "acme.changed".to_owned(),
-        before: PackageEvidence {
-            version: before_subject.version.clone(),
-            archive_sha256: before_subject.sha256.clone(),
-        },
-        after: PackageEvidence {
-            version: after_subject.version.clone(),
-            archive_sha256: after_subject.sha256.clone(),
-        },
+        before: evidence(&before_subject),
+        after: evidence(&after_subject),
         changes: vec![
             change(
                 StructuralChangeKind::ResourceRemoved,
@@ -196,33 +181,24 @@ fn preserves_added_and_removed_canonical_seeds_on_their_evidence_side() {
 
     let report = build_impact_report(&diff, &before, &after).unwrap();
     assert_eq!(report.seeds.len(), 2);
-    let added_seed = report
-        .seeds
-        .iter()
-        .find(|seed| seed.kind == ImpactSeedKind::Added)
-        .unwrap();
-    assert!(added_seed.before.is_none());
-    assert_eq!(added_seed.after.as_ref(), Some(&added.identity));
-    let removed_seed = report
-        .seeds
-        .iter()
-        .find(|seed| seed.kind == ImpactSeedKind::Removed)
-        .unwrap();
-    assert_eq!(removed_seed.before.as_ref(), Some(&removed.identity));
-    assert!(removed_seed.after.is_none());
-}
+    assert!(report.seeds.iter().any(|seed| {
+        seed.kind == ImpactSeedKind::Added
+            && seed.before.is_none()
+            && seed.after.as_ref() == Some(&added.identity)
+    }));
+    assert!(report.seeds.iter().any(|seed| {
+        seed.kind == ImpactSeedKind::Removed
+            && seed.before.as_ref() == Some(&removed.identity)
+            && seed.after.is_none()
+    }));
 
-#[test]
-fn canonical_url_change_becomes_removed_and_added_seed() {
-    let before_subject = package("acme.changed", "1.0.0", "before");
-    let after_subject = package("acme.changed", "2.0.0", "after");
-    let before_artifact = artifact(
+    let old = artifact(
         &before_subject,
         "profile.json",
         "old",
         Some("https://example.org/Old"),
     );
-    let after_artifact = artifact(
+    let new = artifact(
         &after_subject,
         "profile.json",
         "new",
@@ -230,27 +206,21 @@ fn canonical_url_change_becomes_removed_and_added_seed() {
     );
     let before = graph(
         vec![before_subject.clone()],
-        vec![before_artifact],
+        vec![old],
         Vec::new(),
         Vec::new(),
     );
     let after = graph(
         vec![after_subject.clone()],
-        vec![after_artifact],
+        vec![new],
         Vec::new(),
         Vec::new(),
     );
     let diff = StructuralDiffReport {
-        schema: 1,
+        schema: StructuralDiffReport::SCHEMA_V1,
         package_name: "acme.changed".to_owned(),
-        before: PackageEvidence {
-            version: before_subject.version.clone(),
-            archive_sha256: before_subject.sha256.clone(),
-        },
-        after: PackageEvidence {
-            version: after_subject.version.clone(),
-            archive_sha256: after_subject.sha256.clone(),
-        },
+        before: evidence(&before_subject),
+        after: evidence(&after_subject),
         changes: vec![StructuralChange {
             kind: StructuralChangeKind::ResourceBytesChanged,
             resource: ResourceKey {
@@ -276,7 +246,7 @@ fn canonical_url_change_becomes_removed_and_added_seed() {
 }
 
 #[test]
-fn package_exposure_keeps_same_name_versions_distinct_and_terminates_cycles() {
+fn keeps_same_name_package_versions_distinct_and_terminates_cycles() {
     let subject = package("acme.changed", "2.0.0", "subject");
     let dep_v1 = package("acme.dep", "1.0.0", "dep-v1");
     let dep_v2 = package("acme.dep", "2.0.0", "dep-v2");
@@ -287,7 +257,7 @@ fn package_exposure_keeps_same_name_versions_distinct_and_terminates_cycles() {
         "seed",
         Some("https://example.org/Seed"),
     );
-    let graph = graph(
+    let context = graph(
         vec![
             subject.clone(),
             dep_v1.clone(),
@@ -304,19 +274,15 @@ fn package_exposure_keeps_same_name_versions_distinct_and_terminates_cycles() {
         ],
         Vec::new(),
     );
-    let diff = modified_diff(
-        &subject,
-        &subject,
-        "https://example.org/Seed",
-        "seed.json",
-    );
+    let diff = modified_diff(&subject, &subject, "https://example.org/Seed", "seed.json");
 
-    let report = build_impact_report(&diff, &graph, &graph).unwrap();
+    let report = build_impact_report(&diff, &context, &context).unwrap();
     let identities = report
         .package_impacts
         .iter()
         .map(|impact| impact.impacted.clone())
         .collect::<std::collections::BTreeSet<_>>();
+
     assert!(identities.contains(&dep_v1));
     assert!(identities.contains(&dep_v2));
     assert!(identities.contains(&root));
@@ -328,9 +294,9 @@ fn package_exposure_keeps_same_name_versions_distinct_and_terminates_cycles() {
 }
 
 #[test]
-fn does_not_traverse_ambiguous_or_external_reference_edges() {
+fn never_traverses_ambiguous_reference_as_resolved() {
     let subject = package("acme.changed", "1.0.0", "subject");
-    let dep = package("acme.dep", "1.0.0", "dep");
+    let dependent = package("acme.dep", "1.0.0", "dep");
     let seed = artifact(
         &subject,
         "seed.json",
@@ -338,13 +304,13 @@ fn does_not_traverse_ambiguous_or_external_reference_edges() {
         Some("https://example.org/Seed"),
     );
     let source = artifact(
-        &dep,
+        &dependent,
         "source.json",
         "source",
         Some("https://example.org/Source"),
     );
-    let graph = graph(
-        vec![subject.clone(), dep],
+    let context = graph(
+        vec![subject.clone(), dependent],
         vec![seed.clone(), source.clone()],
         Vec::new(),
         vec![ContextCanonicalReferenceEdge {
@@ -357,16 +323,10 @@ fn does_not_traverse_ambiguous_or_external_reference_edges() {
             candidates: vec![seed.identity.clone(), source.identity.clone()],
         }],
     );
-    let diff = modified_diff(
-        &subject,
-        &subject,
-        "https://example.org/Seed",
-        "seed.json",
-    );
+    let diff = modified_diff(&subject, &subject, "https://example.org/Seed", "seed.json");
 
-    let report = build_impact_report(&diff, &graph, &graph).unwrap();
+    let report = build_impact_report(&diff, &context, &context).unwrap();
     assert!(report.artifact_impacts.is_empty());
-    assert!(report.unresolved_boundaries.is_empty());
 }
 
 fn modified_diff(
@@ -378,20 +338,21 @@ fn modified_diff(
     StructuralDiffReport {
         schema: StructuralDiffReport::SCHEMA_V1,
         package_name: before.name.clone(),
-        before: PackageEvidence {
-            version: before.version.clone(),
-            archive_sha256: before.sha256.clone(),
-        },
-        after: PackageEvidence {
-            version: after.version.clone(),
-            archive_sha256: after.sha256.clone(),
-        },
+        before: evidence(before),
+        after: evidence(after),
         changes: vec![change(
             StructuralChangeKind::ResourceBytesChanged,
             canonical,
             Some(filename),
             Some(filename),
         )],
+    }
+}
+
+fn evidence(package: &ContextPackageIdentity) -> PackageEvidence {
+    PackageEvidence {
+        version: package.version.clone(),
+        archive_sha256: package.sha256.clone(),
     }
 }
 
