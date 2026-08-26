@@ -1,4 +1,4 @@
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -80,19 +80,25 @@ fn stage_archive(root: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, Oracl
         source,
     })?;
     drop(file);
+    protect_staged_archive(&path)?;
+    Ok(path)
+}
 
-    let mut permissions = fs::metadata(&path)
-        .map_err(|source| OracleError::AdapterIo {
-            operation: "reading staged oracle archive metadata",
-            source,
-        })?
-        .permissions();
-    permissions.set_readonly(true);
-    fs::set_permissions(&path, permissions).map_err(|source| OracleError::AdapterIo {
+#[cfg(unix)]
+fn protect_staged_archive(path: &Path) -> Result<(), OracleError> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let permissions = fs::Permissions::from_mode(0o400);
+    fs::set_permissions(path, permissions).map_err(|source| OracleError::AdapterIo {
         operation: "protecting staged oracle archive",
         source,
-    })?;
-    Ok(path)
+    })
+}
+
+#[cfg(not(unix))]
+fn protect_staged_archive(_path: &Path) -> Result<(), OracleError> {
+    Ok(())
 }
 
 pub fn validate_hl7_oracle_adapter(adapter: &Path, java: Option<&Path>) -> Result<(), OracleError> {
