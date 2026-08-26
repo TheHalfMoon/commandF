@@ -23,22 +23,27 @@ CONTAINER_DIGEST = "9" * 64
 
 
 def policy() -> dict:
+    rules = {
+        "cargo_locked_subcommands": [
+            "bench",
+            "build",
+            "check",
+            "clippy",
+            "doc",
+            "metadata",
+            "run",
+            "test",
+        ],
+        "require_container_digest": True,
+        "require_checkout_credentials_disabled": True,
+        "require_external_uses_full_sha": True,
+    }
     return {
         "schema": 1,
-        "rules": {
-            "cargo_locked_subcommands": [
-                "bench",
-                "build",
-                "check",
-                "clippy",
-                "doc",
-                "metadata",
-                "run",
-                "test",
-            ],
-            "require_container_digest": True,
-            "require_checkout_credentials_disabled": True,
-            "require_external_uses_full_sha": True,
+        "rules": rules,
+        "rationales": {
+            key: f"Test rationale for {key} that is deliberately substantive."
+            for key in rules
         },
         "workflows": {
             WORKFLOW: {
@@ -180,12 +185,45 @@ runs:
         result = self.run_repo(valid_workflow(), action)
         self.assertIn("mutable_uses", self.codes(result))
 
+    def test_flow_style_workflow_uses_fails_closed(self) -> None:
+        workflow = valid_workflow().replace(
+            "    steps:\n      - uses:", "    steps: [{uses: owner/action@v1}]\n    ignored:\n      - uses:"
+        )
+        result = self.run_repo(workflow)
+        self.assertIn("unsupported_uses_syntax", self.codes(result))
+
+    def test_flow_style_action_metadata_uses_fails_closed(self) -> None:
+        action = """name: nested
+description: fixture
+runs:
+  using: composite
+  steps: [{uses: owner/action@v1}]
+"""
+        result = self.run_repo(valid_workflow(), action)
+        self.assertIn("unsupported_uses_syntax", self.codes(result))
+
     def test_checkout_credentials_must_be_disabled(self) -> None:
         workflow = valid_workflow().replace(
             "        with:\n          persist-credentials: false\n", ""
         )
         result = self.run_repo(workflow)
         self.assertIn("checkout_credentials", self.codes(result))
+
+    def test_unscoped_persist_credentials_key_does_not_satisfy_checkout(self) -> None:
+        workflow = valid_workflow().replace(
+            "        with:\n          persist-credentials: false",
+            "        env:\n          persist-credentials: false",
+        )
+        result = self.run_repo(workflow)
+        self.assertIn("checkout_credentials", self.codes(result))
+
+    def test_named_checkout_step_with_scoped_input_passes(self) -> None:
+        workflow = valid_workflow().replace(
+            f"      - uses: actions/checkout@{CHECKOUT_SHA}",
+            f"      - name: Checkout\n        uses: actions/checkout@{CHECKOUT_SHA}",
+        )
+        result = self.run_repo(workflow)
+        self.assertTrue(result["ok"], result)
 
     def test_action_metadata_checkout_credentials_must_be_disabled(self) -> None:
         action = f"""name: nested
@@ -224,11 +262,17 @@ runs:
         result = self.run_repo(workflow)
         self.assertIn("permission_mismatch", self.codes(result))
 
+    def test_policy_cannot_authorize_write_permission_in_stack_a(self) -> None:
+        broken = policy()
+        broken["workflows"][WORKFLOW]["jobs"]["build"]["permissions"] = {
+            "contents": "write"
+        }
+        result = self.run_repo(valid_workflow(), audit_policy=broken)
+        self.assertIn("invalid_policy", self.codes(result))
+
     def test_mutable_runner_is_rejected(self) -> None:
         workflow = valid_workflow().replace("ubuntu-24.04", "ubuntu-latest", 1)
-        expected = policy()
-        expected["workflows"][WORKFLOW]["jobs"]["build"]["runner"] = "ubuntu-latest"
-        result = self.run_repo(workflow, audit_policy=expected)
+        result = self.run_repo(workflow)
         self.assertIn("mutable_runner", self.codes(result))
 
     def test_missing_or_excessive_timeout_is_rejected(self) -> None:
@@ -269,12 +313,32 @@ runs:
         result = self.run_repo(workflow)
         self.assertIn("cargo_unlocked", self.codes(result))
 
+    def test_comment_cannot_fake_cargo_locked_flag(self) -> None:
+        workflow = valid_workflow().replace(
+            "cargo test --locked --workspace", "cargo test --workspace # --locked"
+        )
+        result = self.run_repo(workflow)
+        self.assertIn("cargo_unlocked", self.codes(result))
+
     def test_multiline_locked_cargo_command_is_accepted(self) -> None:
         continuation = chr(92)
         replacement = (
             "        run: |\n"
             f"          cargo test {continuation}\n"
             "            --locked --workspace"
+        )
+        workflow = valid_workflow().replace(
+            "        run: cargo test --locked --workspace", replacement
+        )
+        result = self.run_repo(workflow)
+        self.assertTrue(result["ok"], result)
+
+    def test_cargo_and_subcommand_line_continuation_is_accepted(self) -> None:
+        continuation = chr(92)
+        replacement = (
+            "        run: |\n"
+            f"          cargo {continuation}\n"
+            "            test --locked --workspace"
         )
         workflow = valid_workflow().replace(
             "        run: cargo test --locked --workspace", replacement
@@ -294,6 +358,14 @@ runs:
         self.assertEqual(len(cargo_findings), 1, result)
         self.assertIn("cargo test --workspace", cargo_findings[0]["detail"])
 
+    def test_cargo_global_option_syntax_fails_closed(self) -> None:
+        workflow = valid_workflow().replace(
+            "cargo test --locked --workspace",
+            "cargo --color always test --locked --workspace",
+        )
+        result = self.run_repo(workflow)
+        self.assertIn("unsupported_cargo_syntax", self.codes(result))
+
     def test_malformed_workflow_fails_closed(self) -> None:
         result = self.run_repo("name: broken\n\tjobs:\n")
         self.assertIn("malformed_yaml", self.codes(result))
@@ -308,6 +380,32 @@ runs:
         broken["exceptions"] = [
             {"rule": "mutable_runner", "path": WORKFLOW, "reason": "short"}
         ]
+        result = self.run_repo(valid_workflow(), audit_policy=broken)
+        self.assertIn("invalid_policy", self.codes(result))
+
+    def test_non_object_exception_fails_closed(self) -> None:
+        broken = policy()
+        broken["exceptions"] = [None]
+        result = self.run_repo(valid_workflow(), audit_policy=broken)
+        self.assertFalse(result["ok"])
+        self.assertIn("invalid_policy", self.codes(result))
+
+    def test_malformed_rule_types_fail_closed(self) -> None:
+        for key, value in (
+            ("cargo_locked_subcommands", "test"),
+            ("require_external_uses_full_sha", "true"),
+            ("require_container_digest", False),
+        ):
+            with self.subTest(key=key, value=value):
+                broken = policy()
+                broken["rules"][key] = value
+                result = self.run_repo(valid_workflow(), audit_policy=broken)
+                self.assertFalse(result["ok"])
+                self.assertIn("invalid_policy", self.codes(result))
+
+    def test_missing_rule_rationale_fails_closed(self) -> None:
+        broken = policy()
+        del broken["rationales"]["require_container_digest"]
         result = self.run_repo(valid_workflow(), audit_policy=broken)
         self.assertIn("invalid_policy", self.codes(result))
 
