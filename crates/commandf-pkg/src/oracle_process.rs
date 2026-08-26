@@ -1,8 +1,11 @@
-use std::io::{self, Read};
-use std::path::Path;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+
+use tempfile::TempDir;
 
 use crate::{parse_hl7_oracle_report, Hl7OracleReport, OracleError};
 
@@ -18,6 +21,78 @@ pub struct Hl7OracleInvocation<'a> {
     pub left_version: Option<&'a str>,
     pub right_url: &'a str,
     pub right_version: Option<&'a str>,
+}
+
+pub struct Hl7OracleStagedArchives {
+    _directory: TempDir,
+    core_package: PathBuf,
+    left_package: PathBuf,
+    right_package: PathBuf,
+}
+
+impl Hl7OracleStagedArchives {
+    pub fn new(core: &[u8], left: &[u8], right: &[u8]) -> Result<Self, OracleError> {
+        let directory = tempfile::tempdir().map_err(|source| OracleError::AdapterIo {
+            operation: "creating staged oracle directory",
+            source,
+        })?;
+        let core_package = stage_archive(directory.path(), "core.tgz", core)?;
+        let left_package = stage_archive(directory.path(), "left.tgz", left)?;
+        let right_package = stage_archive(directory.path(), "right.tgz", right)?;
+        Ok(Self {
+            _directory: directory,
+            core_package,
+            left_package,
+            right_package,
+        })
+    }
+
+    pub fn core_package(&self) -> &Path {
+        &self.core_package
+    }
+
+    pub fn left_package(&self) -> &Path {
+        &self.left_package
+    }
+
+    pub fn right_package(&self) -> &Path {
+        &self.right_package
+    }
+}
+
+fn stage_archive(root: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, OracleError> {
+    let path = root.join(name);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|source| OracleError::AdapterIo {
+            operation: "creating staged oracle archive",
+            source,
+        })?;
+    file.write_all(bytes)
+        .map_err(|source| OracleError::AdapterIo {
+            operation: "writing staged oracle archive",
+            source,
+        })?;
+    file.sync_all().map_err(|source| OracleError::AdapterIo {
+        operation: "syncing staged oracle archive",
+        source,
+    })?;
+    drop(file);
+
+    let mut permissions = fs::metadata(&path)
+        .map_err(|source| OracleError::AdapterIo {
+            operation: "reading staged oracle archive metadata",
+            source,
+        })?
+        .permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).map_err(|source| OracleError::AdapterIo {
+        operation: "protecting staged oracle archive",
+        source,
+    })?;
+    Ok(path)
 }
 
 pub fn validate_hl7_oracle_adapter(adapter: &Path, java: Option<&Path>) -> Result<(), OracleError> {
