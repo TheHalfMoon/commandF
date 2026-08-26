@@ -375,13 +375,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             after_cache,
             format,
         } => {
-            let bytes = impact::run(
-                package,
-                before_lock,
-                before_cache,
-                after_lock,
-                after_cache,
-            )?;
+            let bytes = impact::run(package, before_lock, before_cache, after_lock, after_cache)?;
             match format {
                 OutputFormat::Json => io::stdout().write_all(&bytes)?,
             }
