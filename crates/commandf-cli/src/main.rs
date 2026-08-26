@@ -1,3 +1,4 @@
+mod gate;
 mod impact;
 mod oracle;
 
@@ -115,6 +116,7 @@ enum Command {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    Gate(gate::GateArgs),
     Terminology {
         package: String,
         #[arg(long)]
@@ -237,7 +239,11 @@ enum PkgCommand {
 }
 
 fn main() -> ExitCode {
-    let is_check = std::env::args_os().nth(1).as_deref() == Some(OsStr::new("check"));
+    let command = std::env::args_os().nth(1);
+    let normalize_usage_exit = matches!(
+        command.as_deref(),
+        Some(value) if value == OsStr::new("check") || value == OsStr::new("gate")
+    );
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -246,7 +252,7 @@ fn main() -> ExitCode {
             if clap_exit == 0 {
                 return ExitCode::SUCCESS;
             }
-            if is_check {
+            if normalize_usage_exit {
                 return ExitCode::from(1);
             }
             return ExitCode::from(clap_exit as u8);
@@ -426,6 +432,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             }
             return Ok(ExitCode::from(2));
         }
+        Command::Gate(args) => return gate::run(args),
         Command::Terminology {
             package,
             before_lock,
