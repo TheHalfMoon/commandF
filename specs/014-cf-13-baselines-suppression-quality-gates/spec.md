@@ -40,7 +40,7 @@ The command performs no package acquisition or network lookup. It reuses the exa
 `commandf gate` follows the CI-stable check/gate contract:
 
 - `0` — evaluation completed and the CF-13 quality gate passed;
-- `1` — usage, input, baseline, suppression, classification, serialization, or output failure;
+- `1` — usage, input, baseline, suppression, classification, serialization, validation, or output failure;
 - `2` — evaluation completed successfully, output was emitted, and the quality gate failed.
 
 Exit `2` is reserved for a completed quality-gate policy failure. Parse failures for `gate` MUST normalize to exit `1` just as `check` parse failures do.
@@ -56,6 +56,8 @@ CF-13 MUST NOT:
 - reinterpret CF-05 direction or `fail_on` semantics;
 - mutate or filter the embedded current CF-05 evidence.
 
+The embedded current `CheckReport` retains exact current package name, before/after package versions, archive SHA-256 identities, ruleset, findings, and policy decision. CF-13 must not replace those identities with local file paths.
+
 ## Baseline contract
 
 `--baseline` accepts a bounded UTF-8 JSON file containing a valid CF-05 `CheckReport` schema v1.
@@ -65,13 +67,15 @@ A baseline is admissible only when:
 - the report passes existing CF-05 validation;
 - its `package_name` exactly equals the current package name;
 - its CF-04 ruleset exactly equals the current report ruleset;
-- every finding produces a unique CF-13 fingerprint.
+- every finding produces a unique CF-13 V1 fingerprint.
 
 The baseline policy (`direction` / `fail_on`) is not CF-13 authority. The baseline contributes only its validated compatibility findings as previously accepted evidence.
 
 A baseline may represent different before/after package versions from the current candidate. That is the expected adoption use case.
 
 If no baseline is supplied, no current finding is treated as pre-existing.
+
+A persisted CF-13 report that claims any finding disposition `baseline` MUST retain sufficient baseline membership evidence to revalidate that claim without re-reading an unseen external file. V1 therefore retains the validated baseline before/after package identities and the complete sorted set of baseline finding fingerprints in `QualityGateBaselineEvidence`, in addition to the canonical baseline digest. A digest plus count alone is not authoritative membership evidence.
 
 ## Exact finding fingerprint
 
@@ -96,15 +100,22 @@ V1 fingerprint input includes:
 
 The human-readable message is deliberately excluded: a wording-only message edit MUST NOT invalidate an otherwise identical accepted finding.
 
-The input is serialized through a fixed commandF-owned canonical structure and hashed with SHA-256. The public representation is:
+The input is serialized through a fixed commandF-owned canonical structure. Any nested JSON object in `before` or `after` is recursively canonicalized by lexicographically sorting object keys while preserving array order. Those canonical bytes are hashed with SHA-256.
 
-```text
-sha256:<64 lowercase hex characters>
+Every persisted fingerprint identity uses the explicit versioned object:
+
+```json
+{
+  "schema": 1,
+  "digest": "sha256:<64 lowercase hex characters>"
+}
 ```
+
+The schema is part of the persisted identity, not merely an implicit hash-preimage detail. Consumers MUST reject unsupported fingerprint schema values; they MUST NOT compare a V1 digest against an identity from another fingerprint schema.
 
 A severity, direction, rule, resource, source-kind, or evidence-value change therefore creates a different fingerprint and is treated as new unless separately accepted/suppressed.
 
-Duplicate fingerprints in either the current or baseline report are rejected as ambiguous rather than silently collapsed.
+Duplicate V1 fingerprints in either the current or baseline report are rejected as ambiguous rather than silently collapsed.
 
 ## Suppression contract
 
@@ -115,7 +126,10 @@ Duplicate fingerprints in either the current or baseline report are rejected as 
   "schema": 1,
   "suppressions": [
     {
-      "finding_fingerprint": "sha256:<64 lowercase hex characters>",
+      "finding_fingerprint": {
+        "schema": 1,
+        "digest": "sha256:<64 lowercase hex characters>"
+      },
       "rationale": "Approved interoperability exception",
       "reference": "optional external tracking reference"
     }
@@ -125,14 +139,16 @@ Duplicate fingerprints in either the current or baseline report are rejected as 
 
 Rules:
 
-- suppression fingerprints MUST use the exact V1 syntax;
+- every persisted suppression fingerprint MUST carry the explicit supported fingerprint schema;
+- fingerprint digests MUST use exact `sha256:` plus 64 lowercase hexadecimal characters;
+- unsupported fingerprint schemas fail closed even if the digest text is otherwise valid;
 - `rationale` MUST be non-empty after trimming and is retained in output;
 - `reference` is optional evidence text only and carries no authority;
 - duplicate suppression fingerprints fail closed;
 - there are no glob, rule-wide, severity-wide, resource-wide, or wildcard suppressions in V1;
 - there is no clock-based expiry evaluation in V1, avoiding hidden wall-clock nondeterminism;
 - an unmatched/stale suppression is retained as `unused` evidence but does not itself fail the gate;
-- a misspelled or stale suppression cannot hide a finding because only exact fingerprint equality suppresses it.
+- a misspelled or stale suppression cannot hide a finding because only exact supported-version fingerprint equality suppresses it.
 
 Suppressions do not alter the embedded CF-05 report.
 
@@ -140,8 +156,8 @@ Suppressions do not alter the embedded CF-05 report.
 
 Every current finding receives exactly one CF-13 disposition:
 
-1. `suppressed` — an exact suppression entry matches the fingerprint;
-2. `baseline` — otherwise, an exact baseline finding matches the fingerprint;
+1. `suppressed` — an exact same-version suppression fingerprint matches;
+2. `baseline` — otherwise, an exact same-version baseline fingerprint matches;
 3. `new` — otherwise.
 
 Suppression precedence over baseline is intentional so explicit waiver evidence remains visible when both inputs contain the finding.
@@ -171,10 +187,31 @@ The versioned report contains at least:
 - the complete unmodified current CF-05 `CheckReport`;
 - deterministic baseline evidence when supplied;
 - deterministic suppression-file evidence when supplied;
-- per-current-finding fingerprint and disposition;
+- per-current-finding explicit-version fingerprint and disposition;
 - matched suppression rationale/reference when applicable;
-- unused suppression fingerprints;
-- enough evidence to distinguish new, baseline, and suppressed findings without repository paths or external lookups.
+- unused explicit-version suppression fingerprints;
+- enough evidence to distinguish and revalidate new, baseline, and suppressed findings without repository paths or external lookups.
+
+`QualityGateBaselineEvidence` V1 contains at least:
+
+- baseline canonical SHA-256;
+- fingerprint schema `1`;
+- package name;
+- CF-04 ruleset;
+- exact baseline before package version and archive SHA-256;
+- exact baseline after package version and archive SHA-256;
+- finding count;
+- the complete lexicographically sorted unique set of baseline V1 fingerprint identities.
+
+`QualityGateSuppressionEvidence` V1 contains at least:
+
+- suppression canonical SHA-256;
+- suppression schema;
+- fingerprint schema `1`;
+- entry count;
+- normalized suppression entries or equivalent complete membership evidence sufficient to validate every `suppressed` disposition and every `unused` identity.
+
+Local baseline/suppression/lock/cache paths MUST NOT be serialized as authority.
 
 Decision counts include:
 
@@ -189,6 +226,24 @@ Decision counts include:
 
 The report MUST NOT delete findings merely because they are baseline or suppressed.
 
+## Canonical evidence digests
+
+Baseline and suppression evidence digests are semantic-content digests, not original-file-byte digests.
+
+For the baseline:
+
+1. bound, parse, and validate the CF-05 `CheckReport`;
+2. serialize the validated typed report to a JSON value;
+3. recursively sort **every JSON object key at every depth**, including nested `before`/`after` evidence values, while preserving array order;
+4. serialize that normalized value with one fixed commandF-owned JSON encoding;
+5. hash those bytes with SHA-256.
+
+Therefore semantically identical baseline reports differing only in whitespace or JSON object-key insertion order produce the same canonical baseline digest. Array reordering remains identity-bearing.
+
+Suppression evidence is normalized by validating every entry, sorting entries by explicit-version fingerprint identity, recursively canonicalizing JSON objects, and hashing the fixed canonical serialization.
+
+The canonical digest never substitutes for membership evidence needed to validate a persisted disposition.
+
 ## Determinism
 
 For identical pinned package inputs, policy, canonical baseline content, and suppression content:
@@ -198,7 +253,7 @@ For identical pinned package inputs, policy, canonical baseline content, and sup
 - JSON output is byte-identical;
 - no timestamps, host paths, random ids, run ids, environment fields, or wall-clock decisions are emitted.
 
-Baseline and suppression evidence digests are computed from commandF canonical parsed content rather than original whitespace, so semantically identical JSON formatting does not change the gate result.
+Baseline and suppression evidence digests are computed from commandF canonical parsed content rather than original whitespace or object insertion order.
 
 ## Output semantics
 
@@ -214,13 +269,17 @@ CF-13 fails closed on:
 - duplicate current or baseline fingerprints;
 - malformed or oversized baseline/suppression files;
 - unsupported suppression schema;
-- malformed fingerprint syntax;
+- unsupported fingerprint schema;
+- malformed fingerprint digest syntax;
 - empty suppression rationale;
 - duplicate suppression fingerprints;
+- persisted `baseline` disposition without retained matching baseline membership evidence;
+- persisted `suppressed` disposition without retained matching suppression membership evidence;
+- persisted fingerprint/count/decision mismatch;
 - serialization/output publication failure;
 - any underlying CF-03/CF-04/CF-05 operational failure.
 
-Unknown future disposition/schema values are not coerced.
+Unknown future disposition/schema/fingerprint-version values are not coerced.
 
 ## Security and trust boundary
 
@@ -231,6 +290,22 @@ Unknown future disposition/schema values are not coerced.
 - suppression text is evidence, not executable policy;
 - diagnostic output remains bounded/sanitized by existing CLI behavior;
 - input size limits are explicit and tested.
+
+## Provenance and retained proof evidence
+
+Runtime CF-13 evidence retains exact package identity through the embedded current `CheckReport` and baseline evidence: package name, exact versions, ruleset, and archive SHA-256 values. The product report does not serialize host-local lock/cache paths.
+
+The dedicated repository proof artifact additionally MUST bind the execution to immutable repository and input provenance without granting those records runtime policy authority. It records at least:
+
+- exact commandF head SHA and tree SHA;
+- repository-relative paths and blob/content SHA identities for the governing CF-13 `spec.md`, `plan.md`, `tasks.md`, constitution, AGENTS.md, and relevant CF-05 implementation authority inspected for the proof;
+- pinned Rust/toolchain and GitHub Action identities used by the workflow;
+- dependency lockfile identity/digest;
+- exact synthetic before/after package names, versions, archive SHA-256 identities, and fixture/source-input SHA-256 values;
+- canonical baseline and suppression evidence digests;
+- final `CF13_GATE_SHA256`.
+
+No mutable branch name, local host path, timestamp, or floating dependency reference is sufficient as retained proof identity.
 
 ## Acceptance
 
@@ -243,16 +318,17 @@ CF-13 is complete only when all of the following are proven on the exact final i
 5. An exact suppression changes only disposition/gate decision, retains the full CF-05 finding plus rationale/reference evidence, and does not remove it.
 6. A stale or misspelled suppression is reported unused and cannot hide a current finding.
 7. Duplicate finding fingerprints and duplicate suppression fingerprints fail closed.
-8. Baseline package mismatch, unsupported schema/ruleset, malformed suppression schema, invalid fingerprint, and empty rationale exit `1`.
+8. Baseline package mismatch, unsupported schema/ruleset, malformed suppression schema, unsupported fingerprint schema, invalid fingerprint digest, and empty rationale exit `1`.
 9. Direction and `fail_on` semantics match CF-05 exactly, including `none`.
-10. Reordered/whitespace-different equivalent suppression and baseline JSON canonicalize deterministically where semantic ordering is irrelevant.
+10. Reordered/whitespace-different equivalent suppression and baseline JSON canonicalize deterministically, including nested object-key permutations; semantically meaningful array-order changes remain distinguishable.
 11. Repeated identical evaluation produces byte-identical report bytes.
 12. `--output` atomically replaces an existing file and emits complete output before policy-failure exit `2`.
 13. Existing `commandf check` JSON/SARIF bytes and exit semantics remain unchanged.
-14. Full workspace format, Clippy, tests, security regressions, and configured real-FHIR smoke remain green.
-15. A dedicated CF-13 deterministic proof demonstrates baseline-match, suppression-match, new-finding block, repeated-byte equality, and a clean repository.
-16. Independent review findings are dispositioned; reviewer unavailability/rate limits are recorded without invented PASS.
-17. Convergence records exact final head/tree, workflow run/job/artifact identities, deterministic proof digest, coverage limits, and explicit deferrals.
+14. Persisted report validation accepts a legitimate report and rejects forged baseline/suppressed dispositions, altered fingerprints, count mismatches, decision mismatches, unsupported fingerprint/disposition/schema values, and insufficient membership evidence deterministically.
+15. Full workspace format, Clippy, tests, security regressions, and configured real-FHIR smoke remain green.
+16. A dedicated CF-13 deterministic proof demonstrates baseline-match, suppression-match, new-finding block, repeated-byte equality, immutable repository/input provenance, and a clean repository.
+17. Independent review findings are dispositioned; reviewer unavailability/rate limits are recorded without invented PASS.
+18. Convergence records exact final head/tree, workflow run/job/artifact identities, deterministic proof digest, coverage limits, and explicit deferrals.
 
 ## Explicit deferrals / non-goals
 
