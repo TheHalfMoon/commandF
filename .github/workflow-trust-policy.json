@@ -15,6 +15,12 @@
     "require_checkout_credentials_disabled": true,
     "require_external_uses_full_sha": true
   },
+  "rationales": {
+    "cargo_locked_subcommands": "Lockfile-consuming Cargo commands must use the checked-in Cargo.lock rather than silently resolving a different dependency graph during assurance execution.",
+    "require_container_digest": "Job and service containers on proof-relevant workflows must resolve to an immutable image generation so a mutable tag cannot silently change the execution environment.",
+    "require_checkout_credentials_disabled": "Checkout must not persist the GitHub token into repository Git configuration because later steps do not require ambient repository write credentials.",
+    "require_external_uses_full_sha": "External Actions and reusable workflows must be bound to an immutable 40-hex commit so mutable tags or branches cannot change executed code without a repository diff."
+  },
   "workflows": {
     ".github/workflows/cf06-oracle.yml": {
       "jobs": {
