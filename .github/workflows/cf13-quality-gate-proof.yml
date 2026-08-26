@@ -53,7 +53,7 @@ jobs:
       - name: Prove CF-13 CLI contract and deterministic evidence
         run: |
           set -euo pipefail
-          cargo test --locked -p commandf --test gate_behavior --test gate_exit_contract
+          cargo test --locked -p commandf --test gate_behavior_v1 --test gate_exit_contract
           cargo test --locked -p commandf --test gate_determinism_proof -- --nocapture --test-threads=1 \
             | tee /tmp/cf13-quality-gate-proof.log
           grep -oE 'CF13_(GATE|BASELINE_CANONICAL|SUPPRESSION_CANONICAL|BEFORE_ARCHIVE|AFTER_ARCHIVE)_SHA256=(sha256:)?[0-9a-f]{64}' \
