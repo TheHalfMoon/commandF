@@ -33,6 +33,8 @@ CodeRabbit status                       SUCCESS / Review completed
 
 Post-merge reconciliation then established that the same six frozen CF-10 package states are representable and attested on the canonical CF-11 foundation. This completed CF-11 T012. Any later CF-10 production block is separate and remains governed by the CF-06 oracle contract.
 
+The durable six-state evidence is the retained CF-10 full-corpus reproof on PR #11 head `5fe10d9859407272acf6649fc3e868d3eb2fbd12`, whose base is canonical main `5cb1a4c3445c0ebd86654cfb467a5e008e801c3e` (the PR #13 merge commit). Run `31916124080` executed the unchanged C001/C002/C003 before+after corpus, retained exact closure evidence for all six package states, and uploaded artifact `9255732702` (`cf10-real-corpus-evidence`) with GitHub-recorded digest `sha256:9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612`. The workflow's overall conclusion is `failure` only because the separately governed production CF-06 oracle still fails operationally for C001/C002; package-state representability, closure binding, and retained evidence completed before that final enforcement failure. Artifact expiry does not change the immutable GitHub-recorded run/head/digest identity.
+
 ## Implementation identity
 
 Earlier retained implementation/proof heads remain useful provenance:
@@ -132,7 +134,7 @@ Terminology canonical ambiguity and duplicate protections are unchanged.
 
 ## CF-10 boundary
 
-The required post-merge foundation action was completed: PR #11 was reconciled onto the canonical CF-11 foundation and the same six frozen package states were rerun without replacing cases. All six package states are representable and attested.
+The required post-merge foundation action was completed: PR #11 was reconciled onto the canonical CF-11 foundation and the same six frozen package states were rerun without replacing cases. All six package states are representable and attested by CF-10 run `31916124080` / artifact `9255732702` at digest `sha256:9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612`, on PR #11 head `5fe10d9859407272acf6649fc3e868d3eb2fbd12` based on CF-11 merge commit `5cb1a4c3445c0ebd86654cfb467a5e008e801c3e`.
 
 That result closes CF-11 foundation work only. CF-10's later production gate remains independently blocked by the current CF-06 production oracle contract for C001/C002. CF-11 does not authorize changing that oracle identity or reinterpreting those failures.
 
@@ -152,4 +154,4 @@ Recent research/donor inputs — CPGPrompt, PathWISE, and `reason-healthcare/rh-
 
 ## Closure rule
 
-CF-11 is closed canonical because the final reviewed candidate passed all configured CF-11 gates, PR #13 merged, and the required post-merge same-six-state CF-10 eligibility rerun completed. Any future regression in exact package identity, deterministic semantic lock ordering, digest/provenance retention, or fail-closed name-only ambiguity reopens the relevant foundation behavior as a new issue rather than retroactively changing this closeout record.
+CF-11 is closed canonical because the final reviewed candidate passed all configured CF-11 gates, PR #13 merged, and the required post-merge same-six-state CF-10 eligibility rerun completed with immutable run/head/artifact-digest identity recorded above. Any future regression in exact package identity, deterministic semantic lock ordering, digest/provenance retention, or fail-closed name-only ambiguity reopens the relevant foundation behavior as a new issue rather than retroactively changing this closeout record.
