@@ -61,12 +61,7 @@ fn write_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
                 &before_subject_sha,
                 before_dependencies,
             ),
-            locked_package(
-                "acme.shared",
-                "1.0.0",
-                &before_shared_sha,
-                BTreeMap::new(),
-            ),
+            locked_package("acme.shared", "1.0.0", &before_shared_sha, BTreeMap::new()),
         ],
         vec![ResolvedDependency {
             from_name: "acme.subject".to_owned(),
@@ -85,12 +80,7 @@ fn write_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
                 &after_subject_sha,
                 after_dependencies,
             ),
-            locked_package(
-                "acme.shared",
-                "2.0.0",
-                &after_shared_sha,
-                BTreeMap::new(),
-            ),
+            locked_package("acme.shared", "2.0.0", &after_shared_sha, BTreeMap::new()),
         ],
         vec![ResolvedDependency {
             from_name: "acme.subject".to_owned(),
