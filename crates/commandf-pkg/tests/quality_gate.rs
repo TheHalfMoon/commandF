@@ -132,8 +132,7 @@ fn baseline_membership_is_non_blocking_across_package_versions() {
 fn exact_suppression_precedes_baseline_and_unused_suppressions_are_retained() {
     let baseline = check(vec![breaking()], "0.8.0", "0.9.0", default_policy());
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint =
-        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let unused = FindingFingerprint {
         schema: FindingFingerprint::SCHEMA_V1,
         digest: format!("sha256:{}", "c".repeat(64)),
@@ -330,8 +329,7 @@ fn baseline_canonical_digest_is_invariant_to_nested_object_key_order() {
 #[test]
 fn suppression_order_is_canonical_and_report_bytes_are_repeatable() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let current_fp =
-        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let current_fp = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let unused_fp = FindingFingerprint {
         schema: 1,
         digest: format!("sha256:{}", "d".repeat(64)),
@@ -383,8 +381,7 @@ fn suppression_order_is_canonical_and_report_bytes_are_repeatable() {
 #[test]
 fn invalid_or_ambiguous_suppression_state_fails_closed() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint =
-        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
 
     let unsupported = GateSuppressions {
         schema: 1,
@@ -543,8 +540,7 @@ fn persisted_report_validation_rejects_missing_baseline_membership() {
 #[test]
 fn persisted_report_validation_rejects_suppression_metadata_tampering() {
     let current = check(vec![breaking()], "1.0.0", "1.1.0", default_policy());
-    let fingerprint =
-        finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
+    let fingerprint = finding_fingerprint_v1(CompatibilityReport::RULESET_V1, &breaking()).unwrap();
     let suppressions = GateSuppressions {
         schema: 1,
         suppressions: vec![GateSuppression {
