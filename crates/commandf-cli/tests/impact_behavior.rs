@@ -61,7 +61,10 @@ fn impact_is_byte_identical_and_reports_dependency_evidence_without_severity() {
         assert!(json.contains(expected), "missing {expected}");
     }
     for forbidden in ["\"breaking\"", "\"risky\"", "\"additive\""] {
-        assert!(!json.contains(forbidden), "impact invented severity: {forbidden}");
+        assert!(
+            !json.contains(forbidden),
+            "impact invented severity: {forbidden}"
+        );
     }
 
     let _ = fs::remove_dir_all(root);
@@ -131,12 +134,7 @@ fn write_impact_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
                 &before_subject_sha,
                 before_dependencies,
             ),
-            locked_package(
-                "acme.shared",
-                "1.0.0",
-                &before_shared_sha,
-                BTreeMap::new(),
-            ),
+            locked_package("acme.shared", "1.0.0", &before_shared_sha, BTreeMap::new()),
         ],
         vec![ResolvedDependency {
             from_name: "acme.subject".to_owned(),
@@ -155,12 +153,7 @@ fn write_impact_state(root: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
                 &after_subject_sha,
                 after_dependencies,
             ),
-            locked_package(
-                "acme.shared",
-                "2.0.0",
-                &after_shared_sha,
-                BTreeMap::new(),
-            ),
+            locked_package("acme.shared", "2.0.0", &after_shared_sha, BTreeMap::new()),
         ],
         vec![ResolvedDependency {
             from_name: "acme.subject".to_owned(),
