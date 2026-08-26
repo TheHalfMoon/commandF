@@ -17,14 +17,14 @@ Reasons:
 1. CF-05 JSON/SARIF and exit behavior are already shipped evidence contracts and should remain byte/behavior stable.
 2. New-change-first adoption is a separate policy layer over a valid CF-05 current report, not a reinterpretation of compatibility semantics.
 3. A separate report schema can preserve baseline/suppression provenance without version-bumping CF-05.
-4. `gate` can reuse existing two-state loading/classification/check APIs and existing atomic output plumbing without duplicating semantic engines.
+4. `gate` can reuse existing two-state loading/classification/check APIs and existing atomic-output plumbing without duplicating semantic engines.
 
 ## Proposed implementation surface
 
 Expected library modules in `commandf-pkg`:
 
-- `gate_model.rs` — public V1 schema, suppression schema, dispositions, decisions, evidence;
-- `gate.rs` — validation, fingerprinting, canonicalization, baseline/suppression matching, gate evaluation;
+- `gate_model.rs` — public V1 schema, explicit-version fingerprint identity, suppression schema, dispositions, decisions, evidence;
+- `gate.rs` — validation, recursive canonicalization, fingerprinting, baseline/suppression matching, gate evaluation;
 - `gate_error.rs` — bounded typed failures;
 - `lib.rs` exports.
 
@@ -36,7 +36,7 @@ Expected CLI surface:
 Expected proof surface:
 
 - `.github/workflows/cf13-quality-gate-proof.yml` with complete path filters for the CF-13 implementation/test/spec surface;
-- retained deterministic evidence artifact containing a report digest and fixture/input identity.
+- retained deterministic evidence artifact containing report/input/provenance identities and `CF13_GATE_SHA256`.
 
 No new dependency is expected. `sha2`, `serde`, `serde_json`, and existing atomic-output infrastructure are already direct dependencies/available plumbing.
 
@@ -54,6 +54,8 @@ The CLI follows the current `check` path:
 
 No CF-13 function classifies compatibility itself.
 
+The embedded current `CheckReport` remains the current package-evidence authority and already retains package name, exact before/after versions, archive SHA-256 values, ruleset, findings, policy, and decision. CF-13 must not substitute host-local paths for those identities.
+
 ### 2. Validate baseline authority
 
 When a baseline is provided:
@@ -64,34 +66,52 @@ When a baseline is provided:
 - require exact current/baseline package-name equality;
 - require exact current/baseline CF-04 ruleset equality;
 - compute V1 fingerprints for all baseline findings;
-- reject duplicate baseline fingerprints.
+- reject duplicate baseline fingerprints;
+- retain baseline before/after `PackageEvidence` and the complete sorted unique baseline fingerprint membership set in CF-13 output.
 
 Baseline direction/fail-on metadata is retained by the baseline artifact but ignored for matching. Only validated compatibility findings constitute baseline evidence.
 
-### 3. Canonical fingerprint key
+### 3. Explicit-version canonical fingerprint identity
 
-Add a private/publicly testable commandF-owned key struct with a fixed field order and explicit fingerprint schema version.
+Add a commandF-owned persisted fingerprint identity:
 
-Fields are exactly those frozen in `spec.md`: ruleset, rule/severity/direction/source-kind/resource, optional filenames/view/element/field, and before/after values. The message is omitted.
+```text
+FindingFingerprint {
+  schema: 1,
+  digest: "sha256:<64 lowercase hex>"
+}
+```
 
-Serialize the key deterministically with `serde_json::to_vec`, hash with `sha2::Sha256`, and format lowercase as `sha256:<hex>`.
+The V1 hash preimage uses a fixed field order and includes the fingerprint schema plus exactly the semantic fields frozen in `spec.md`: ruleset, rule/severity/direction/source-kind/resource, optional filenames/view/element/field, and before/after values. The message is omitted.
 
-`serde_json::Value` object-key determinism must not be assumed accidentally. Before/after JSON values MUST be recursively canonicalized into deterministic object-key order before fingerprint serialization. Arrays preserve their semantic order.
+Before serialization, recursively canonicalize every JSON object in `before`/`after` by lexicographically sorting keys at every depth. Arrays preserve order. Serialize the fixed key structure deterministically, hash with `sha2::Sha256`, and format the digest lowercase.
 
-Tests must prove object-key permutations yield the same fingerprint while semantically meaningful array order changes remain distinguishable.
+Every persisted baseline member, suppression selector, current-finding identity, and unused-suppression identity carries `schema: 1` explicitly. Validation rejects unsupported fingerprint schemas before digest comparison. Cross-version fingerprints are never compared as equal merely because their digest strings match.
+
+Tests must prove:
+
+- nested object-key permutations yield the same V1 fingerprint;
+- semantically meaningful array-order changes yield a different fingerprint;
+- unsupported fingerprint versions fail closed;
+- message-only changes preserve identity while all frozen semantic/evidence fields remain identity-bearing.
 
 ### 4. Suppression model
 
 Public V1 suppression structures:
 
 ```text
+FindingFingerprint {
+  schema: 1,
+  digest: "sha256:<64 lowercase hex>"
+}
+
 GateSuppressions {
   schema: 1,
   suppressions: Vec<GateSuppression>
 }
 
 GateSuppression {
-  finding_fingerprint: String,
+  finding_fingerprint: FindingFingerprint,
   rationale: String,
   reference: Option<String>
 }
@@ -99,52 +119,74 @@ GateSuppression {
 
 Validation:
 
-- exact schema 1;
+- exact suppression schema 1;
+- exact fingerprint schema 1;
 - bounded entry count and bounded individual string lengths;
-- exact `sha256:` + 64 lowercase hexadecimal syntax;
+- exact `sha256:` + 64 lowercase hexadecimal digest syntax;
 - trimmed rationale non-empty;
-- duplicate fingerprint rejected.
+- duplicate same-version fingerprint rejected.
 
 The implementation should choose explicit conservative V1 bounds and expose them as named constants so boundary tests can prove acceptance/rejection. No regex crate is required.
 
-Canonical suppression evidence is produced by sorting entries by fingerprint for digest/output metadata. User input order has no policy meaning.
+Canonical suppression evidence is produced by sorting entries by `(fingerprint.schema, fingerprint.digest)` for digest/output metadata. User input order has no policy meaning.
 
-### 5. Baseline canonical evidence digest
+### 5. Baseline canonical evidence and membership
 
-Canonicalize the parsed baseline report using its existing `to_json_bytes()` after validation. Because the embedded compatibility findings already have deterministic ordering, compute SHA-256 over those canonical bytes.
+Do **not** hash `CheckReport::to_json_bytes()` directly as the canonical baseline identity. Nested `serde_json::Value` object insertion order is not an accepted source of evidence identity.
 
-Record a baseline evidence object containing at least:
+Define one `canonical_json_bytes` helper for CF-13 semantic evidence:
+
+1. serialize the already validated typed value to `serde_json::Value`;
+2. recursively rebuild every JSON object with lexicographically sorted keys at every depth;
+3. preserve array order exactly;
+4. serialize with one fixed compact or otherwise fixed commandF-owned JSON encoding;
+5. append no environment-dependent data.
+
+Compute the baseline SHA-256 over those canonical bytes.
+
+`QualityGateBaselineEvidence` V1 contains at least:
 
 - canonical SHA-256;
+- fingerprint schema 1;
 - package name;
 - ruleset;
-- finding count.
+- exact before `PackageEvidence` (`version`, `archive_sha256`);
+- exact after `PackageEvidence` (`version`, `archive_sha256`);
+- finding count;
+- complete lexicographically sorted unique `Vec<FindingFingerprint>` membership.
 
-Do not retain the local input path in machine-readable output.
+This membership is authoritative for validating a persisted `baseline` disposition. The digest is evidence binding, not a substitute for unseen membership.
 
-### 6. Suppression canonical evidence digest
+Do not retain the local baseline input path in machine-readable output.
 
-After validation and deterministic sorting, serialize the normalized suppression object through a fixed canonical structure and hash it. Record:
+### 6. Suppression canonical evidence and membership
+
+After validation and deterministic sorting, recursively canonicalize and serialize the normalized suppression object using the same fixed canonical JSON rules, then hash it.
+
+`QualityGateSuppressionEvidence` V1 contains at least:
 
 - canonical SHA-256;
-- entry count.
+- suppression schema 1;
+- fingerprint schema 1;
+- entry count;
+- normalized complete suppression entries, or an equivalent complete membership structure that retains each exact fingerprint plus rationale/reference and is sufficient to validate every `suppressed` disposition and `unused` fingerprint.
 
-Do not retain local paths.
+Do not retain local suppression paths.
 
 ### 7. Current finding uniqueness
 
-Compute each current finding fingerprint in CF-04 order. Reject duplicate fingerprints as ambiguous.
+Compute each current finding V1 fingerprint in CF-04 order. Reject duplicate same-version fingerprints as ambiguous.
 
-This is intentionally stricter than silently deduplicating compatibility evidence. If CF-04 ever produces byte-identical semantic findings twice, the quality gate refuses to guess whether one accepted baseline/suppression identity should cover one or both occurrences.
+This is intentionally stricter than silently deduplicating compatibility evidence. If CF-04 ever produces semantically identical findings twice, the quality gate refuses to guess whether one accepted baseline/suppression identity should cover one or both occurrences.
 
 ### 8. Disposition algorithm
 
-Build maps keyed by fingerprint only after uniqueness validation.
+Build maps keyed by the complete supported-version fingerprint identity only after uniqueness validation.
 
 For each current finding in original deterministic CF-04 order:
 
-1. if suppression exists -> `suppressed` and attach its rationale/reference;
-2. else if baseline contains fingerprint -> `baseline`;
+1. if a same-version suppression exists -> `suppressed` and attach its rationale/reference;
+2. else if retained baseline membership contains the same-version fingerprint -> `baseline`;
 3. else -> `new`.
 
 Track suppression fingerprints that never matched a current finding as deterministic sorted `unused_suppressions`.
@@ -169,6 +211,7 @@ Prefer reusing the current `CheckReport.decision` for total/selected severity co
 Expected V1 structures:
 
 ```text
+FindingFingerprint
 QualityGateReport
 QualityGateDecision
 QualityGateFinding
@@ -179,28 +222,34 @@ GateSuppressions
 GateSuppression
 ```
 
-`QualityGateReport` embeds the complete current `CheckReport` unchanged and includes the current CF-05 policy explicitly or via that embedded report. Per-finding gate evidence carries fingerprint/disposition and matched suppression metadata.
+`QualityGateReport` embeds the complete current `CheckReport` unchanged and includes the current CF-05 policy explicitly or via that embedded report. Per-finding gate evidence carries explicit-version fingerprint/disposition and matched suppression metadata.
 
 Output order:
 
 - current findings: original CF-04 order;
-- unused suppressions: lexicographic fingerprint order;
-- suppression normalization/digest: lexicographic fingerprint order.
+- baseline membership: lexicographic `(schema, digest)` order;
+- unused suppressions: lexicographic `(schema, digest)` order;
+- normalized suppression evidence: lexicographic `(schema, digest)` order.
 
 ### 11. Validation API
 
-Provide a `validate_quality_gate_report` function that recomputes the gate from embedded current evidence and normalized baseline/suppression evidence where enough source content is present, or otherwise validates all internal invariants deterministically.
+Provide `validate_quality_gate_report` as a true persisted-evidence validator rather than a partial invariant checker.
 
-If the report does not embed the full baseline report/suppression source, validation MUST still verify:
+V1 report evidence is deliberately sufficient to revalidate all disposition authority without an external baseline/suppression file. Validation MUST:
 
-- current CheckReport validity;
-- unique current fingerprints;
-- per-finding fingerprints match recomputation;
-- disposition/count consistency;
-- suppression evidence syntax and unique matched identities;
-- decision consistency with current policy/dispositions.
+- validate the embedded current `CheckReport`;
+- validate supported report, suppression, and fingerprint schemas;
+- recompute every current V1 fingerprint from the embedded current finding;
+- verify unique current identities;
+- verify baseline evidence package/ruleset/before/after identity syntax, canonical digest syntax, count, uniqueness, ordering, and membership set;
+- verify suppression evidence canonical digest syntax, count, uniqueness, ordering, rationale/reference bounds, and complete membership;
+- require every `baseline` disposition to have an exact member in retained baseline evidence;
+- require every `suppressed` disposition and attached suppression metadata to match retained suppression evidence;
+- recompute `unused_suppressions` from retained suppression membership and current identities;
+- recompute all disposition and decision counts from embedded current evidence plus retained memberships;
+- reject altered fingerprints, forged dispositions, count mismatches, decision mismatches, unknown values, and insufficient membership evidence.
 
-Do not claim the digest alone proves unseen external content.
+The validator does not claim that a digest proves unseen content; it validates the content that the report actually retains and its self-binding invariants.
 
 ## CLI architecture
 
@@ -227,13 +276,41 @@ V1 JSON only. SARIF remains the complete CF-05 artifact and is not filtered by b
 - no arbitrary expressions/scripts;
 - bounded baseline and suppression input bytes;
 - bounded suppression entry count and string lengths;
-- no path values serialized into reports;
+- no host-local path values serialized into reports;
 - existing sanitized runtime diagnostics retained;
 - no PHI/instance fixtures;
 - no external tracker lookup for suppression references;
 - no current-time evaluation.
 
 A suppression is explicit local policy evidence, not proof that a finding is safe.
+
+## Immutable authority and provenance binding
+
+Runtime product evidence and repository proof evidence have different scopes and must both be explicit.
+
+### Runtime product evidence
+
+The CF-13 report retains:
+
+- current package name and exact before/after package versions/archive SHA-256 values through the embedded CF-05 report;
+- baseline package name, ruleset, exact before/after versions/archive SHA-256 values, canonical baseline digest, and full baseline membership;
+- canonical suppression digest and complete normalized suppression membership;
+- no host-local lock/cache/baseline/suppression paths.
+
+### Repository proof evidence
+
+The dedicated proof artifact must bind its result to immutable development/runtime authorities by recording:
+
+- commandF exact head SHA and tree SHA;
+- repository-relative path plus blob/content SHA for `spec.md`, `plan.md`, `tasks.md`, `.specify/memory/constitution.md`, `AGENTS.md`, and the relevant CF-05/CF-04 source files consumed as implementation authority;
+- pinned Rust toolchain version and immutable GitHub Action refs used by the proof workflow;
+- `Cargo.lock` repository path plus blob/content SHA and a SHA-256 digest of its exact proof-head bytes;
+- exact synthetic source fixture paths relative to the repository/workflow staging root plus SHA-256 content digests;
+- exact before/after package name/version/archive SHA-256 identities produced from those fixtures;
+- baseline/suppression canonical evidence digests;
+- final report digest `CF13_GATE_SHA256`.
+
+Repository-relative paths identify which governed inputs were inspected; immutable SHAs/digests establish identity. Mutable branch names, local absolute paths, timestamps, and floating dependency/action references are insufficient proof identity.
 
 ## Compatibility / migration impact
 
@@ -257,28 +334,38 @@ A suppression is explicit local policy evidence, not proof that a finding is saf
 - producer/consumer/both parity;
 - unused suppression retained;
 - empty baseline/no suppressions;
-- baseline with different package versions but same package name.
+- baseline with different package versions but same package name;
+- legitimate serialized gate report validates successfully.
 
 ### Library negative/counterexample cases
 
 - severity change invalidates baseline match;
 - direction/rule/source-kind/resource/evidence changes invalidate match;
 - message-only change preserves fingerprint;
-- malformed/uppercase/short fingerprint rejected;
+- malformed/uppercase/short digest rejected;
+- unsupported fingerprint schema rejected before matching;
 - empty rationale rejected;
 - duplicate suppressions rejected;
 - duplicate current/baseline fingerprints rejected;
 - invalid baseline check schema/decision/ruleset rejected;
 - baseline package mismatch rejected;
 - unsupported suppression schema rejected;
-- input/string/count bounds rejected.
+- input/string/count bounds rejected;
+- forged `baseline` disposition absent from retained membership rejected;
+- forged `suppressed` disposition or altered rationale/reference rejected;
+- altered persisted current fingerprint rejected;
+- baseline/suppression membership count mismatch rejected;
+- gate decision/count mismatch rejected;
+- unknown disposition/report/fingerprint schema values rejected.
 
 ### Determinism
 
 - repeated report bytes equal;
-- baseline whitespace/key-order variants canonicalize to same baseline digest where parsed semantics are identical;
-- suppression entry order/key-order variants canonicalize to same suppression digest;
-- fingerprint JSON object-key permutations equal;
+- baseline whitespace/top-level/nested-object-key variants canonicalize to the same baseline digest when parsed semantics are identical;
+- array order remains identity-bearing in baseline/fingerprint evidence;
+- suppression entry order/key-order variants canonicalize to the same suppression digest;
+- fingerprint nested JSON object-key permutations equal;
+- validation returns the same accepted/rejected result and bounded error classification for repeated identical persisted inputs;
 - output remains stable under deterministic fixture repetition.
 
 ### CLI
@@ -289,6 +376,7 @@ A suppression is explicit local policy evidence, not proof that a finding is saf
 - matching suppression exit 0;
 - stale suppression still exit 2 when current blocker is new;
 - malformed baseline/suppression exit 1;
+- unsupported fingerprint schema exit 1;
 - gate parse failure exit 1;
 - output atomic replace on pass/fail;
 - existing `check` behavior regressions unchanged.
@@ -309,15 +397,18 @@ Add `cf13-quality-gate-proof` only in the implementation stack after the library
 The proof must use pinned runner/toolchain/action identities consistent with repository policy and must:
 
 1. create deterministic local synthetic package states without network acquisition;
-2. produce a baseline/current scenario with one accepted old finding and one genuinely new finding;
-3. prove the baseline finding does not block;
-4. prove the new finding blocks under the selected policy;
-5. add an exact suppression and prove only that fingerprint becomes suppressed;
-6. execute the same final gate twice and compare bytes;
-7. emit a SHA-256 identity artifact;
-8. assert the repository remains clean.
+2. record exact fixture/source-input SHA-256 values and resulting package name/version/archive SHA-256 identities;
+3. produce a baseline/current scenario with one accepted old finding and one genuinely new finding;
+4. prove the baseline finding does not block and its disposition validates against retained membership;
+5. prove the new finding blocks under the selected policy;
+6. add an exact suppression and prove only that explicit-version fingerprint becomes suppressed;
+7. validate the persisted final report, including retained baseline/suppression membership;
+8. execute the same final gate twice and compare bytes;
+9. record exact head/tree, governed repository paths with immutable blob/content identities, toolchain/action refs, and dependency lock identity;
+10. emit a retained deterministic evidence artifact containing those identities plus `CF13_GATE_SHA256`;
+11. assert the repository remains clean.
 
-Proof output must not contain timestamps/random ids/host paths.
+Proof output must not contain timestamps/random ids/host absolute paths.
 
 ## Delivery stacks
 
@@ -334,7 +425,7 @@ No production code in planning PR.
 
 ### Stack A — library
 
-Implement fingerprint, baseline/suppression models/validation, gate evaluator, deterministic report, and library contract tests. No CLI yet.
+Implement explicit-version fingerprint identity, canonicalization, baseline/suppression models/validation, membership-bearing evidence, gate evaluator, deterministic/revalidatable report, and library contract/tamper tests. No CLI yet.
 
 ### Stack B — CLI + proof
 
