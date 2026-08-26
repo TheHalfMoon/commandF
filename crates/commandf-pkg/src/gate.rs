@@ -76,7 +76,13 @@ pub fn evaluate_quality_gate(
 
     let baseline_members = baseline_evidence
         .as_ref()
-        .map(|evidence| evidence.fingerprints.iter().cloned().collect::<BTreeSet<_>>())
+        .map(|evidence| {
+            evidence
+                .fingerprints
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        })
         .unwrap_or_default();
     let suppression_map = suppression_evidence
         .as_ref()
@@ -152,22 +158,27 @@ pub fn validate_quality_gate_report(report: &QualityGateReport) -> Result<(), Qu
     };
 
     if report.findings.len() != current_fingerprints.len() {
-        return Err(inconsistent("finding count does not match current CF-05 evidence"));
+        return Err(inconsistent(
+            "finding count does not match current CF-05 evidence",
+        ));
     }
 
-    for (index, ((gate_finding, current_fingerprint), _current_finding)) in report
+    for (index, (gate_finding, current_fingerprint)) in report
         .findings
         .iter()
         .zip(current_fingerprints.iter())
-        .zip(report.current.compatibility.findings.iter())
         .enumerate()
     {
         if gate_finding.finding_index != index {
-            return Err(inconsistent("finding_index does not match current finding order"));
+            return Err(inconsistent(
+                "finding_index does not match current finding order",
+            ));
         }
         validate_fingerprint(&gate_finding.fingerprint)?;
         if &gate_finding.fingerprint != current_fingerprint {
-            return Err(inconsistent("persisted finding fingerprint does not match current evidence"));
+            return Err(inconsistent(
+                "persisted finding fingerprint does not match current evidence",
+            ));
         }
 
         let expected_suppression = suppression_map.get(current_fingerprint);
@@ -179,9 +190,14 @@ pub fn validate_quality_gate_report(report: &QualityGateReport) -> Result<(), Qu
             QualityGateDisposition::New
         };
         if gate_finding.disposition != expected_disposition {
-            return Err(inconsistent("finding disposition does not match retained membership evidence"));
+            return Err(inconsistent(
+                "finding disposition does not match retained membership evidence",
+            ));
         }
-        match (expected_suppression, gate_finding.matched_suppression.as_ref()) {
+        match (
+            expected_suppression,
+            gate_finding.matched_suppression.as_ref(),
+        ) {
             (Some(expected), Some(found)) if expected == found => {}
             (None, None) => {}
             _ => {
@@ -202,13 +218,17 @@ pub fn validate_quality_gate_report(report: &QualityGateReport) -> Result<(), Qu
         validate_fingerprint(fingerprint)?;
     }
     if report.unused_suppressions != expected_unused {
-        return Err(inconsistent("unused suppressions do not match retained suppression evidence"));
+        return Err(inconsistent(
+            "unused suppressions do not match retained suppression evidence",
+        ));
     }
 
     let expected_decision =
         build_quality_gate_decision(&report.current, &report.findings, expected_unused.len());
     if report.decision != expected_decision {
-        return Err(inconsistent("quality-gate decision does not match current policy and dispositions"));
+        return Err(inconsistent(
+            "quality-gate decision does not match current policy and dispositions",
+        ));
     }
     Ok(())
 }
@@ -314,15 +334,24 @@ fn validate_baseline_evidence(
     validate_raw_sha256(&evidence.before.archive_sha256)?;
     validate_raw_sha256(&evidence.after.archive_sha256)?;
     if evidence.package_name != current.compatibility.package_name {
-        return Err(inconsistent("baseline evidence package does not match current package"));
+        return Err(inconsistent(
+            "baseline evidence package does not match current package",
+        ));
     }
     if evidence.ruleset != current.compatibility.ruleset {
-        return Err(inconsistent("baseline evidence ruleset does not match current ruleset"));
+        return Err(inconsistent(
+            "baseline evidence ruleset does not match current ruleset",
+        ));
     }
     if evidence.finding_count != evidence.fingerprints.len() {
-        return Err(inconsistent("baseline evidence finding count is inconsistent"));
+        return Err(inconsistent(
+            "baseline evidence finding count is inconsistent",
+        ));
     }
-    validate_sorted_unique_fingerprints(&evidence.fingerprints, "baseline fingerprints are not sorted and unique")?;
+    validate_sorted_unique_fingerprints(
+        &evidence.fingerprints,
+        "baseline fingerprints are not sorted and unique",
+    )?;
     Ok(evidence.fingerprints.iter().cloned().collect())
 }
 
@@ -343,7 +372,9 @@ fn validate_suppression_evidence(
     }
     validate_sha256_identity(&evidence.canonical_sha256)?;
     if evidence.entry_count != evidence.suppressions.len() {
-        return Err(inconsistent("suppression evidence entry count is inconsistent"));
+        return Err(inconsistent(
+            "suppression evidence entry count is inconsistent",
+        ));
     }
     if evidence.suppressions.len() > MAX_GATE_SUPPRESSIONS {
         return Err(QualityGateError::TooManySuppressions {
@@ -358,14 +389,13 @@ fn validate_suppression_evidence(
         validate_suppression(suppression)?;
         if let Some(previous) = previous {
             if previous >= &suppression.finding_fingerprint {
-                return Err(inconsistent("suppression evidence is not sorted and unique"));
+                return Err(inconsistent(
+                    "suppression evidence is not sorted and unique",
+                ));
             }
         }
         previous = Some(&suppression.finding_fingerprint);
-        map.insert(
-            suppression.finding_fingerprint.clone(),
-            suppression.clone(),
-        );
+        map.insert(suppression.finding_fingerprint.clone(), suppression.clone());
     }
 
     let normalized_input = GateSuppressions {
@@ -374,12 +404,16 @@ fn validate_suppression_evidence(
     };
     let expected_digest = sha256_identity(&canonical_json_bytes(&normalized_input)?);
     if evidence.canonical_sha256 != expected_digest {
-        return Err(inconsistent("suppression canonical digest does not match retained evidence"));
+        return Err(inconsistent(
+            "suppression canonical digest does not match retained evidence",
+        ));
     }
     Ok(map)
 }
 
-fn current_fingerprints(current: &CheckReport) -> Result<Vec<FindingFingerprint>, QualityGateError> {
+fn current_fingerprints(
+    current: &CheckReport,
+) -> Result<Vec<FindingFingerprint>, QualityGateError> {
     let mut seen = BTreeSet::new();
     let mut fingerprints = Vec::with_capacity(current.compatibility.findings.len());
     for finding in &current.compatibility.findings {
@@ -546,12 +580,9 @@ fn canonicalize_json_value(value: Value) -> Value {
             }
             Value::Object(canonical)
         }
-        Value::Array(values) => Value::Array(
-            values
-                .into_iter()
-                .map(canonicalize_json_value)
-                .collect(),
-        ),
+        Value::Array(values) => {
+            Value::Array(values.into_iter().map(canonicalize_json_value).collect())
+        }
         scalar => scalar,
     }
 }
