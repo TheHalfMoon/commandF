@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{CheckReport, PackageEvidence};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FindingFingerprint {
     pub schema: u32,
     pub digest: String,
@@ -13,6 +14,7 @@ impl FindingFingerprint {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GateSuppression {
     pub finding_fingerprint: FindingFingerprint,
     pub rationale: String,
@@ -21,6 +23,7 @@ pub struct GateSuppression {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GateSuppressions {
     pub schema: u32,
     pub suppressions: Vec<GateSuppression>,
@@ -49,6 +52,7 @@ pub enum QualityGateDisposition {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityGateFinding {
     pub finding_index: usize,
     pub fingerprint: FindingFingerprint,
@@ -58,6 +62,7 @@ pub struct QualityGateFinding {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityGateBaselineEvidence {
     pub canonical_sha256: String,
     pub fingerprint_schema: u32,
@@ -70,6 +75,7 @@ pub struct QualityGateBaselineEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityGateSuppressionEvidence {
     pub canonical_sha256: String,
     pub schema: u32,
@@ -79,6 +85,7 @@ pub struct QualityGateSuppressionEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityGateDecision {
     pub passed: bool,
     pub total_findings: usize,
@@ -94,6 +101,7 @@ pub struct QualityGateDecision {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityGateReport {
     pub schema: u32,
     pub current: CheckReport,
