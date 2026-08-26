@@ -269,6 +269,26 @@ runs:
         result = self.run_repo(workflow)
         self.assertIn("cargo_unlocked", self.codes(result))
 
+    def test_multiline_locked_cargo_command_is_accepted(self) -> None:
+        workflow = valid_workflow().replace(
+            "        run: cargo test --locked --workspace",
+            "        run: |\n          cargo test \\\n            --locked --workspace",
+        )
+        result = self.run_repo(workflow)
+        self.assertTrue(result["ok"], result)
+
+    def test_later_locked_cargo_command_cannot_mask_unlocked_command(self) -> None:
+        workflow = valid_workflow().replace(
+            "cargo test --locked --workspace",
+            "cargo test --workspace && cargo test --locked -p commandf-pkg",
+        )
+        result = self.run_repo(workflow)
+        cargo_findings = [
+            finding for finding in result["findings"] if finding["code"] == "cargo_unlocked"
+        ]
+        self.assertEqual(len(cargo_findings), 1, result)
+        self.assertIn("cargo test --workspace", cargo_findings[0]["detail"])
+
     def test_malformed_workflow_fails_closed(self) -> None:
         result = self.run_repo("name: broken\n\tjobs:\n")
         self.assertIn("malformed_yaml", self.codes(result))
