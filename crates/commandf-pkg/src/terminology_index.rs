@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 
 use serde_json::Value;
 
@@ -32,15 +31,20 @@ impl TerminologyClosure {
         lockfile: &Lockfile,
         cache: &PackageCache,
     ) -> Result<Self, TerminologyError> {
-        lockfile.verify_cache(cache)?;
+        Self::load_with_reader(lockfile, |sha256| cache.read_verified(sha256))
+    }
+
+    fn load_with_reader<F>(
+        lockfile: &Lockfile,
+        mut read_verified: F,
+    ) -> Result<Self, TerminologyError>
+    where
+        F: FnMut(&str) -> Result<Vec<u8>, PackageError>,
+    {
         let mut closure = Self::default();
 
         for package in &lockfile.packages {
-            let path = cache
-                .root()
-                .join("sha256")
-                .join(format!("{}.tgz", package.sha256));
-            let bytes = fs::read(path).map_err(PackageError::Io)?;
+            let bytes = read_verified(&package.sha256)?;
             let manifest = read_manifest(&bytes)?;
             if manifest.name != package.name || manifest.version != package.version {
                 return Err(TerminologyError::InvalidField {
@@ -196,7 +200,32 @@ fn location(resource: &TerminologyResource) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::collections::BTreeMap;
+    use std::io::Cursor;
+
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use tar::{Builder, Header};
+
     use super::*;
+    use crate::LockedPackage;
+
+    fn manifest_only_archive() -> Vec<u8> {
+        let body = br#"{"name":"example.term","version":"1.0.0","dependencies":{}}"#;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        {
+            let mut builder = Builder::new(&mut encoder);
+            let mut header = Header::new_gnu();
+            header.set_path("package/package.json").unwrap();
+            header.set_size(body.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append(&header, Cursor::new(body)).unwrap();
+            builder.finish().unwrap();
+        }
+        encoder.finish().unwrap()
+    }
 
     #[test]
     fn canonical_reference_parser_is_exact_and_fail_closed() {
@@ -214,5 +243,35 @@ mod tests {
                 Err(TerminologyError::MalformedCanonical { .. })
             ));
         }
+    }
+
+    #[test]
+    fn closure_consumes_each_archive_from_verified_reader_once() {
+        let archive = manifest_only_archive();
+        let digest = "a".repeat(64);
+        let lockfile = Lockfile::new(
+            vec!["example.term@1.0.0".to_owned()],
+            vec![LockedPackage {
+                name: "example.term".to_owned(),
+                version: "1.0.0".to_owned(),
+                sha256: digest.clone(),
+                source: "fixture".to_owned(),
+                dependencies: BTreeMap::new(),
+            }],
+        );
+        let calls = Cell::new(0_u32);
+
+        let closure = TerminologyClosure::load_with_reader(&lockfile, |requested| {
+            assert_eq!(requested, digest);
+            calls.set(calls.get() + 1);
+            Ok(archive.clone())
+        })
+        .unwrap();
+
+        assert_eq!(calls.get(), 1);
+        assert!(closure
+            .resolve_value_set("http://example.org/ValueSet/missing")
+            .unwrap()
+            .is_none());
     }
 }
