@@ -273,8 +273,11 @@ fn exact_suppression_passes_and_stale_suppression_does_not_hide_blocker() {
             .iter()
             .enumerate()
             .map(|(index, finding)| GateSuppression {
-                finding_fingerprint: finding_fingerprint_v1(&current.compatibility.ruleset, finding)
-                    .expect("fingerprint"),
+                finding_fingerprint: finding_fingerprint_v1(
+                    &current.compatibility.ruleset,
+                    finding,
+                )
+                .expect("fingerprint"),
                 rationale: "approved interoperability exception".to_owned(),
                 reference: Some(format!("TEST-{}", index + 1)),
             })
