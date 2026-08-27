@@ -44,6 +44,26 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
         findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
         self.assertIn("unsupported_shell_heredoc", codes(findings))
 
+    def test_env_wrapped_bash_heredoc_is_executable_authority(self) -> None:
+        script = "env bash <<'EOF'\ncargo test --workspace\nEOF"
+        findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
+        self.assertIn("unsupported_shell_heredoc", codes(findings))
+
+    def test_env_option_wrapped_bash_heredoc_fails_closed(self) -> None:
+        script = "env -u UNUSED bash <<'EOF'\ncargo test --workspace\nEOF"
+        findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
+        self.assertIn("unsupported_shell_heredoc", codes(findings))
+
+    def test_absolute_bash_heredoc_is_executable_authority(self) -> None:
+        script = "/bin/bash <<'EOF'\ncargo test --workspace\nEOF"
+        findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
+        self.assertIn("unsupported_shell_heredoc", codes(findings))
+
+    def test_command_wrapped_absolute_shell_heredoc_is_executable_authority(self) -> None:
+        script = "command /bin/sh <<'EOF'\ncargo test --workspace\nEOF"
+        findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
+        self.assertIn("unsupported_shell_heredoc", codes(findings))
+
     def test_python_heredoc_remains_data(self) -> None:
         script = "python3 - <<'PY'\nprint('cargo test --workspace')\nPY"
         findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
@@ -83,6 +103,32 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
         )
         self.assertNotIn("cargo_unlocked", codes(findings))
 
+    def test_action_cargo_config_global_option_fails_closed_unlocked(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action("cargo --config net.offline=false test --workspace"), LOCKED
+        )
+        self.assertIn("unsupported_cargo_syntax", codes(findings))
+
+    def test_action_cargo_config_global_option_fails_closed_even_when_locked(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("cargo --config net.offline=false test --locked --workspace"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_cargo_syntax", codes(findings))
+
+    def test_action_cargo_color_global_option_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action("cargo --color=always test --workspace"), LOCKED
+        )
+        self.assertIn("unsupported_cargo_syntax", codes(findings))
+
+    def test_wrapped_cargo_outside_static_command_position_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action("env -u UNUSED cargo test --workspace"), LOCKED
+        )
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
     def test_exported_cargo_variable_executable_fails_closed(self) -> None:
         script = 'export tool=cargo\n"$tool" test --workspace'
         findings = SURFACE._direct_cargo_findings("action.yml", "composite-action", script, LOCKED)
@@ -96,6 +142,12 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
     def test_unknown_variable_executable_fails_closed(self) -> None:
         findings = SURFACE._direct_cargo_findings(
             "action.yml", "composite-action", '"$tool" test --workspace', LOCKED
+        )
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
+    def test_dynamic_path_executable_fails_closed(self) -> None:
+        findings = SURFACE._direct_cargo_findings(
+            "action.yml", "composite-action", '"/usr/bin/$tool" test --workspace', LOCKED
         )
         self.assertIn("unsupported_cargo_indirect", codes(findings))
 
@@ -119,6 +171,18 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
     def test_action_relative_shell_source_fails_closed(self) -> None:
         findings = SURFACE.audit_action_text(
             "action.yml", action("bash scripts/build.sh"), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_action_dynamic_source_builtin_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action('source "$SCRIPT"'), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_action_relative_dot_source_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action(". scripts/build.sh"), LOCKED
         )
         self.assertIn("unsupported_action_script", codes(findings))
 
@@ -172,6 +236,98 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
                 tracked_files=["action.yml", "scripts/build.sh"],
             )
             self.assertTrue(result["ok"], result["findings"])
+
+    def test_absolute_shell_local_action_script_is_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('/bin/bash "$GITHUB_ACTION_PATH/scripts/build.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "build.sh").write_text(
+                "#!/usr/bin/env bash\ncargo test --workspace\n", encoding="utf-8"
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+            self.assertFalse(result["ok"])
+            self.assertIn("cargo_unlocked", [item["code"] for item in result["findings"]])
+
+    def test_direct_action_root_script_execution_is_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('"$GITHUB_ACTION_PATH/scripts/build.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "build.sh").write_text(
+                "#!/usr/bin/env bash\ncargo test --workspace\n", encoding="utf-8"
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+            self.assertFalse(result["ok"])
+            self.assertIn("cargo_unlocked", [item["code"] for item in result["findings"]])
+
+    def test_sourced_local_action_script_is_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('source "$GITHUB_ACTION_PATH/scripts/build.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "build.sh").write_text(
+                "#!/usr/bin/env bash\ncargo test --workspace\n", encoding="utf-8"
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+            self.assertFalse(result["ok"])
+            self.assertIn("cargo_unlocked", [item["code"] for item in result["findings"]])
+
+    def test_dot_sourced_local_locked_action_script_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('. "$GITHUB_ACTION_PATH/scripts/build.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "build.sh").write_text(
+                "#!/usr/bin/env bash\ncargo test --locked --workspace\n", encoding="utf-8"
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+            self.assertTrue(result["ok"], result["findings"])
+
+    def test_delegated_cargo_global_option_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('bash "$GITHUB_ACTION_PATH/scripts/build.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "build.sh").write_text(
+                "#!/usr/bin/env bash\ncargo --config net.offline=false test --workspace\n",
+                encoding="utf-8",
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+            self.assertFalse(result["ok"])
+            self.assertIn(
+                "unsupported_cargo_syntax", [item["code"] for item in result["findings"]]
+            )
 
     def test_nested_tracked_local_action_script_is_audited(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -228,6 +384,28 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
             )
             (root / "scripts" / "b.sh").write_text(
                 '#!/usr/bin/env bash\nexec bash "$GITHUB_ACTION_PATH/scripts/a.sh"\n',
+                encoding="utf-8",
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/a.sh", "scripts/b.sh"],
+            )
+            self.assertTrue(result["ok"], result["findings"])
+
+    def test_recursive_source_cycle_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('source "$GITHUB_ACTION_PATH/scripts/a.sh"'), encoding="utf-8"
+            )
+            (root / "scripts" / "a.sh").write_text(
+                '#!/usr/bin/env bash\nsource "$GITHUB_ACTION_PATH/scripts/b.sh"\n',
+                encoding="utf-8",
+            )
+            (root / "scripts" / "b.sh").write_text(
+                '#!/usr/bin/env bash\n. "$GITHUB_ACTION_PATH/scripts/a.sh"\n',
                 encoding="utf-8",
             )
             result = SURFACE.audit_repository_surface(
