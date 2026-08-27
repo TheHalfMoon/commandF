@@ -4,7 +4,7 @@ Status: PLANNING_CANDIDATE
 
 ## Entry condition
 
-AF-02 planning begins from canonical:
+Canonical planning base:
 
 ```text
 main: 2b4033e237a5c74f3c45c12fbc7e7bfdc88067b1
@@ -12,363 +12,342 @@ tree: 804ce63c15edb501574bd4aba9a9aadc5bfb07f3
 AF-01: CLOSED_CANONICAL
 ```
 
-Implementation is not authorized until T006 is canonical. CF-14 planning may proceed independently, but this plan does not authorize CF-14/15/16 product implementation.
+AF-02 implementation starts only after this planning package is exact-head qualified, independently reviewed, merged to canonical `main`, and post-merge authority is re-read.
 
-## Normative design authority
+The first authorized implementation unit after planning closure is **Stack A0 design freeze**. No fuzz/property result may be used for closure before A0 is canonical.
 
-`evidence-contracts.md` is normative for executable AF-02 evidence. It freezes before implementation:
+## Normative contract set
 
-- semantic authority snapshots for AF-01 live rulesets, CF-06 production oracle, and CF-10 frozen corpus;
-- `commandf.af02-authority-baseline/v1`;
-- deterministic critical-boundary discovery and `commandf.af02-surface-policy/v1`;
-- normalized adversarial outcome classes;
-- `commandf.af02-resource-policy/v1` with offline enforcement;
-- immutable executable and registry package provenance through `commandf.af02-tool-lock/v1`;
-- property/generator independent models;
-- `commandf.af02-corpus/v1` plus assertion binding;
-- no-PHI and fuzz-artifact safety rules;
-- nextest CLI override-resistant flaky-as-failure behavior;
-- fixed pre-measurement coverage descriptor and rebaseline rules;
-- frozen mutation inventory/config/result/waiver rules;
-- CI partial-run/cancellation/retention semantics;
-- base-policy anti-forgery;
-- `commandf.af02-adversarial-proof/v1` canonical JSON and independent verifier algorithm;
-- separate design-freeze gates before every implementation stack.
+Implementation follows the precedence in `spec.md`:
 
-No implementation PR may silently choose a weaker alternative to those contracts.
+1. repository governance/constitution/`AGENTS.md`;
+2. `verification-protocol.md` and machine-readable schemas;
+3. `evidence-contracts.md` for non-superseded requirements;
+4. `spec.md`;
+5. this plan;
+6. `tasks.md`;
+7. consistency/donor/provenance records.
 
-## Evidence model
+The old illustrative authority-baseline v1 shape in `evidence-contracts.md` is not implementable authority. The closed baseline is `commandf.af02-authority-baseline/v2` in `schemas/af02-authority-baseline-v2.schema.json`.
 
-AF-02 keeps four evidence classes distinct:
+## Architecture summary
 
-1. **deterministic regression/property evidence** — exact inputs/configuration and reproducible assertions;
-2. **coverage evidence** — exercised source under a frozen descriptor;
-3. **mutation evidence** — test sensitivity to a frozen exact mutant inventory;
-4. **stochastic discovery evidence** — bounded fuzz exploration that may discover failures but whose no-crash observation is not correctness proof.
+AF-02 adds an assurance/evidence plane around the existing commandF Rust product core. It adds no new user-facing semantic engine and does not change CF-06/CF-10 authority.
 
-Only independently validated deterministic evidence contributes to `AF02_ADVERSARIAL_SHA256`. Stochastic observations remain separately retained metadata.
+Evidence classes remain separate:
 
-## Initial product boundary inventory
+1. deterministic regression/property evidence;
+2. deterministic coverage evidence;
+3. deterministic frozen-scope mutation evidence;
+4. stochastic fuzz-discovery observations.
 
-Planning has already identified these high-value existing boundaries:
+The final verifier reconstructs deterministic evidence from raw inputs. Stochastic observations are retained but excluded from `AF02_ADVERSARIAL_SHA256`.
 
-- package registry/acquisition/cache plus gzip/tar archive, manifest and resource ingestion;
-- Lockfile V1/V2 parse, validation, canonical serialization, exact package/dependency identity;
-- SUSHI source-map index, portable paths, canonicalized filesystem containment, line/report bounds;
-- context graph and canonical reference resolution including zero/one/many candidates;
-- compatibility/check/quality-gate reports, fingerprints, baseline/suppression evidence, gate decisions;
-- deterministic machine-readable serializers and persisted evidence validators.
+## Existing high-risk boundary inventory
 
-Stack A design freeze will turn this into a machine-readable discovered inventory. It is not allowed to reduce the minimum set based on which targets happen to be easy to fuzz.
+### Archive/package ingestion
+
+`crates/commandf-pkg/src/archive.rs` handles gzip/tar input, manifest limits, archive-entry limits, decompressed scan limits, and normalized package paths. Fuzzing enters through an existing public product seam and does not publish private API merely for fuzzing.
+
+### Lockfile retained evidence
+
+Lockfile V1/V2 parsing/canonicalization/validation is a critical structured-property and mutation surface because malformed persisted evidence must not be silently normalized into authority.
+
+### Source mapping and portable paths
+
+CF-09 source mapping enforces source-root containment, portable relative paths, bounded report/input size, line ranges, duplicate-output rejection, and report consistency. AF-02 reaches the narrowest existing public or internal test seam; no public API is added solely for fuzz tooling.
+
+### Context graph and canonical references
+
+Graph construction consumes verified lock/cache evidence and canonical references, then sorts/deduplicates nodes and edges. Important properties are order independence and explicit resolved/ambiguous/external status.
+
+### Compatibility/check/gate evidence
+
+Canonical fingerprints, baseline/suppression membership, report validators, and quality-gate decisions are false-PASS-critical surfaces. Properties cover JSON key ordering, set ordering, evaluate-then-validate agreement, and tamper rejection.
+
+### Acquisition/cache/subprocess boundaries
+
+Registry responses, local mirrors, cache reads/writes/reuse, archive scans, and external-process boundaries belong to the deterministic source scanner inventory even when a particular fuzz target uses an offline seam.
 
 ## Frozen initial tool identities
 
 ```text
 cargo-fuzz 0.13.2
-  source commit 984c861c8dfea28055254c5f1d2659ab2cd63f76
+  upstream 984c861c8dfea28055254c5f1d2659ab2cd63f76
 
-cargo-mutants 27.1.0
-  source commit 8ab1dc786a1f61a4e370416cc6c68b81a704e917
-
-cargo-llvm-cov 0.9.0
-  source commit be59056988acd54c7f984b7c85643daea3711b29
-
-cargo-nextest 0.9.143
-  source commit 60fa45f638ffc3f35e74afa65737f45fcd32db2a
-
-proptest =1.11.0
 libfuzzer-sys =0.4.13
 arbitrary =1.4.2
 fuzz compiler nightly-2026-08-25
+
+proptest =1.11.0
+
+cargo-nextest 0.9.143
+  upstream 60fa45f638ffc3f35e74afa65737f45fcd32db2a
+
+cargo-llvm-cov 0.9.0
+  upstream be59056988acd54c7f984b7c85643daea3711b29
+
+cargo-mutants 27.1.0
+  upstream 8ab1dc786a1f61a4e370416cc6c68b81a704e917
+
+surface parser: syn =3.0.3
+  source registry+https://github.com/rust-lang/crates.io-index
+  features [full, visit]
+
 normal product Rust 1.97.1
 ```
 
-Executable tools are acquired only through the immutable modes in the donor manifest/normative contract and produce an exact tool-lock record including executable digest. Crates.io packages retain exact registry checksums.
+Every executable tool uses the immutable acquisition models in the tool-lock contract and records installed binary digest plus compiler/target/features. Exact registry checksums are read from canonical locked metadata and retained before use.
 
-## Authority non-regression baseline
+## Retained authority source resolution
 
-AF-02 continuously verifies, rather than merely asserting, these independent authorities:
-
-### AF-01
-
-- assurance ruleset `21652953` remains active on `refs/heads/main`, no bypass actor, deletion/non-fast-forward protected, strict required checks `rust`, `assurance-proof`, `scorecard`, each integration ID 15368;
-- review-governance ruleset `21652974` remains active on main with one review, code-owner/latest-push/thread resolution protections, merge-only, PR-only repository-role bypass.
-
-The exact semantic projections and SHA-256s are frozen in `evidence-contracts.md`. Every stack performs live API read-back and recomputation.
-
-### CF-06
-
-Production oracle remains:
+CF-10 authority is not expected to exist on current `main`. AF-02 explicitly references retained source blobs through:
 
 ```text
-hapifhir/org.hl7.fhir.core 6.10.2
-d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
-validator_cli.jar sha256 a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6
-hl7.fhir.r4.core@4.0.1
+retained-authority-sources.json
 ```
 
-### CF-10
+That file binds repository, retained commit, path, Git blob SHA, PR/base/run/artifact identities, and API locators. The authority projector fetches those exact retained blobs by commit/blob identity and computes raw SHA-256 itself. Hard-coded case values alone are not sufficient.
 
-Frozen cases remain:
+CF-06 is reconstructed from canonical-base `oracle_model.rs`, donor metadata, and `cf06-oracle.yml`. AF-01 is reconstructed from the two live ruleset endpoints.
+
+## Stack A0 — design freeze and base-controlled enforcement
+
+A0 is policy/verifier infrastructure only. It MUST NOT use newly generated fuzz/property results as evidence that A0 itself is correct.
+
+### A0.1 Authority baseline v2
+
+Create machine-readable `commandf.af02-authority-baseline/v2` validated by `schemas/af02-authority-baseline-v2.schema.json`.
+
+It records independently derived:
+
+- AF-01 assurance/review projection digests;
+- CF-06 exact projection and authoritative source digests;
+- CF-10 exactly three deltas and six states;
+- retained PR/head/base/run/conclusion/artifact id/name/digest;
+- retained manifest/donor Git blob identities and derived raw SHA-256.
+
+Candidate-edited baseline values never establish authority.
+
+### A0.2 Deterministic surface policy
+
+Implement one `syn=3.0.3` AST scanner over Git-tracked `.rs` source under:
 
 ```text
-C001 hl7.fhir.us.core  8.0.1 -> 9.0.0
-C002 hl7.fhir.uv.ips   1.1.0 -> 2.0.1
-C003 hl7.fhir.us.mcode 3.0.0 -> 4.0.0
+crates/**/src/**
+tools/**/src/**
 ```
 
-Retained six-state evidence remains bound to PR #11 head `5fe10d9859407272acf6649fc3e868d3eb2fbd12`, run `31916124080`, artifact `9255732702`, digest `9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612`.
+The protocol freezes alias/macro/comment/string/cfg/dead-code and stale-entry semantics. Every finding gets exactly one disposition. The scanner dependency checksum, scanner source, matcher policy, source universe, and raw/classified inventories are evidence.
 
-AF-02 does not merge PR #11 or reinterpret its blocked production-oracle result.
+### A0.3 Resource/offline policy
 
-# Phase 0 — planning correction and authorization
+Freeze checked-in campaign/per-input memory/CPU/PID/tmpfs/generated/decompressed/temp-file/subprocess/artifact/corpus/retention limits.
 
-The initial PR #54 head `3224098403f6bfb64525bfab002e94d5c3d82e69` passed all five existing workflows but received substantive Qodo and CodeRabbit findings. Those findings are accepted.
+Canonical proof execution uses the digest-pinned Linux Rust container with network none, read-only root/source, dedicated writable output, cgroup limits, tmpfs, runtime inspection, and negative network/write probes. “Equivalent mechanism” is not canonical proof authority.
 
-The planning correction must:
+### A0.4 Tool lock
 
-1. make `evidence-contracts.md` normative;
-2. reconcile spec/plan/tasks/consistency/donor provenance to it;
-3. receive fresh exact-head CI;
-4. receive fresh exact-head Qodo and CodeRabbit review;
-5. close every substantive inline thread;
-6. merge only from the exact qualified head with expected-head protection;
-7. re-read canonical main/tree plus live AF-01 rulesets after merge.
+For each executable, freeze one acquisition mode:
 
-Only that post-merge state completes T006 and authorizes Stack A design freeze.
+- locked exact-revision source build; or
+- immutable release asset with verified SHA-256.
 
-# Stack A — design freeze: adversarial surfaces, resources, properties, corpus
+For crates, retain exact registry package/version/checksum. Record commands, compiler, cargo, target, features, executable SHA-256, and version-output digest.
 
-Stack A is split deliberately into **design freeze** then implementation. The design-freeze candidate MUST merge before any dependent harness code.
+### A0.5 Property/model design
 
-## A0 design-freeze artifacts
+Freeze independently expressed model registries for archive manifest behavior, Lockfile graph/canonicalization, portable paths, canonical-reference resolution, graph ordering, and gate/fingerprint/suppression truth tables.
 
-Create and independently review:
+### A0.6 Corpus/assertion design
 
-- authority baseline file with independently derived AF-01/CF-06/CF-10 values;
-- `commandf.af02-surface-policy/v1` and deterministic boundary discovery validator;
-- `commandf.af02-resource-policy/v1` and proof of effective offline/resource controls;
-- initial `commandf.af02-tool-lock/v1` acquisition procedure for cargo-fuzz/property tooling;
-- property configuration schema and initial independent models;
-- `commandf.af02-corpus/v1`, assertion registry and replay registry design;
-- no-PHI/provenance and opaque artifact-retention policy.
+Freeze corpus manifest and `commandf.af02-assertion-registry/v1` before discovery results. Each scenario/registry entry is bijective and binds runner kind, target, exact argv, expected normalized outcome, parser, source/config digests, provenance, and fixture digest.
 
-### Surface discovery implementation rule
+### A0.7 Proof schemas
 
-A conservative deterministic scanner/AST-aware audit discovers production input/acquisition/cache/filesystem/subprocess boundaries under frozen source roots. New unclassified boundaries fail. Missing source/seam/corpus references fail. Reviewed exclusions are narrow and complete.
-
-### Resource policy initial bounds
-
-Routine target defaults from the normative contract include:
+Adopt the machine-readable closed schemas:
 
 ```text
-PR deterministic job <= 30 min
-single fuzz input <= 256 KiB
-per-input timeout <= 5 s
-process memory <= 768 MiB
-CPU <= 2
-PIDs <= 256
-tmpfs <= 512 MiB
-scheduled discovery per target <= 900 s
-single retained crash artifact <= 1 MiB
-retained discovery bundle <= 32 MiB
-single promoted corpus fixture <= 256 KiB by default
-aggregate committed AF-02 corpus <= 8 MiB
+schemas/af02-authority-baseline-v2.schema.json
+schemas/af02-adversarial-proof-v1.schema.json
 ```
 
-These are upper bounds, not performance targets. AF-04 owns large-stress qualification.
+Schema files and SHA-256 are mandatory proof contract files. Repository-owned semantic validation adds cross-field/arithmetic/path relations that JSON Schema alone cannot express.
 
-### Offline control
+### A0.8 Base-verifier execution anchor
 
-Tool/dependency acquisition occurs separately. Deterministic AF-02 execution then uses `CARGO_NET_OFFLINE=true` plus OS/container network denial. The intended Linux mechanism is a digest-pinned container with `--network none` and explicit CPU/memory/PID/tmpfs controls. Any equivalent replacement requires design-freeze proof before harness implementation.
+A0 introduces a base-controlled GitHub Actions gate using `pull_request_target` semantics so candidate workflow code cannot decide whether its own verifier weakening is accepted.
 
-## A1 implementation after canonical A0
+The base-controlled job MUST:
 
-Implement:
+- execute workflow/script/verifier blobs from the PR canonical base, not candidate copies;
+- use read-only GitHub permissions;
+- check out base and candidate into separate directories with credentials disabled;
+- never execute candidate code in the base-controlled job;
+- treat candidate policy/evidence as data only;
+- record exact base workflow, verifier, schema, and enforcement-inventory blob SHAs;
+- trigger for every AF-02 policy/schema/verifier/scanner/parser/result/workflow/inventory path;
+- fail if the base verifier cannot run or parse candidate evidence.
 
-- isolated `fuzz/` workspace on `nightly-2026-08-25`;
-- raw archive/package fuzzing through an existing product entrypoint;
-- Lockfile raw and structured adversarial tests;
-- source-map/path adversarial properties through narrow existing/internal test seams;
-- context graph/canonical-reference structured properties;
-- compatibility/check/gate/fingerprint/suppression adversarial properties;
-- deterministic corpus promotion and assertion-bound replay;
-- safe crash-artifact handling and no-PHI provenance gate;
-- PR target build/corpus replay/property CI and bounded scheduled discovery.
+A0 first proves this check has universal terminal topology. Only then may a separate live-policy reconciliation add the new check to the AF-01 assurance ruleset. Read-back is mandatory before A0 merge if promoted.
 
-Expected normalized outcomes come only from the surface policy enum. `UNEXPECTED_ACCEPTANCE`, invariant violation, oracle divergence, or panic requires minimization and deterministic regression before closure.
+## Stack A1 — fuzz/property/regression implementation
 
-No public API is added solely for fuzzing convenience.
+A1 starts only after A0 is canonical.
 
-## A2 qualification
+### Fuzz workspace
 
-Exact Stack A implementation head must pass:
-
-- canonical `cargo test --workspace --all-features --locked`;
-- all new policy validators and adversarial deterministic replay/property gates;
-- fuzz target compilation;
-- every path-applicable existing product/oracle/AF-01 workflow;
-- live AF-01 and canonical CF-06/CF-10 identity assertions;
-- fresh Qodo and CodeRabbit with zero unresolved substantive threads.
-
-Merge only from the exact qualified head and re-read post-merge authority before Stack B.
-
-# Stack B — design freeze: flaky-as-failure and coverage
-
-Again, design semantics merge before enforcement code.
-
-## B0 nextest design freeze
-
-Freeze:
-
-```toml
-[profile.ci]
-retries = 2
-flaky-result = "fail"
-slow-timeout = { period = "60s", terminate-after = 2 }
-```
-
-and CI invocation:
+Expected layout:
 
 ```text
-cargo nextest run ... --retries 2 --flaky-result fail
+fuzz/
+  Cargo.toml
+  rust-toolchain.toml
+  fuzz_targets/
+  corpus/
+  artifacts/   # generated, ignored
 ```
 
-The command-line options intentionally disable weaker per-test override authority.
+The nightly/libFuzzer workspace remains isolated from normal product dependency authority.
 
-Freeze the isolated non-workspace retry fixture: first attempt atomically creates an AF-02-owned state file and fails; retry sees it and passes. Expected normalized outcome is `FLAKY_RETRY_PASS` with non-zero process exit. No clock/RNG/network/scheduler dependency.
+### Required reachability
 
-## B0 coverage design freeze
+Initial target families cover package archive bytes, Lockfile JSON/structured forms, retained report evidence, context graph/reference shapes, and source-map/path semantics.
 
-Before measuring any percentage, freeze:
+One raw fuzzer plus properties may jointly cover a surface when that exercises the real public/internal seam more strongly than forcing every path through libFuzzer.
+
+### Harness bounds
+
+Routine raw input cap is `1 MiB` unless a narrower surface limit applies. Structured collection/depth sizes are small and policy-bound. Production maximums implying routine multi-hundred-MiB allocations are not normal fuzz iteration sizes.
+
+Every run uses A0's OCI/offline/resource runner.
+
+### Regression promotion
+
+Every crash/invariant failure/unexpected acceptance/property counterexample is minimized and committed only when provenance/no-PHI rules permit. Default fixture <=256 KiB and aggregate committed corpus <=8 MiB.
+
+A1 cannot close while a discovered defect lacks a deterministic assertion/replay entry.
+
+## Stack B0 — flaky/coverage design freeze
+
+B0 contains policy/fixture/parser design only.
+
+### Nextest fixture
+
+Freeze the isolated fixture specified by `verification-protocol.md`:
 
 ```text
-platform Linux/x86_64
-Rust 1.97.1 + llvm-tools-preview
-cargo llvm-cov --workspace --all-features --locked --json
-production source crates/*/src/**
+tests/assurance/af02-nextest-flake-fixture/
+selected test: af02_retry_pass_is_failure
 ```
 
-plus explicit non-product exclusions, normalized baseline descriptor schema, raw-report retention, critical-surface mapping, and dedicated rebaseline/floor-reduction governance.
+Invocation forces `--retries 2 --flaky-result fail` so per-test overrides cannot weaken the result.
 
-## B1 measured baseline
+The JUnit output root is an **empty dedicated output mount created by the base-controlled runner**. Before nextest:
 
-Only after B0 is canonical:
+- parent exists with mode 0700 and expected unprivileged UID/GID;
+- target JUnit path does not exist;
+- no path component is symlink;
+- output mount is empty except runner-created directories.
 
-- measure workspace production line coverage;
-- measure every `COVERAGE_CRITICAL` surface line coverage;
-- freeze each floor as integer floor of its own exact `covered/total*100` result;
-- retain function/region diagnostics but do not invent hidden floors;
-- record numerator/denominator, not floating-point proof values.
+After nextest:
 
-No averaging across surface percentages.
+- JUnit path is a regular non-symlink file owned by the expected UID;
+- it resides on the dedicated output mount;
+- link count is one;
+- the base-controlled runner opens/hashes it directly after process wait;
+- no wrapper-supplied alternate path is accepted;
+- raw stdout/stderr/exit and JUnit hash are captured together in the same runner result envelope.
 
-## B2 implementation/qualification
+The state-file protocol proves deterministic first-fail/retry-pass behavior. JUnit must contain the selected testcase's flaky retry history and process exit must remain non-zero.
 
-Add nextest and coverage lanes, repository-owned policy validation and anti-gaming checks. A floor/descrip­tor/exclusion weakening cannot make its own PR green. Canonical cargo test remains independently mandatory.
+### Coverage descriptor
 
-Exact Stack B head must pass all Stack A, canonical, AF-01 and relevant product/oracle gates plus fresh independent review before merge.
+Before measuring percentage, freeze exact source/tree, Linux/x86_64, Rust/tool identity, command, Cargo inputs, replay/property inputs, and exclusions.
 
-# Stack C — design freeze: mutation and exact-head AF-02 proof
-
-## C0 mutation design freeze
-
-Before running required mutation qualification, freeze exact cargo-mutants 27.1.0:
-
-- tool-lock executable digest;
-- source SHA/tree;
-- exact command/config and build profile;
-- test command;
-- parallelism (default bound 2 jobs);
-- baseline required;
-- minimum test timeout 20 s;
-- explicit maximum test timeout <=120 s unless a smaller measured bound is frozen;
-- explicit maximum build timeout <=180 s unless smaller;
-- source scope and reviewed exclusions;
-- `--list --json` inventory digest;
-- stable mutant-ID derivation;
-- timeout/unviable bounded retry and diagnosis policy;
-- exact waiver schema and dedicated waiver-policy governance.
-
-The exact pinned-version flags are verified during this design freeze and then cannot drift during execution.
-
-## C0 proof/CI design freeze
-
-Freeze `commandf.af02-adversarial-proof/v1`, canonical JSON algorithm and independent verifier behavior from `evidence-contracts.md` plus artifact retention and CI dependency graph.
-
-The verifier takes canonical base policy as authority first. A candidate weakening acceptance criteria cannot prove itself under its own weakening.
-
-## C1 mutation implementation
-
-Generate the frozen JSON inventory, choose required target mutants based on false-PASS/security boundaries, then execute the exact inventory.
-
-Result classes remain separate. Required `SURVIVED`, unresolved `TIMEOUT`, and unresolved `UNVIABLE_OR_BUILD_FAILURE` are not green. Timeouts/unviable receive bounded retry+diagnosis before exact waiver is even eligible.
-
-New waiver or required-set reduction cannot make the same implementation candidate green; it requires a dedicated policy PR merged first.
-
-## C2 stochastic discovery
-
-Run bounded scheduled/manual campaigns. A clean campaign outcome is only:
+Coverage source universe matches surface source universe for tracked Rust production paths:
 
 ```text
-NO_CRASH_OBSERVED_WITHIN_BOUND
+crates/**/src/**/*.rs
+tools/**/src/**/*.rs
 ```
 
-An interrupted/resource/harness failure is `INCOMPLETE_RESOURCE_OR_HARNESS_FAILURE`, not clean evidence.
+Only exact previously canonical non-product exclusions can remove a path. Every production source appears exactly once in the report, including zero-hit files. Missing/unknown/duplicate paths fail.
 
-## C3 exact-head proof
+## Stack B1 — flaky/coverage execution
 
-The verifier independently recomputes:
+After B0 canonical:
 
-- source/tree/base identity;
-- policy/spec/contract hashes;
-- tool/package identities;
-- surface discovery coverage;
-- resource/offline enforcement;
-- corpus raw digests/assertion replay;
-- property outcomes;
-- nextest retry self-test and no-flake truth;
-- coverage descriptor/floors/numerator-denominator values;
-- mutation inventory/results/waivers;
-- canonical cargo-test identity;
-- live AF-01 + CF-06/CF-10 authority state.
+- run canonical `cargo test --workspace --all-features --locked`;
+- run nextest ordinary suite and retry-pass self-test;
+- collect coverage from the frozen command/input set;
+- derive workspace and each critical-surface floor independently from exact integer covered/total pairs;
+- fail on any floor decrease, missing path, descriptor drift, or same-candidate scope weakening.
 
-It builds canonical deterministic JSON and recomputes `AF02_ADVERSARIAL_SHA256`; a producer-authored digest is not trusted.
+A coverage-policy/floor/exclusion change must be a dedicated policy-only PR evaluated under the prior policy; it cannot modify product source, tests, or the measurement command. A later candidate adopts the new baseline.
 
-## C4 qualification/merge
+## Stack C0 — mutation/proof design freeze
 
-Run all AF-02 deterministic evidence plus every path-applicable existing product/oracle/AF-01 workflow on exact head. Obtain fresh Qodo/CodeRabbit. Merge only from exact qualified head and verify post-merge main/tree/proof applicability/live authority.
+C0 freezes mutation target source paths and exact exclusions **before listing or executing mutants**.
 
-AF-02 does not add a new required main context by default. A proposal for one is a separate governance/topology mutation with administrator read-back.
+### Complete required mutant set
 
-# Phase 4 — convergence
+Run pinned cargo-mutants JSON listing on the exact tree and target paths. Every listed mutant in that scope is REQUIRED unless it matches exactly one pre-frozen exact exclusion.
 
-Create `convergence.md` only after canonical Stack C. It records:
+There is no “choose required mutants” step after listing. There is no percentage, top-N, operator preference, or post-result manual subset.
 
-- planning/A/B/C design-freeze and implementation identities;
-- exact tool/package/executable checksums;
-- surface policy/discovery results and reviewed exclusions;
-- resource/offline enforcement;
-- property models/configuration;
-- corpus scenario IDs/digests/assertion bindings;
-- nextest no-flake truth;
-- coverage descriptor/baseline/floors;
-- mutation inventory/results/waivers;
-- stochastic observations, clearly non-deterministic;
-- exact proof artifact/digest;
-- reviewer dispositions;
-- AF-01/CF-06/CF-10 non-regression;
-- limits and AF-03/AF-04/CF deferrals.
+Stable mutant IDs bind source blob/span/function/diff/tool-lock/policy identity. Duplicate/missing dispositions fail.
 
-Final closeout follows the repository temporal-evidence pattern: qualify the exact convergence head, merge with expected-head guard, re-read post-merge truth, then use a docs-only closeout candidate without circularly embedding future identifiers. `AF-02=CLOSED_CANONICAL` is claimed only after post-merge proof and live authority remain green.
+### Proof schema and semantic validator
 
-# Acceptance principles
+The machine schema defines field types/nullability/patterns/enums/cardinality/conditional shapes. Repository semantic validation freezes:
 
-- **No false proof from same-PR policy weakening.** Canonical base policy is independently enforced.
-- **No stochastic laundering.** No-crash fuzz time is observation, not correctness authority.
-- **No coverage vanity target.** Scope is frozen before measurement; floors are mechanically derived.
-- **No mutation score shortcut.** Exact required results are classified individually.
-- **No hidden retry green.** CLI flaky-result fail is mandatory.
-- **No unsafe fixture provenance.** Synthetic/public redistributable only.
-- **No authority drift.** AF-01/CF-06/CF-10 are machine-checked every stack.
-- **No hidden design choices.** Each stack's measured/operational semantics are canonicalized in a separate design-freeze PR before dependent implementation.
+- counter arithmetic/relations;
+- required-check exact membership and success;
+- digest/source relationships;
+- sorted/unique set identities;
+- path normalization/containment;
+- tool-lock conditional executable versus registry shapes;
+- inventory-object shapes referenced by digest;
+- authority/proof/raw-evidence cross-links.
+
+Malformed type/format/range/conditional shape/cross-field relation negative fixtures are required before C0 closes.
+
+## Stack C1 — mutation execution and final proof
+
+After C0 canonical:
+
+- execute every required mutant;
+- keep KILLED/SURVIVED/TIMEOUT/UNVIABLE_OR_BUILD_FAILURE separate;
+- retry and diagnose TIMEOUT/UNVIABLE required results;
+- close every required result as KILLED or a previously canonical exact waiver;
+- run stochastic campaigns only as separately labeled observations;
+- reconstruct final deterministic proof from raw evidence;
+- validate JSON Schema and semantic invariants;
+- recompute `AF02_ADVERSARIAL_SHA256` independently;
+- prove required check uniqueness/provenance on exact head.
+
+No producer-created normalized outcome or summary is trusted without independent reconstruction.
+
+## CI and path topology
+
+Each AF-02 workflow/action/script/config is included in AF-01 workflow-trust/path auditing.
+
+Expensive lanes use explicit timeouts and resource policy. Path-skipped work must produce explicit terminal neutral/success topology only where the canonical gate contract defines it; absence of a required result is never silently interpreted green.
+
+The base-verifier gate is special: after A0 canonicalization its execution anchor comes from canonical-base `pull_request_target` workflow code, not the candidate workflow copy.
+
+## Closure and convergence
+
+AF-02 reaches `CLOSED_CANONICAL` only after:
+
+1. A0, A1, B0, B1, C0, and C1 each become canonical in dependency order;
+2. every required corpus/property/nextest/coverage/mutation/proof gate passes on exact final head;
+3. AF-01/CF-06/CF-10 authority is re-derived and unchanged;
+4. required checks retain exact GitHub Actions provenance and uniqueness;
+5. Qodo and CodeRabbit substantive findings are closed or explicitly recorded unavailable without inventing PASS;
+6. final convergence document records exact final head/tree, runs/checks/artifacts, live policy read-back, waivers, and residual risks;
+7. final PR merges with expected-head guard;
+8. canonical post-merge main/tree and live rulesets are re-read.
+
+AF-02 closure does not authorize a CF-06 production pin change or merge blocked CF-10 work.

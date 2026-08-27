@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commandf.dev/schemas/af02-authority-baseline-v2.schema.json",
+  "title": "commandf.af02-authority-baseline/v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","captured_from_main_sha","captured_from_main_tree","af01","cf06","cf10"],
+  "properties": {
+    "schema": {"const": "commandf.af02-authority-baseline/v2"},
+    "captured_from_main_sha": {"$ref": "#/$defs/gitSha"},
+    "captured_from_main_tree": {"$ref": "#/$defs/gitSha"},
+    "af01": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assurance","review_governance"],
+      "properties": {
+        "assurance": {"$ref": "#/$defs/rulesetProjection"},
+        "review_governance": {"$ref": "#/$defs/rulesetProjection"}
+      }
+    },
+    "cf06": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project","release","source_commit","validator_cli_jar_sha256","r4_core_context","projection_sha256","source_files"],
+      "properties": {
+        "project": {"const": "hapifhir/org.hl7.fhir.core"},
+        "release": {"const": "6.10.2"},
+        "source_commit": {"const": "d06577dbc5c62c74a2a8823fbc4830a3024d5b0b"},
+        "validator_cli_jar_sha256": {"const": "a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6"},
+        "r4_core_context": {"const": "hl7.fhir.r4.core@4.0.1"},
+        "projection_sha256": {"$ref": "#/$defs/sha256"},
+        "source_files": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/sourceFile"}
+        }
+      }
+    },
+    "cf10": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deltas","states","retained_pr","retained_head","retained_base","retained_run","retained_run_conclusion","retained_artifact_id","retained_artifact_name","retained_artifact_sha256","retained_manifest_blob_sha","retained_manifest_sha256","retained_donor_blob_sha","retained_donor_sha256","projection_sha256"],
+      "properties": {
+        "deltas": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"$ref": "#/$defs/deltaC001"},
+            {"$ref": "#/$defs/deltaC002"},
+            {"$ref": "#/$defs/deltaC003"}
+          ],
+          "items": false
+        },
+        "states": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"$ref": "#/$defs/stateC001After"},
+            {"$ref": "#/$defs/stateC001Before"},
+            {"$ref": "#/$defs/stateC002After"},
+            {"$ref": "#/$defs/stateC002Before"},
+            {"$ref": "#/$defs/stateC003After"},
+            {"$ref": "#/$defs/stateC003Before"}
+          ],
+          "items": false
+        },
+        "retained_pr": {"const": 11},
+        "retained_head": {"const": "5fe10d9859407272acf6649fc3e868d3eb2fbd12"},
+        "retained_base": {"const": "5cb1a4c3445c0ebd86654cfb467a5e008e801c3e"},
+        "retained_run": {"const": 31916124080},
+        "retained_run_conclusion": {"const": "failure"},
+        "retained_artifact_id": {"const": 9255732702},
+        "retained_artifact_name": {"const": "cf10-real-corpus-evidence"},
+        "retained_artifact_sha256": {"const": "9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612"},
+        "retained_manifest_blob_sha": {"const": "655949a8a30d67502dffd624a175d2e8e02b1d1f"},
+        "retained_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "retained_donor_blob_sha": {"const": "566b46f4e6f467a1ccae3ac810b31956309173b6"},
+        "retained_donor_sha256": {"$ref": "#/$defs/sha256"},
+        "projection_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "$defs": {
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "rulesetProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleset_id","semantic_sha256"],
+      "properties": {
+        "ruleset_id": {"type": "integer", "minimum": 1},
+        "semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path","git_blob_sha","raw_sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "git_blob_sha": {"$ref": "#/$defs/gitSha"},
+        "raw_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "deltaBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id","package","before","after"],
+      "properties": {
+        "id": {"type": "string"},
+        "package": {"type": "string"},
+        "before": {"type": "string"},
+        "after": {"type": "string"}
+      }
+    },
+    "deltaC001": {"allOf": [{"$ref": "#/$defs/deltaBase"},{"properties":{"id":{"const":"C001"},"package":{"const":"hl7.fhir.us.core"},"before":{"const":"8.0.1"},"after":{"const":"9.0.0"}}}]},
+    "deltaC002": {"allOf": [{"$ref": "#/$defs/deltaBase"},{"properties":{"id":{"const":"C002"},"package":{"const":"hl7.fhir.uv.ips"},"before":{"const":"1.1.0"},"after":{"const":"2.0.1"}}}]},
+    "deltaC003": {"allOf": [{"$ref": "#/$defs/deltaBase"},{"properties":{"id":{"const":"C003"},"package":{"const":"hl7.fhir.us.mcode"},"before":{"const":"3.0.0"},"after":{"const":"4.0.0"}}}]},
+    "stateBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_id","case_id","side","package","version","archive_sha256","archive_bytes"],
+      "properties": {
+        "state_id": {"type": "string"},
+        "case_id": {"type": "string"},
+        "side": {"enum": ["before","after"]},
+        "package": {"type": "string"},
+        "version": {"type": "string"},
+        "archive_sha256": {"$ref": "#/$defs/sha256"},
+        "archive_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "stateC001After": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C001-after"},"case_id":{"const":"C001"},"side":{"const":"after"},"package":{"const":"hl7.fhir.us.core"},"version":{"const":"9.0.0"},"archive_sha256":{"const":"d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059"},"archive_bytes":{"const":2749959}}}]},
+    "stateC001Before": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C001-before"},"case_id":{"const":"C001"},"side":{"const":"before"},"package":{"const":"hl7.fhir.us.core"},"version":{"const":"8.0.1"},"archive_sha256":{"const":"3c02eef48ef10617021bee95e58cbc66d596ceda8cada24b72000d33ad67c464"},"archive_bytes":{"const":2713046}}}]},
+    "stateC002After": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C002-after"},"case_id":{"const":"C002"},"side":{"const":"after"},"package":{"const":"hl7.fhir.uv.ips"},"version":{"const":"2.0.1"},"archive_sha256":{"const":"7183242b70fb2a9058aa3701fb607517a3c2fd0e3100d1d8c538d744c2adf799"},"archive_bytes":{"const":725312}}}]},
+    "stateC002Before": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C002-before"},"case_id":{"const":"C002"},"side":{"const":"before"},"package":{"const":"hl7.fhir.uv.ips"},"version":{"const":"1.1.0"},"archive_sha256":{"const":"403c4141101810e924f2928287985084819d8a5cc3a62e2b3840a557129840ef"},"archive_bytes":{"const":1065103}}}]},
+    "stateC003After": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C003-after"},"case_id":{"const":"C003"},"side":{"const":"after"},"package":{"const":"hl7.fhir.us.mcode"},"version":{"const":"4.0.0"},"archive_sha256":{"const":"e603283bafa508a3705ad022bce95bba1fbd0b8b3b87b978e7412813b7bc1778"},"archive_bytes":{"const":1003918}}}]},
+    "stateC003Before": {"allOf":[{"$ref":"#/$defs/stateBase"},{"properties":{"state_id":{"const":"C003-before"},"case_id":{"const":"C003"},"side":{"const":"before"},"package":{"const":"hl7.fhir.us.mcode"},"version":{"const":"3.0.0"},"archive_sha256":{"const":"c94c91971747efeae760aa037d168e4df992cefb6dacece08217c464b9d39214"},"archive_bytes":{"const":1014084}}}]}
+  }
+}
