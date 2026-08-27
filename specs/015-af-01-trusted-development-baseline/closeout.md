@@ -6,6 +6,8 @@ This document records the final AF-01 closure evidence after the convergence imp
 
 This closeout is not canonical merely because this file exists on a branch. AF-01 may be classified as `CLOSED_CANONICAL` only if this exact docs-only closeout head receives its own required exact-head qualification and merges to `main` without content-changing substitution.
 
+Temporal exact-head workflow, check-run, artifact, and reviewer identifiers are created only after a commit exists. They are therefore retained in the pull-request conversation as an exact-head qualification checkpoint rather than injected into the same commit: committing those future identifiers would create a new SHA and immediately invalidate them. The checked-in closeout defines the gate and retains completed prerequisite evidence; GitHub's immutable association of the temporal checkpoint with the exact candidate head is the authoritative non-circular T056 record.
+
 ## Canonical entry state
 
 AF-01 convergence PR #51 merged from exact qualified head:
@@ -160,7 +162,7 @@ Scorecard remains supplemental posture evidence and is not commandF correctness 
 
 ### Live source-control policy after merge
 
-Live GitHub ruleset read-back after the convergence merge remains active and applies to `refs/heads/main`.
+An owner-authorized GitHub ruleset read-back after the convergence merge remains active and applies to `refs/heads/main`. This owner-authorized detailed ruleset endpoint is the authority for repository-administration fields such as bypass actors. GitHub Apps with narrower administration visibility may receive a redacted or `null` `bypass_actors` field; such a permission-scoped omission is not evidence that an owner-visible configured bypass actor is absent.
 
 Assurance ruleset:
 
@@ -179,7 +181,7 @@ rules:
     scorecard         integration 15368
 ```
 
-Review-governance ruleset:
+Review-governance ruleset, owner-authorized live read-back:
 
 ```text
 id: 21652974
@@ -195,9 +197,10 @@ require review-thread resolution: true
 bypass:
   RepositoryRole actor 5
   mode: pull_request only
+current user bypass: pull_requests_only
 ```
 
-The review-only bypass cannot bypass the separate assurance ruleset, whose live bypass list remains empty.
+The review-only bypass cannot bypass the separate assurance ruleset, whose owner-authorized live bypass list remains empty.
 
 Therefore:
 
@@ -217,13 +220,15 @@ Post-Stack-C dependency updates remain separately qualified work and are not fol
 
 T055 evidence is complete. T056 is represented by this docs-only closeout candidate under the same canonical-closeout pattern used by prior commandF slices:
 
-1. this exact closeout head/tree must be identified;
+1. this exact closeout head/tree must be identified in authoritative GitHub PR/commit metadata and retained in a PR qualification checkpoint;
 2. every path-applicable mandatory workflow on this exact closeout head must be terminal and successful;
 3. fresh Qodo and CodeRabbit truth must be obtained when available;
 4. every substantive returned finding must be dispositioned;
 5. unresolved substantive review threads must be `0`;
 6. merge must use an exact expected-head guard and merge method `merge`;
 7. canonical post-merge `main` SHA/tree and live rulesets must be re-read.
+
+The temporal evidence produced after this commit exists — workflow run IDs, check-run IDs, artifact IDs/digests, exact reviewer outcomes, and the final live-policy re-read — belongs in the PR qualification checkpoint. It must not be committed back into this same candidate merely to make the candidate describe its own future evidence, because that would create a new SHA and invalidate the evidence being recorded.
 
 Until those steps complete, this branch remains `CLOSEOUT_CANDIDATE` and no canonical closure claim is made.
 
