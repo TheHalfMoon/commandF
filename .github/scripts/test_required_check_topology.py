@@ -8,6 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "required-checks.json"
+WORKFLOWS = ROOT / ".github" / "workflows"
+GITHUB_ACTIONS_INTEGRATION_ID = 15368
 
 
 def display_path(path: Path) -> str:
@@ -70,13 +72,69 @@ def assert_universal_required_job(path: Path, job: str) -> None:
             )
 
 
+def workflow_paths(root: Path = WORKFLOWS) -> list[Path]:
+    return sorted(
+        path
+        for path in root.iterdir()
+        if path.is_file() and path.suffix in {".yml", ".yaml"}
+    )
+
+
+def literal_job_name(lines: list[str], start: int, end: int) -> str | None:
+    names = [line[9:].strip() for line in lines[start + 1 : end] if line.startswith("    name:")]
+    if len(names) > 1:
+        raise AssertionError("workflow job has multiple top-level name fields")
+    if not names:
+        return None
+    value = names[0]
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    if not value:
+        raise AssertionError("workflow job has an empty name")
+    if "${{" in value:
+        return None
+    return value
+
+
+def job_check_contexts(path: Path) -> list[tuple[str, str | None]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        jobs_index = lines.index("jobs:")
+    except ValueError:
+        return []
+    job_ids: list[str] = []
+    for line in lines[jobs_index + 1 :]:
+        if line and not line.startswith(" "):
+            break
+        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+            job_ids.append(line.strip()[:-1])
+    result: list[tuple[str, str | None]] = []
+    for job_id in job_ids:
+        start, end = job_range(lines, job_id)
+        explicit_name = literal_job_name(lines, start, end)
+        result.append((job_id, explicit_name or job_id))
+    return result
+
+
+def required_context_producers(
+    workflow_root: Path, contexts: set[str]
+) -> dict[str, list[tuple[str, str]]]:
+    producers = {context: [] for context in contexts}
+    for path in workflow_paths(workflow_root):
+        relative = display_path(path)
+        for job_id, context in job_check_contexts(path):
+            if context in contexts:
+                producers[str(context)].append((relative, job_id))
+    return producers
+
+
 class RequiredCheckTopologyTests(unittest.TestCase):
     def load_config(self) -> dict[str, object]:
         value = json.loads(CONFIG.read_text(encoding="utf-8"))
         self.assertIsInstance(value, dict)
         return value
 
-    def test_selected_checks_are_unique_and_universal(self) -> None:
+    def test_selected_checks_are_unique_universal_and_integration_bound(self) -> None:
         config = self.load_config()
         self.assertEqual(config.get("schema"), 1)
         self.assertEqual(config.get("protected_branch"), "main")
@@ -85,23 +143,41 @@ class RequiredCheckTopologyTests(unittest.TestCase):
         self.assertGreater(len(checks), 0)
         contexts: set[str] = set()
         pairs: set[tuple[str, str]] = set()
+        expected_producers: dict[str, tuple[str, str]] = {}
         for index, item in enumerate(checks):
             with self.subTest(index=index):
                 self.assertIsInstance(item, dict)
-                self.assertEqual(set(item), {"context", "workflow", "job"})
+                self.assertEqual(set(item), {"context", "integration_id", "workflow", "job"})
                 context = item["context"]
+                integration_id = item["integration_id"]
                 workflow = item["workflow"]
                 job = item["job"]
                 self.assertIsInstance(context, str)
+                self.assertEqual(integration_id, GITHUB_ACTIONS_INTEGRATION_ID)
                 self.assertIsInstance(workflow, str)
                 self.assertIsInstance(job, str)
                 self.assertNotIn(context, contexts)
                 self.assertNotIn((workflow, job), pairs)
                 contexts.add(context)
                 pairs.add((workflow, job))
+                expected_producers[context] = (workflow, job)
                 path = ROOT / workflow
                 self.assertTrue(path.is_file(), workflow)
                 assert_universal_required_job(path, job)
+                actual_contexts = dict(job_check_contexts(path))
+                self.assertEqual(
+                    actual_contexts.get(job),
+                    context,
+                    f"{workflow} job {job!r} does not emit required context {context!r}",
+                )
+
+        producers = required_context_producers(WORKFLOWS, contexts)
+        for context, expected in expected_producers.items():
+            self.assertEqual(
+                producers[context],
+                [expected],
+                f"required context {context!r} must have exactly one authoritative workflow/job producer",
+            )
 
     def test_counterexample_path_filtered_workflow_is_rejected(self) -> None:
         lines = [
@@ -125,6 +201,27 @@ class RequiredCheckTopologyTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(AssertionError, "job-level conditional"):
                 assert_universal_required_job(path, "gate")
+
+    def test_counterexample_duplicate_or_named_spoof_context_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "authoritative.yml").write_text(
+                "name: authoritative\njobs:\n  rust:\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            (root / "spoof.yml").write_text(
+                "name: spoof\njobs:\n  harmless-id:\n    name: rust\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            producers = required_context_producers(root, {"rust"})
+            self.assertEqual(len(producers["rust"]), 2)
+            self.assertEqual(
+                producers["rust"],
+                [
+                    (str(root / "authoritative.yml"), "rust"),
+                    (str(root / "spoof.yml"), "harmless-id"),
+                ],
+            )
 
 
 if __name__ == "__main__":
