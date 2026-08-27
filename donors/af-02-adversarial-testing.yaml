@@ -1,0 +1,150 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-27
+
+sources:
+  - id: rust-fuzz-cargo-fuzz
+    repository: https://github.com/rust-fuzz/cargo-fuzz
+    ref: 984c861c8dfea28055254c5f1d2659ab2cd63f76
+    tag: 0.13.2
+    license: MIT OR Apache-2.0
+    mode:
+      - DEPEND_DEV_TOOL
+      - STUDY
+      - ADAPT_CONFIG
+    scope:
+      - libFuzzer cargo integration
+      - fuzz workspace and target execution model
+      - corpus/minimization workflow
+      - structure-aware fuzz harness integration
+    exclusions:
+      - no commandF product runtime dependency
+      - no semantic authority
+      - no mutable tag/latest installation as retained proof identity
+      - no claim that no-crash duration proves correctness
+
+  - id: sourcefrog-cargo-mutants
+    repository: https://github.com/sourcefrog/cargo-mutants
+    ref: 8ab1dc786a1f61a4e370416cc6c68b81a704e917
+    tag: v27.1.0
+    license: MIT
+    mode:
+      - DEPEND_DEV_TOOL
+      - STUDY
+      - ADAPT_CONFIG
+    scope:
+      - targeted Rust mutation testing
+      - survivor/killed/timeout/build-failure evidence
+      - source/function mutation inventory
+      - narrow mutation exclusions
+    exclusions:
+      - no aggregate mutation score as correctness authority
+      - no broad critical-module skip policy
+      - no automatic classification of timeout/build failure as killed
+      - no commandF runtime dependency
+
+  - id: taiki-e-cargo-llvm-cov
+    repository: https://github.com/taiki-e/cargo-llvm-cov
+    ref: be59056988acd54c7f984b7c85643daea3711b29
+    tag: v0.9.0
+    license: Apache-2.0 OR MIT
+    mode:
+      - DEPEND_DEV_TOOL
+      - STUDY
+      - ADAPT_CONFIG
+    scope:
+      - LLVM source-based line/function/region coverage
+      - machine-readable coverage evidence
+      - measured baseline and regression floors
+    exclusions:
+      - no coverage percentage as semantic correctness proof
+      - no guessed vanity floor
+      - no broad product-source exclusion merely to raise coverage
+      - no commandF runtime dependency
+
+  - id: nextest-rs-nextest
+    repository: https://github.com/nextest-rs/nextest
+    ref: 60fa45f638ffc3f35e74afa65737f45fcd32db2a
+    tag: cargo-nextest-0.9.143
+    license: MIT OR Apache-2.0
+    mode:
+      - DEPEND_DEV_TOOL
+      - STUDY
+      - ADAPT_CONFIG
+    scope:
+      - additive Rust test execution
+      - bounded retry diagnostics
+      - flaky-result-as-failure policy
+      - machine-readable test-run evidence
+    exclusions:
+      - do not replace canonical cargo test
+      - do not convert retry-pass to green
+      - do not use self-update/mutable installation as retained proof identity
+      - no commandF runtime dependency
+
+  - id: proptest-rs-proptest
+    repository: https://github.com/proptest-rs/proptest
+    ref: a6f033cf83adfd55557b86e6065e6f4df054ec70
+    version: 1.11.0
+    license: MIT OR Apache-2.0
+    mode:
+      - DEPEND_TEST_ONLY
+      - STUDY
+      - ADAPT_PATTERNS
+    scope:
+      - property-based generation
+      - shrinking/minimized counterexamples
+      - deterministic/canonical invariant tests
+      - adversarial structured-data generation
+    exclusions:
+      - implementation must pin crates.io version exactly as =1.11.0 and retain registry checksum
+      - repository commit records researched upstream state and does not replace crates.io package identity
+      - no commandF runtime dependency
+
+adoption_decisions:
+  commandf_product_runtime:
+    use: none
+    rationale: AF-02 tooling is development/test assurance only; commandF shipped Rust semantics must not depend on fuzz, mutation, coverage, or alternate test-runner tooling
+
+  fuzz_workspace:
+    use:
+      - cargo-fuzz 0.13.2
+      - libfuzzer-sys =0.4.13
+      - arbitrary =1.4.2
+      - nightly-2026-08-25
+    rationale: raw and structure-aware discovery requires an isolated libFuzzer harness without changing the stable product workspace toolchain
+
+  property_tests:
+    use:
+      - proptest =1.11.0
+    rationale: generated invariant cases and shrinking strengthen canonicalization, validation, graph, path, and retained-evidence tests while remaining test-only
+
+  flaky_detection:
+    use:
+      - cargo-nextest 0.9.143
+      - retries = 2
+      - flaky-result = fail
+    rationale: retry is retained for diagnosis but a retry-pass must remain a failed AF-02 result; canonical cargo test remains mandatory
+
+  coverage:
+    use:
+      - cargo-llvm-cov 0.9.0
+    rationale: source-based coverage provides a measured regression diagnostic; first canonical baseline is measured before floors are frozen
+
+  mutation:
+    use:
+      - cargo-mutants 27.1.0
+    rationale: targeted viable source mutations measure whether existing tests detect plausible false-PASS and fail-open defects; every required survivor is killed or narrowly waived
+
+  regression_corpus:
+    use:
+      - minimized synthetic/public reproducer promotion
+      - stable scenario IDs and SHA-256 digests
+    rationale: stochastic discovery artifacts must become deterministic reproducible regression evidence before a discovered defect is considered closed
+
+review_before_copy:
+  - verify exact source path and commit before copying any upstream code rather than using documented CLI/config interfaces
+  - preserve license notices when required
+  - record crates.io/binary checksums for the exact implementation-time artifacts
+  - keep tool/config adoption separate from semantic authority
+  - re-audit every version/pin change through AF-01 workflow/dependency policy
+  - do not vendor upstream tool source unless a later reviewed task explicitly requires it
