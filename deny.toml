@@ -1,0 +1,59 @@
+# AF-01 T021 dependency trust policy.
+#
+# Derived from specs/015-af-01-trusted-development-baseline/stack-b-dependency-inventory.md.
+# This policy intentionally starts without advisory, source, duplicate, or license waivers.
+
+[advisories]
+ignore = []
+
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "LGPL-2.1-or-later",
+  "MIT",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.8
+exceptions = []
+
+[licenses.private]
+# commandF workspace crates are unpublished (`publish = false`) and are not
+# third-party dependency license authority. Dependency licenses remain checked.
+ignore = true
+registries = []
+
+[bans]
+# The T020 graph contains three transitive duplicate families. Keep them visible
+# without turning the current lockfile into an opaque skip-list contract.
+multiple-versions = "warn"
+wildcards = "deny"
+# Keep the wildcard rule effective for every dependency, including private path
+# dependencies. The repository-owned commandf -> commandf-pkg edge carries an
+# exact =0.0.0 requirement in the manifest instead of relying on a global bypass.
+allow-wildcard-paths = false
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+allow-workspace = false
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

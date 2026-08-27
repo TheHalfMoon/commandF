@@ -22,6 +22,38 @@
     "require_external_uses_full_sha": "External Actions and reusable workflows must be bound to an immutable 40-hex commit so mutable tags or branches cannot change executed code without a repository diff."
   },
   "workflows": {
+    ".github/workflows/af01-security.yml": {
+      "jobs": {
+        "cargo-audit": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 20
+        },
+        "cargo-deny": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        },
+        "dependency-inventory": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 10
+        },
+        "zizmor": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    },
     ".github/workflows/cf06-oracle.yml": {
       "jobs": {
         "oracle-changed-profile": {

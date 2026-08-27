@@ -29,22 +29,22 @@ Depends on T005.
 - [x] **T014** Harden `.github/workflows/ci.yml` to full-SHA external Actions, credentialless checkout, explicit machine-checkable least permissions, fixed supported runner label, bounded timeout, and preserved existing semantic/test steps.
 - [x] **T015** Reconcile every other existing workflow and repository Action metadata file to the AF-01 baseline, including permission declarations and proof-critical container digest identity, without changing its product/oracle/proof semantics or path-filter authority except where later universal required-check aggregation is explicitly introduced.
 - [x] **T016** Add a regression that discovers both `action.yml` and `action.yaml` anywhere in the tracked tree and fails if a future workflow, Action metadata file, permission grant, external Action ref, checkout credential setting, or proof-critical container identity escapes AF-01 trust auditing.
-- [ ] **T017** Run mandatory workspace gates and every path-applicable existing proof/oracle workflow on the exact Stack A head.
-- [ ] **T018** Request CodeRabbit and Qodo on exact Stack A head; disposition every substantive returned finding and require zero unresolved material review threads.
-- [ ] **T019** Merge Stack A only from its exact qualified head and record canonical merge/main/tree.
+- [x] **T017** Run mandatory workspace gates and every path-applicable existing proof/oracle workflow on the exact Stack A head.
+- [x] **T018** Request CodeRabbit and Qodo on exact Stack A head; disposition every substantive returned finding and require zero unresolved material review threads.
+- [x] **T019** Merge Stack A only from its exact qualified head and record canonical merge/main/tree.
 
 ## Phase 2 / Stack B — dependency and CI security gates
 
 Depends on canonical T019.
 
-- [ ] **T020** Inspect the exact current Cargo dependency graph and license/source metadata; document intended direct/transitive source and license policy before generating `deny.toml`.
-- [ ] **T021** Add checked-in `deny.toml` covering licenses, bans/duplicates, advisories, and sources with narrow reviewed exceptions only.
-- [ ] **T022** Add pinned `cargo-deny` execution in an independently diagnosable CI job; retain machine-readable or complete textual evidence.
-- [ ] **T023** Add pinned RustSec `cargo-audit` execution against exact `Cargo.lock`; retain advisory database/tool identity where available.
-- [ ] **T024** Define waiver documentation requirements for any advisory/security exception: identity, rationale, scope, compensating evidence, and revisit/removal condition.
-- [ ] **T025** Add pinned `zizmor` audit over all repository workflows/actions; freeze initial severity policy from observed baseline rather than guessing around findings.
-- [ ] **T026** Fix valid high/medium workflow findings or amend the plan/tasks with explicit reviewed disposition; do not lower the gate silently.
-- [ ] **T027** Add regressions proving dependency/workflow security configurations and both Action metadata filename forms are included in relevant workflow path/coverage logic so policy mutations cannot bypass gates.
+- [x] **T020** Inspect the exact current Cargo dependency graph and license/source metadata; document intended direct/transitive source and license policy before generating `deny.toml`.
+- [x] **T021** Add checked-in `deny.toml` covering licenses, bans/duplicates, advisories, and sources with narrow reviewed exceptions only.
+- [x] **T022** Add pinned `cargo-deny` execution in an independently diagnosable CI job; retain machine-readable or complete textual evidence.
+- [x] **T023** Add pinned RustSec `cargo-audit` execution against exact `Cargo.lock`; retain advisory database/tool identity where available.
+- [x] **T024** Define waiver documentation requirements for any advisory/security exception: identity, rationale, scope, compensating evidence, and revisit/removal condition.
+- [x] **T025** Add pinned `zizmor` audit over all repository workflows/actions; freeze initial severity policy from observed baseline rather than guessing around findings.
+- [x] **T026** Fix valid high/medium workflow findings or amend the plan/tasks with explicit reviewed disposition; do not lower the gate silently.
+- [x] **T027** Add regressions proving dependency/workflow security configurations and both Action metadata filename forms are included in relevant workflow path/coverage logic so policy mutations cannot bypass gates.
 - [ ] **T028** Run mandatory workspace gates plus all path-applicable existing proof/oracle workflows on exact Stack B head.
 - [ ] **T029** Obtain and disposition CodeRabbit/Qodo review on exact Stack B head, merge only from exact qualified head, and record canonical merge/main/tree.
 

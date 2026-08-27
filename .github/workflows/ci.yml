@@ -24,6 +24,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
         with:
           components: rustfmt, clippy
+      - name: AF-01 T020 exact dependency metadata inventory
+        run: cargo metadata --locked --format-version 1 | python3 .github/scripts/summarize_cargo_metadata.py
       - name: AF-01 workflow trust audit tests
         run: python3 -m unittest discover -s .github/scripts -p 'test_audit_workflow_trust*.py'
       - name: AF-01 repository workflow trust audit
