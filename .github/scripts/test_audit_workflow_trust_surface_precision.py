@@ -270,6 +270,117 @@ runs:
         )
         self.assertNotIn("unsupported_action_script", codes(findings))
 
+    def test_env_unset_operand_shell_heredoc_prefix_fails_closed(self) -> None:
+        self.assertTrue(SURFACE._heredoc_prefix_executes_shell("env -u UNUSED bash "))
+        self.assertTrue(SURFACE._heredoc_prefix_executes_shell("env --unset=UNUSED bash "))
+
+    def test_wrapper_shell_heredoc_in_action_fails_closed(self) -> None:
+        text = """name: fixture
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        env -u UNUSED bash <<'SH'
+        cargo test --workspace
+        SH
+"""
+        findings = SURFACE.audit_action_text("action.yml", text, LOCKED)
+        self.assertIn("unsupported_shell_heredoc", codes(findings))
+
+    def test_wrapper_shell_heredoc_in_workflow_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = root / ".github" / "workflows" / "test.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text(
+                """name: fixture
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - shell: bash
+        run: |
+          env -u UNUSED bash <<'SH'
+          cargo test --workspace
+          SH
+""",
+                encoding="utf-8",
+            )
+            result = SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=[".github/workflows/test.yml"],
+            )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_shell_heredoc", [item["code"] for item in result["findings"]])
+
+    def test_non_shell_data_heredoc_is_not_rejected(self) -> None:
+        findings = SURFACE._shell_heredoc_findings(
+            "action.yml", "composite-action", "cat <<'EOF'\ndata\nEOF"
+        )
+        self.assertNotIn("unsupported_shell_heredoc", codes(findings))
+
+    def _audit_hash_resolution(self, delegated_script: str, prefix: str = "hash") -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                f"""name: fixture
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        {prefix} -p "$GITHUB_ACTION_PATH/scripts/build.sh" build.sh
+        build.sh
+""",
+                encoding="utf-8",
+            )
+            (root / "scripts" / "build.sh").write_text(delegated_script, encoding="utf-8")
+            return SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+
+    def test_hash_resolution_rejects_locked_bare_action_script(self) -> None:
+        result = self._audit_hash_resolution(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_hash_resolution_rejects_unlocked_bare_action_script(self) -> None:
+        result = self._audit_hash_resolution(
+            "#!/usr/bin/env bash\ncargo test --workspace\n"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_command_hash_resolution_fails_closed(self) -> None:
+        result = self._audit_hash_resolution(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n", prefix="command hash"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_builtin_hash_resolution_fails_closed(self) -> None:
+        result = self._audit_hash_resolution(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n", prefix="builtin hash"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_resolution_mutation_builtins_fail_closed(self) -> None:
+        for run in ("hash -r", "alias build.sh=true", "unalias build.sh", "enable -n printf"):
+            with self.subTest(run=run):
+                findings = SURFACE.audit_action_text("action.yml", action(run), LOCKED)
+                self.assertIn("unsupported_action_script", codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
