@@ -2,7 +2,7 @@
 
 Status: `T020_COMPLETE_POLICY_INPUT`
 
-This document records the exact dependency/license/source evidence inspected before creating `deny.toml`. It is the policy input for AF-01 T021; it is not itself a scanner PASS.
+This document records the exact dependency/license/source evidence inspected before creating `deny.toml`, plus the observed Stack B scanner calibration used to freeze the initial policies. It is not the final T028 exact-head qualification record.
 
 ## Canonical input
 
@@ -90,14 +90,16 @@ Zlib
 
 No broader license family, wildcard, or blanket approval is authorized by this inventory.
 
-### Legacy metadata exception boundary
+### Legacy metadata boundary
 
 Two exact packages report the legacy non-SPDX expression `MIT/Apache-2.0` in Cargo metadata:
 
 - `filetime@0.2.29`
 - `version_check@0.9.5`
 
-T021 must not convert this into a global acceptance rule. If cargo-deny 0.20.2 does not normalize the legacy expression itself, any remediation must be package-scoped and evidence-backed (for example, an exact package exception or license clarification tied to upstream license material). The policy must remain narrower than accepting arbitrary malformed license expressions.
+`cargo-deny 0.20.2` accepted the locked graph under the narrow atom allowlist without a package-specific legacy-expression waiver. No global malformed-license exception or package exception was added.
+
+The two workspace crates are unpublished (`publish = false`). `deny.toml` therefore ignores private workspace-crate license declarations while continuing to enforce every third-party dependency license. This is a repository-owned-boundary decision, not permission to ignore a private third-party registry.
 
 ## Duplicate/version inventory
 
@@ -111,12 +113,15 @@ windows-sys: 0.52.0, 0.61.2
 
 These are current transitive graph facts, not silently approved permanent exceptions.
 
-T021 policy intent:
+T021 policy intent and implemented boundary:
 
 - keep duplicate versions visible and machine-diagnosable;
 - use `multiple-versions = "warn"` initially rather than creating opaque skip lists for the current graph;
-- set wildcard dependency requirements to fail closed;
+- keep external wildcard dependency requirements fail-closed;
+- permit the repository-owned unpublished workspace path edge with `allow-wildcard-paths = true` because the local path requirement has no registry version requirement to pin;
 - do not add `skip` or `skip-tree` entries unless a later exact finding proves a narrow necessity and records a reason/revisit condition.
+
+`allow-wildcard-paths = true` does not authorize wildcard version requirements for crates.io, git, or alternate registries. Source policy remains independently fail-closed.
 
 ## Source policy intent
 
@@ -125,7 +130,7 @@ Observed source authority is only:
 - local workspace/path packages; and
 - crates.io via `https://github.com/rust-lang/crates.io-index`.
 
-T021 must therefore enforce:
+T021 therefore enforces:
 
 ```text
 unknown registry: deny
@@ -134,7 +139,7 @@ allowed registry: crates.io only
 allowed git sources: none
 ```
 
-A future git dependency, alternate registry, or additional source authority must require a repository diff and explicit policy review; it must not be admitted by a wildcard source rule.
+A future git dependency, alternate registry, or additional source authority requires a repository diff and explicit policy review; it cannot be admitted by a wildcard source rule.
 
 ## Advisory policy intent
 
@@ -143,23 +148,50 @@ At the policy layer:
 - RustSec advisories are not blanket-ignored;
 - `advisories.ignore` starts empty;
 - current/future advisory waivers are governed by T024 rather than handwritten anonymous ignore entries;
-- yanked or vulnerable dependency evidence must remain visible to the scanner gates;
-- scanner transport/tooling failures must be CI failures, not PASS-equivalent outcomes.
+- yanked or vulnerable dependency evidence remains visible to the scanner gates;
+- scanner transport/tooling failures are CI failures, not PASS-equivalent outcomes.
 
-T023 remains responsible for an independent cargo-audit view so cargo-deny is not the only advisory signal.
+T023 supplies an independent `cargo-audit` view so cargo-deny is not the only advisory signal.
 
 ## License policy intent
 
-T021 should allow only the observed SPDX atoms listed above and use cargo-deny 0.20.2's exact configuration semantics. The policy must:
+T021 allows only the observed SPDX atoms listed above and uses cargo-deny 0.20.2's exact configuration semantics. The policy:
 
-- avoid wildcard license approval;
-- avoid ignoring private/workspace packages as a shortcut unless repository semantics require it;
-- preserve `confidence-threshold = 0.8` unless exact scanner evidence justifies a narrower change;
-- scope any legacy-license remediation to the exact affected package/version;
-- fail on any new dependency whose license cannot be matched to the checked-in policy.
+- has no wildcard license approval;
+- ignores only the unpublished workspace crates as first-party license subjects while retaining third-party dependency checks;
+- preserves `confidence-threshold = 0.8`;
+- has no package/version license exception or skip list;
+- fails a new dependency whose license cannot be matched to the checked-in policy.
+
+## Stack B scanner calibration
+
+The following run is calibration evidence, not the final T028 head qualification:
+
+```text
+PR head: 66ba48fa7aaa895c8b3cd3d7fefbb82ec55abac7
+PR head tree: 53196a991a7ee579da0d72f4f0b8c5373ba7698a
+GitHub PR merge-ref tree: 53196a991a7ee579da0d72f4f0b8c5373ba7698a
+workflow: af01-security
+run: 33050044070
+```
+
+The PR head and GitHub's temporary merge ref had the same tree, so the scanner inputs were byte-identical. The workflow was subsequently hardened to checkout and attest `AF01_SOURCE_SHA` explicitly because the original proof JSON labeled GitHub's temporary `GITHUB_SHA` as `head_sha`.
+
+Observed calibration results:
+
+- dependency inventory: `SUCCESS`;
+- cargo-deny action `v2.1.1` at commit `3c6349835b2b7b196a839186cb8b78e02f7b5f25`, cargo-deny `0.20.2`: `SUCCESS` for advisories, bans, licenses, and sources;
+- RustSec cargo-audit `0.22.2`: exit `0` against exact `Cargo.lock`;
+- RustSec advisory database origin: `https://github.com/RustSec/advisory-db.git`;
+- observed advisory database commit: `a7bfe16948bf6f3ee25bdee4822209f87da21b80`;
+- observed `Cargo.lock` SHA-256: `0c58bb1b2a78ad5ed7e196ef20622fb5673536146ab6e0f787eb2d5f6517cf66`;
+- zizmor action `v0.6.2` at commit `3dc1ecc9bcb9e94e9b2c709687979e1298497054`, zizmor `1.29.0`, `min-severity=medium`, online audits disabled: `SUCCESS` with no blocking medium/high finding;
+- security waivers: zero.
+
+This observed baseline freezes the initial zizmor gate at `medium`; it does not authorize lowering the threshold around a future finding. T026 therefore has no current high/medium finding to disposition. Any later finding must be fixed or explicitly dispositioned under the AF-01 waiver policy without silently weakening the gate.
 
 ## T020 decision
 
 `T020 = COMPLETE`
 
-The current graph, source authority, license surface, and duplicate families are now documented from exact locked evidence. T021 may create `deny.toml` from this inventory. No cargo-deny, cargo-audit, advisory-waiver, or zizmor PASS is claimed by this document.
+The current graph, source authority, license surface, duplicate families, and initial scanner calibration are documented. T021–T027 implement the checked-in dependency/workflow security gates and waiver/coverage policy. Final Stack B PASS remains governed by T028 exact-head workflow evidence and T029 exact-head independent reviews plus canonical merge truth.
