@@ -28,7 +28,10 @@ class MainRulesetContractTests(unittest.TestCase):
         rules = ruleset.get("rules")
         self.assertIsInstance(rules, list)
         by_type = {rule.get("type"): rule for rule in rules if isinstance(rule, dict)}
-        self.assertEqual(set(by_type), {"deletion", "non_fast_forward", "pull_request", "required_status_checks"})
+        self.assertEqual(
+            set(by_type),
+            {"deletion", "non_fast_forward", "pull_request", "required_status_checks"},
+        )
         self.assertEqual(by_type["deletion"], {"type": "deletion"})
         self.assertEqual(by_type["non_fast_forward"], {"type": "non_fast_forward"})
 
@@ -38,7 +41,7 @@ class MainRulesetContractTests(unittest.TestCase):
             {
                 "allowed_merge_methods": ["merge"],
                 "dismiss_stale_reviews_on_push": True,
-                "require_code_owner_review": False,
+                "require_code_owner_review": True,
                 "require_last_push_approval": True,
                 "required_approving_review_count": 1,
                 "required_review_thread_resolution": True,
@@ -79,6 +82,17 @@ class MainRulesetContractTests(unittest.TestCase):
         for check in required_rule["parameters"]["required_status_checks"]:
             self.assertEqual(set(check), {"context", "integration_id"})
             self.assertEqual(check["integration_id"], GITHUB_ACTIONS_INTEGRATION_ID)
+
+    def test_workflow_changes_require_code_owner_review(self) -> None:
+        ruleset = json.loads(RULESET.read_text(encoding="utf-8"))
+        pull_request_rule = next(
+            rule for rule in ruleset["rules"] if rule["type"] == "pull_request"
+        )
+        parameters = pull_request_rule["parameters"]
+        self.assertIs(parameters.get("require_code_owner_review"), True)
+        self.assertIs(parameters.get("dismiss_stale_reviews_on_push"), True)
+        self.assertIs(parameters.get("require_last_push_approval"), True)
+        self.assertGreaterEqual(parameters.get("required_approving_review_count", 0), 1)
 
 
 if __name__ == "__main__":
