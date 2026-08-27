@@ -39,7 +39,17 @@ class AssuranceSummaryTests(unittest.TestCase):
             ".github/workflows/ci.yml": "name: ci\non: [pull_request]\n",
             ".github/workflow-trust-policy.json": "{\"schema\":1}\n",
             "action.yaml": "name: fixture\nruns:\n  using: composite\n  steps: []\n",
-            "Cargo.lock": "# fixture lock\n",
+            "Cargo.lock": (
+                "version = 4\n\n"
+                "[[package]]\n"
+                "name = \"commandf\"\n"
+                "version = \"0.1.0\"\n\n"
+                "[[package]]\n"
+                "name = \"dep\"\n"
+                "version = \"1.0.0\"\n"
+                f"source = \"{SUMMARY.CRATES_IO_SOURCE}\"\n"
+                f"checksum = \"{'b' * 64}\"\n"
+            ),
             "deny.toml": "[bans]\nwildcards = \"deny\"\n",
         }
         for relative, content in files.items():
@@ -62,6 +72,66 @@ class AssuranceSummaryTests(unittest.TestCase):
     def _sha(self, relative: str) -> str:
         return hashlib.sha256((self.root / relative).read_bytes()).hexdigest()
 
+    def _inventory_packages(self) -> list[dict[str, object]]:
+        dep_id = f"{SUMMARY.CRATES_IO_SOURCE}#dep@1.0.0"
+        root_id = "path+file:///workspace/commandf#0.1.0"
+        return [
+            {
+                "dependencies": [
+                    {
+                        "name": "dep",
+                        "package_id": dep_id,
+                        "package_name": "dep",
+                        "source": SUMMARY.CRATES_IO_SOURCE,
+                        "version": "1.0.0",
+                    }
+                ],
+                "license": None,
+                "name": "commandf",
+                "package_id": root_id,
+                "source": None,
+                "source_class": "workspace",
+                "version": "0.1.0",
+                "workspace": True,
+            },
+            {
+                "dependencies": [],
+                "license": "MIT",
+                "name": "dep",
+                "package_id": dep_id,
+                "source": SUMMARY.CRATES_IO_SOURCE,
+                "source_class": "crates.io",
+                "version": "1.0.0",
+                "workspace": False,
+            },
+        ]
+
+    def _write_inventory(self, packages: list[dict[str, object]] | None = None) -> None:
+        packages = self._inventory_packages() if packages is None else packages
+        inventory = {
+            "schema": 2,
+            "ok": True,
+            "package_count": len(packages),
+            "packages": packages,
+            "graph_sha256": SUMMARY.canonical_graph_sha256(packages),
+            "source_classes": {"crates.io": 1, "workspace": 1},
+            "unknown_license": [],
+        }
+        write_json(self.evidence / "dependency-inventory.json", inventory)
+        write_json(
+            self.evidence / "dependency-inventory-proof.json",
+            {
+                "schema": 1,
+                "head_sha": self.source,
+                "command": SUMMARY.INVENTORY_COMMAND,
+                "cargo_lock_sha256": self._sha("Cargo.lock"),
+                "inventory_sha256": hashlib.sha256(
+                    (self.evidence / "dependency-inventory.json").read_bytes()
+                ).hexdigest(),
+                "graph_sha256": inventory["graph_sha256"],
+            },
+        )
+
     def _write_valid_evidence(self) -> None:
         write_json(
             self.evidence / "workflow-trust.json",
@@ -73,16 +143,7 @@ class AssuranceSummaryTests(unittest.TestCase):
                 "findings": [],
             },
         )
-        write_json(
-            self.evidence / "dependency-inventory.json",
-            {
-                "schema": 2,
-                "ok": True,
-                "package_count": 0,
-                "packages": [],
-                "unknown_license": [],
-            },
-        )
+        self._write_inventory()
         write_json(
             self.evidence / "cargo-deny-proof.json",
             {
@@ -109,7 +170,17 @@ class AssuranceSummaryTests(unittest.TestCase):
         )
         write_json(
             self.evidence / "cargo-audit.json",
-            {"vulnerabilities": {"found": False, "count": 0, "list": []}},
+            {
+                "database": {
+                    "advisory-count": 1,
+                    "last-commit": "a" * 40,
+                    "last-updated": "2026-08-27T00:00:00Z",
+                },
+                "lockfile": {"dependency-count": 2},
+                "settings": {},
+                "vulnerabilities": {"found": False, "count": 0, "list": []},
+                "warnings": {},
+            },
         )
         write_json(
             self.evidence / "zizmor-proof.json",
@@ -142,13 +213,64 @@ class AssuranceSummaryTests(unittest.TestCase):
             SUMMARY.build_summary(self.root, self.evidence, self.source, "0" * 40)
 
     def test_missing_required_evidence_fails_closed(self) -> None:
-        (self.evidence / "cargo-deny-proof.json").unlink()
+        (self.evidence / "dependency-inventory-proof.json").unlink()
         with self.assertRaisesRegex(SUMMARY.AssuranceError, "required evidence is missing"):
             self.build()
 
     def test_malformed_evidence_fails_closed(self) -> None:
         (self.evidence / "dependency-inventory.json").write_text("{", encoding="utf-8")
         with self.assertRaisesRegex(SUMMARY.AssuranceError, "invalid JSON evidence"):
+            self.build()
+
+    def test_dependency_graph_digest_mismatch_fails_closed(self) -> None:
+        inventory = json.loads(
+            (self.evidence / "dependency-inventory.json").read_text(encoding="utf-8")
+        )
+        inventory["packages"][1]["version"] = "9.9.9"
+        write_json(self.evidence / "dependency-inventory.json", inventory)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "graph digest does not match"):
+            self.build()
+
+    def test_dependency_inventory_proof_must_bind_cargo_lock(self) -> None:
+        proof = json.loads(
+            (self.evidence / "dependency-inventory-proof.json").read_text(encoding="utf-8")
+        )
+        proof["cargo_lock_sha256"] = "0" * 64
+        write_json(self.evidence / "dependency-inventory-proof.json", proof)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "identity/graph mismatch"):
+            self.build()
+
+    def test_dependency_inventory_must_match_cargo_lock_identities(self) -> None:
+        packages = self._inventory_packages()
+        packages[1]["version"] = "2.0.0"
+        self._write_inventory(packages)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "does not match Cargo.lock"):
+            self.build()
+
+    def test_cargo_audit_empty_object_fails_closed(self) -> None:
+        write_json(self.evidence / "cargo-audit.json", {})
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "missing vulnerabilities evidence"):
+            self.build()
+
+    def test_cargo_audit_missing_found_fails_closed(self) -> None:
+        result = json.loads((self.evidence / "cargo-audit.json").read_text(encoding="utf-8"))
+        result["vulnerabilities"].pop("found")
+        write_json(self.evidence / "cargo-audit.json", result)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "explicitly prove zero"):
+            self.build()
+
+    def test_cargo_audit_zero_fields_must_be_consistent(self) -> None:
+        result = json.loads((self.evidence / "cargo-audit.json").read_text(encoding="utf-8"))
+        result["vulnerabilities"]["count"] = 1
+        write_json(self.evidence / "cargo-audit.json", result)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "zero-vulnerability fields"):
+            self.build()
+
+    def test_cargo_audit_database_commit_must_match_proof(self) -> None:
+        result = json.loads((self.evidence / "cargo-audit.json").read_text(encoding="utf-8"))
+        result["database"]["last-commit"] = "b" * 40
+        write_json(self.evidence / "cargo-audit.json", result)
+        with self.assertRaisesRegex(SUMMARY.AssuranceError, "database commit"):
             self.build()
 
     def test_permission_policy_mismatch_fails_closed(self) -> None:
