@@ -13,6 +13,18 @@ AUDIT = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = AUDIT
 SPEC.loader.exec_module(AUDIT)
 
+SUMMARY_TEST_PATH = Path(__file__).with_name("test_summarize_cargo_metadata.py")
+SUMMARY_TEST_SPEC = importlib.util.spec_from_file_location(
+    "summarize_cargo_metadata_regression_tests", SUMMARY_TEST_PATH
+)
+assert SUMMARY_TEST_SPEC is not None and SUMMARY_TEST_SPEC.loader is not None
+SUMMARY_TESTS = importlib.util.module_from_spec(SUMMARY_TEST_SPEC)
+sys.modules[SUMMARY_TEST_SPEC.name] = SUMMARY_TESTS
+SUMMARY_TEST_SPEC.loader.exec_module(SUMMARY_TESTS)
+# The existing universal AF-01 unittest discovery pattern loads this module. Re-export
+# the inventory regression suite so exact-graph tests cannot be skipped by that gate.
+CargoMetadataSummaryTests = SUMMARY_TESTS.CargoMetadataSummaryTests
+
 ROOT = Path(__file__).resolve().parents[2]
 SECURITY_WORKFLOW = ROOT / ".github" / "workflows" / "af01-security.yml"
 
@@ -49,6 +61,8 @@ class Af01SecurityCoverageTests(unittest.TestCase):
             ".github/workflow-trust-policy.json",
             ".github/workflows/af01-security.yml",
             ".github/scripts/audit_workflow_trust.py",
+            ".github/scripts/summarize_cargo_metadata.py",
+            ".github/scripts/test_summarize_cargo_metadata.py",
             "action.yml",
             "nested/action.yaml",
         )
