@@ -28,6 +28,7 @@ SHELL_SHEBANG_RE = re.compile(r"^#![^\n]*\b(?:bash|dash|ksh|sh|zsh)\b")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
 VARIABLE_TARGET_BUILTINS = frozenset({"read", "mapfile", "readarray", "unset"})
 COMMAND_BUILTIN_WRAPPERS = frozenset({"builtin", "command"})
+SHELL_BOUNDARY_CHARS = frozenset({";", "&", "|", "\n"})
 
 
 def _tracked_files(root: Path) -> list[str]:
@@ -176,41 +177,68 @@ def _shell_scripts(path: str, text: str) -> list[str]:
     return [text]
 
 
+def _is_shell_boundary(token: str) -> bool:
+    return bool(token) and all(character in SHELL_BOUNDARY_CHARS for character in token)
+
+
+def _shell_command_tokens(script: str) -> tuple[list[list[str]], str | None]:
+    """Tokenize shell commands without splitting separators that occur inside quotes."""
+    command_text = core._without_heredoc_bodies(script)
+    joined = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", command_text)
+    lexer = shlex.shlex(joined, posix=True, punctuation_chars=";&|\n")
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+
+    commands: list[list[str]] = []
+    current: list[str] = []
+    try:
+        for token in lexer:
+            if _is_shell_boundary(token):
+                if current:
+                    commands.append(current)
+                    current = []
+                continue
+            current.append(token)
+    except ValueError as error:
+        return [], str(error)
+    if current:
+        commands.append(current)
+    return commands, None
+
+
 def _dynamic_variable_write_findings(path: str, text: str) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for script in _shell_scripts(path, text):
-        for segment in core._logical_shell_segments(script):
-            try:
-                tokens = shlex.split(segment, comments=True, posix=True)
-            except ValueError as error:
-                if "$" in segment and any(
-                    name in segment
-                    for name in (
-                        "export",
-                        "declare",
-                        "local",
-                        "readonly",
-                        "typeset",
-                        "printf",
-                        "read",
-                        "mapfile",
-                        "readarray",
-                        "getopts",
-                        "unset",
-                        "env",
-                    )
-                ):
-                    findings.append(
-                        {
-                            "channel": "",
-                            "code": "unsupported_dynamic_variable_write",
-                            "detail": f"cannot safely parse dynamic variable-writing shell segment: {error}: {segment}",
-                            "path": path,
-                        }
-                    )
-                continue
-            if not tokens:
-                continue
+        commands, parse_error = _shell_command_tokens(script)
+        if parse_error is not None:
+            if "$" in script and any(
+                name in script
+                for name in (
+                    "export",
+                    "declare",
+                    "local",
+                    "readonly",
+                    "typeset",
+                    "printf",
+                    "read",
+                    "mapfile",
+                    "readarray",
+                    "getopts",
+                    "unset",
+                    "env",
+                )
+            ):
+                findings.append(
+                    {
+                        "channel": "",
+                        "code": "unsupported_dynamic_variable_write",
+                        "detail": f"cannot safely parse dynamic variable-writing shell script: {parse_error}",
+                        "path": path,
+                    }
+                )
+            continue
+        for tokens in commands:
             detail = _dynamic_writer_detail(tokens)
             if detail is not None:
                 findings.append(
