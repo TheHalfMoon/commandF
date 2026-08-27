@@ -20,6 +20,7 @@ import audit_workflow_trust as core
 HEREDOC_OPERATOR_RE = re.compile(
     r"<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?"
 )
+REDIRECTION_TOKEN_RE = re.compile(r"^(?:\d*)?(?:>>?|<<?|<>|>&|<&).+$")
 DOUBLE_BRACKET_RE = re.compile(r"\[\[(?:(?!\]\]).)*\]\]", re.DOTALL)
 ACTION_LOCAL_SCRIPT_RE = re.compile(
     r"^\$(?:GITHUB_ACTION_PATH|\{GITHUB_ACTION_PATH\})/"
@@ -31,7 +32,7 @@ VARIABLE_COMMAND_RE = re.compile(
 ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
 ACTION_SOURCE_BUILTINS = frozenset({".", "source"})
-SHELL_HEREDOC_WRAPPERS = frozenset(
+EXECUTION_WRAPPERS = frozenset(
     {"command", "env", "exec", "nice", "nohup", "stdbuf", "sudo", "timeout"}
 )
 
@@ -55,6 +56,19 @@ def _raw_executable_index(tokens: list[str]) -> int | None:
     while index < len(tokens) and tokens[index] in core.SHELL_CONTROL_WORDS:
         index += 1
     return index if index < len(tokens) else None
+
+
+def _wrapper_hides_cargo(tokens: list[str]) -> bool:
+    """Detect Cargo behind an execution wrapper the core constrained normalizer did not resolve."""
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is None or _basename(tokens[raw_index]) not in EXECUTION_WRAPPERS:
+        return False
+    return any(_basename(token) == "cargo" for token in tokens[raw_index + 1 :])
+
+
+def _only_redirections(tokens: list[str]) -> bool:
+    """Allow fixed shell redirections after a Cargo information flag."""
+    return all(REDIRECTION_TOKEN_RE.fullmatch(token) is not None for token in tokens)
 
 
 def _heredoc_prefix_executes_shell(prefix: str) -> bool:
@@ -86,7 +100,7 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
     raw_index = _raw_executable_index(tokens)
     if raw_index is None:
         return False
-    if _basename(tokens[raw_index]) not in SHELL_HEREDOC_WRAPPERS:
+    if _basename(tokens[raw_index]) not in EXECUTION_WRAPPERS:
         return False
     # Fail closed on wrapper forms the core constrained normalizer does not fully understand (for
     # example `env -u NAME bash` or an absolute `/usr/bin/env` wrapper).
@@ -205,13 +219,13 @@ def _direct_cargo_findings(
 
         command_index = core._command_token_index(tokens)
         if command_index is None or command_index >= len(tokens):
-            if any(core.CARGO_WORD_RE.search(token) for token in tokens):
+            if _wrapper_hides_cargo(tokens):
                 findings.append(
                     _finding(
                         "unsupported_cargo_indirect",
                         path,
                         scope,
-                        f"Cargo appears without a statically executable command: {segment}",
+                        f"execution wrapper hides Cargo from static command normalization: {segment}",
                     )
                 )
             continue
@@ -278,13 +292,13 @@ def _direct_cargo_findings(
 
         is_direct_cargo = command == "cargo" or command_basename == "cargo"
         if not is_direct_cargo:
-            if any(core.CARGO_WORD_RE.search(token) for token in tokens):
+            if _wrapper_hides_cargo(tokens):
                 findings.append(
                     _finding(
                         "unsupported_cargo_indirect",
                         path,
                         scope,
-                        f"Cargo appears outside the statically executable command position: {segment}",
+                        f"execution wrapper hides Cargo from static command normalization: {segment}",
                     )
                 )
             continue
@@ -303,7 +317,18 @@ def _direct_cargo_findings(
             )
             continue
         subcommand = tokens[subcommand_index]
-        if subcommand in core.CARGO_INFO_FLAGS and subcommand_index == len(tokens) - 1:
+        if subcommand in core.CARGO_INFO_FLAGS:
+            trailing = tokens[subcommand_index + 1 :]
+            if not trailing or _only_redirections(trailing):
+                continue
+            findings.append(
+                _finding(
+                    "unsupported_cargo_syntax",
+                    path,
+                    scope,
+                    f"Cargo information flag has unsupported trailing syntax: {segment}",
+                )
+            )
             continue
         if subcommand.startswith("-"):
             findings.append(
