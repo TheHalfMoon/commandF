@@ -4,7 +4,9 @@ set -euo pipefail
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
 
-fake="$temp/fake-commandf"
+fake_target="$temp/fake-target"
+mkdir -p "$fake_target/debug"
+fake="$fake_target/debug/commandf"
 cat > "$fake" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -83,6 +85,7 @@ run_case() {
   : > "$fsh_index"
 
   set +e
+  CARGO_TARGET_DIR="$fake_target" \
   GITHUB_OUTPUT="$output_file" \
   GITHUB_WORKSPACE="$case_dir/workspace" \
   COMMANDF_RESOLVED_REPORT_PATH="$report_path" \
@@ -101,7 +104,7 @@ run_case() {
   FAKE_RENDER_CODE="$render_code" \
   FAKE_SOURCE_MAP_ARGV_LOG="$source_map_argv" \
   FAKE_RENDER_ARGV_LOG="$render_argv" \
-  bash scripts/github-action-run.sh "$fake" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  bash scripts/github-action-run.sh > "$case_dir/stdout" 2> "$case_dir/stderr"
   actual=$?
   set -e
 
