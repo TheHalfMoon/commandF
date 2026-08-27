@@ -13,6 +13,7 @@ permissions:
 env:
   AF01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   AF01_EVIDENCE_DIR: /tmp/af01-assurance-evidence
+  PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
   assurance-proof:
