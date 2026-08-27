@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary="${1:-}"
-if [[ -z "$binary" || ! -x "$binary" ]]; then
-  printf '::error title=commandF operational failure::commandF Action runner received no executable binary\n'
+if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
+  printf '::error title=commandF operational failure::commandF Action runner received no target directory\n'
+  exit 1
+fi
+binary="$CARGO_TARGET_DIR/debug/commandf"
+if [[ ! -x "$binary" ]]; then
+  printf '::error title=commandF operational failure::built commandF binary is missing or not executable\n'
   exit 1
 fi
 

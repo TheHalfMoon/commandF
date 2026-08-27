@@ -78,9 +78,8 @@ if ! cargo +1.97.1 build --locked \
   emit_operational_failure "unable to build exact commandF source with the pinned toolchain"
 fi
 
-binary="$CARGO_TARGET_DIR/debug/commandf"
-if [[ ! -x "$binary" ]]; then
+if [[ ! -x "$CARGO_TARGET_DIR/debug/commandf" ]]; then
   emit_operational_failure "built commandF binary is missing or not executable"
 fi
 
-exec bash "$GITHUB_ACTION_PATH/scripts/github-action-run.sh" "$binary"
+exec bash "$GITHUB_ACTION_PATH/scripts/github-action-run.sh"
