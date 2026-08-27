@@ -28,6 +28,16 @@ This inventory records the tracked GitHub workflow/action authority that AF-01 S
 
 No `action.yaml` metadata file is present at the inventory base. AF-01 discovery still treats both `action.yml` and `action.yaml` at any tracked path as authoritative scan inputs.
 
+The source-backed root Action delegates through tracked repository-owned shell sources:
+
+```text
+action.yml
+  -> scripts/github-action.sh
+  -> scripts/github-action-run.sh
+```
+
+Because those scripts can execute lockfile-consuming Cargo commands or delegate additional shell authority, Stack A treats the statically exposed `$GITHUB_ACTION_PATH/...` chain as part of the Action trust surface. Delegated Action shell sources must be tracked, recursively auditable, cycle-bounded, and exact-path static. Dynamic, relative, command-substituted, shell-`-c`, or prefix/suffix-expanded script authority fails closed. The Action runner binds execution to the built `$CARGO_TARGET_DIR/debug/commandf` path rather than accepting a runtime-selected executable argument.
+
 ## Job authority inventory
 
 | Workflow | Job | Current effective permission | Current runner | Current container | Current timeout | Stack A disposition |
@@ -80,7 +90,9 @@ Current containerized proof jobs use digest-bound Rust images. No service contai
 
 Current workflow commands that build/check/test/run against the Rust dependency graph already use `--locked` in the proof/oracle/registry workflows and in the relevant `ci.yml` clippy/test/run invocations. `cargo fmt` and `cargo --version` are not lockfile-consuming commands and are outside this rule.
 
-AF-01 audit treats at least these cargo subcommands as lockfile-consuming when present in workflow shell commands:
+The source-backed Action also builds commandF from the repository lockfile. Its composite `run:` entries and recursively reachable tracked Action shell sources are therefore part of the same Cargo authority boundary. Variable-expanded executable positions must be proven statically non-Cargo; unknown or Cargo-resolving executable provenance fails closed.
+
+AF-01 audit treats at least these cargo subcommands as lockfile-consuming when present in workflow or Action shell commands:
 
 ```text
 bench
@@ -103,8 +115,9 @@ test
 - all checkout steps persist no credentials;
 - every job/service container reference, if present, is digest-bound with `sha256`;
 - all lockfile-consuming cargo invocations use `--locked`;
-- every tracked `action.yml` and `action.yaml` is scanned for external `uses:` references.
+- every tracked `action.yml` and `action.yaml` is scanned for external `uses:` references and composite `run:` Cargo authority;
+- every statically delegated `$GITHUB_ACTION_PATH/...` shell source is tracked and recursively audited, while dynamic or non-Action-root shell source selection fails closed.
 
 ## Scope boundary
 
-Stack A changes development-assurance configuration only. It does not change commandF product semantics, CF-06 production oracle identity, the CF-10 frozen corpus, report schemas, or runtime authority.
+Stack A changes development-assurance configuration and source-backed Action execution hardening only. It does not change commandF product semantics, CF-06 production oracle identity, the CF-10 frozen corpus, report schemas, or runtime classification authority.
