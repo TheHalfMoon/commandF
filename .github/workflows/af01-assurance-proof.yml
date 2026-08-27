@@ -35,13 +35,44 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/scripts/audit_workflow_trust.py > "$AF01_EVIDENCE_DIR/workflow-trust.json"
-      - name: Generate exact locked dependency evidence
+      - name: Generate deterministic exact locked dependency evidence
         run: |
           set -euo pipefail
-          cargo metadata --locked --format-version 1 > /tmp/af01-dependency-metadata.json
+          first_metadata=/tmp/af01-dependency-metadata.json
+          second_metadata=/tmp/af01-dependency-metadata-repeat.json
+          first_inventory="$AF01_EVIDENCE_DIR/dependency-inventory.json"
+          second_inventory=/tmp/dependency-inventory-repeat.json
+          cargo metadata --locked --format-version 1 > "$first_metadata"
           python3 .github/scripts/summarize_cargo_metadata.py \
-            < /tmp/af01-dependency-metadata.json \
-            > "$AF01_EVIDENCE_DIR/dependency-inventory.json"
+            < "$first_metadata" \
+            > "$first_inventory"
+          cargo metadata --locked --format-version 1 > "$second_metadata"
+          python3 .github/scripts/summarize_cargo_metadata.py \
+            < "$second_metadata" \
+            > "$second_inventory"
+          cmp --silent "$first_inventory" "$second_inventory"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_dir = Path(os.environ["AF01_EVIDENCE_DIR"])
+          inventory_path = evidence_dir / "dependency-inventory.json"
+          inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+
+          proof = {
+              "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
+              "command": ["cargo", "metadata", "--locked", "--format-version", "1"],
+              "graph_sha256": inventory["graph_sha256"],
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
+              "inventory_sha256": hashlib.sha256(inventory_path.read_bytes()).hexdigest(),
+              "schema": 1,
+          }
+          (evidence_dir / "dependency-inventory-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
       - name: Record cargo-deny proof identity
         run: |
           set -euo pipefail
