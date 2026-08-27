@@ -81,6 +81,58 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
         self.assertIn("unsupported_github_environment_name_fragment", codes(findings))
         self.assertIn("unsupported_indirect_parameter_expansion", codes(findings))
 
+    def _startup_action_findings(self, startup: str, delegated_script: str) -> list[dict[str, str]]:
+        return findings_for(
+            {
+                "action.yml": f"""name: fixture\ndescription: fixture\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      env:\n        {startup}: $GITHUB_ACTION_PATH/scripts/build.sh\n      run: echo ok\n""",
+                "scripts/build.sh": delegated_script,
+            }
+        )
+
+    def test_bash_env_rejects_locked_hidden_action_script(self) -> None:
+        findings = self._startup_action_findings(
+            "BASH_ENV", "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
+        )
+        self.assertIn("unsupported_shell_startup_environment", codes(findings))
+        self.assertIn("BASH_ENV", [item["channel"] for item in findings])
+
+    def test_bash_env_rejects_unlocked_hidden_action_script(self) -> None:
+        findings = self._startup_action_findings(
+            "BASH_ENV", "#!/usr/bin/env bash\ncargo test --workspace\n"
+        )
+        self.assertIn("unsupported_shell_startup_environment", codes(findings))
+        self.assertIn("BASH_ENV", [item["channel"] for item in findings])
+
+    def test_workflow_bash_env_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                ".github/workflows/test.yml": """name: test\non: pull_request\njobs:\n  test:\n    runs-on: ubuntu-24.04\n    steps:\n      - shell: bash\n        env:\n          BASH_ENV: scripts/bootstrap.sh\n        run: echo ok\n"""
+            }
+        )
+        self.assertIn("BASH_ENV", [item["channel"] for item in findings])
+
+    def test_posix_ksh_env_startup_authority_fails_closed(self) -> None:
+        findings = findings_for(
+            {"scripts/build.sh": "#!/usr/bin/env ksh\nENV=/tmp/bootstrap.ksh\nprint ok\n"}
+        )
+        self.assertIn("ENV", [item["channel"] for item in findings])
+
+    def test_zsh_zdotdir_startup_authority_fails_closed(self) -> None:
+        findings = findings_for(
+            {"scripts/build.sh": "#!/usr/bin/env zsh\nZDOTDIR=/tmp/action-dotfiles\nprint ok\n"}
+        )
+        self.assertIn("ZDOTDIR", [item["channel"] for item in findings])
+
+    def test_shell_startup_name_fragments_fail_closed(self) -> None:
+        bash_findings = findings_for(
+            {"scripts/build.sh": "#!/usr/bin/env bash\nname=\"BASH_\"ENV\nprintf '%s\\n' \"$name\"\n"}
+        )
+        zsh_findings = findings_for(
+            {"scripts/build.sh": "#!/usr/bin/env zsh\nname=\"ZDOT\"DIR\nprint -r -- \"$name\"\n"}
+        )
+        self.assertIn("unsupported_shell_startup_name_fragment", codes(bash_findings))
+        self.assertIn("unsupported_shell_startup_name_fragment", codes(zsh_findings))
+
     def test_extensionless_shell_script_is_covered(self) -> None:
         findings = findings_for(
             {
@@ -93,6 +145,14 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
         findings = findings_for(
             {
                 "scripts/github-action.sh": "#!/usr/bin/env bash\nprintf 'passed=true\\n' >> \"$GITHUB_OUTPUT\"\n"
+            }
+        )
+        self.assertEqual([], findings)
+
+    def test_lowercase_env_mapping_and_similar_names_are_allowed(self) -> None:
+        findings = findings_for(
+            {
+                "action.yml": """name: fixture\ndescription: fixture\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      env:\n        MY_ENV: safe\n        BASH_ENVIRONMENT: safe\n      run: echo ok\n"""
             }
         )
         self.assertEqual([], findings)
@@ -120,7 +180,7 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
             second = CHANNELS.audit_repository_environment_channels(root, reversed(list(files.keys())))
         self.assertEqual(first, second)
 
-    def test_live_repository_has_no_cross_step_environment_channel_authority(self) -> None:
+    def test_live_repository_has_no_cross_step_or_startup_environment_authority(self) -> None:
         root = Path(__file__).resolve().parents[2]
         tracked = CHANNELS._tracked_files(root)
         result = CHANNELS.audit_repository_environment_channels(root, tracked)
