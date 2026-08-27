@@ -1,10 +1,10 @@
 # AF-01 Canonical Closeout — Trusted Development Baseline
 
-Status: CLOSEOUT_CANDIDATE
+Status: CLOSED_CANONICAL
 
 This document records the final AF-01 closure evidence after the convergence implementation and convergence record became canonical. It changes no product source, workflow, dependency, ruleset intent, oracle identity, frozen corpus, or runtime behavior.
 
-This closeout is not canonical merely because this file exists on a branch. AF-01 may be classified as `CLOSED_CANONICAL` only if this exact docs-only closeout head receives its own required exact-head qualification and merges to `main` without content-changing substitution.
+AF-01 is classified `CLOSED_CANONICAL` because the exact docs-only closeout candidate qualified, merged without content-changing substitution, and its canonical post-merge `main` and live-policy state were re-verified. The final T056 evidence is retained in PR #52 and summarized below.
 
 Temporal exact-head workflow, check-run, artifact, and reviewer identifiers are created only after a commit exists. They are therefore retained in the pull-request conversation as an exact-head qualification checkpoint rather than injected into the same commit: committing those future identifiers would create a new SHA and immediately invalidate them. The checked-in closeout defines the gate and retains completed prerequisite evidence; GitHub's immutable association of the temporal checkpoint with the exact candidate head is the authoritative non-circular T056 record.
 
@@ -212,30 +212,112 @@ T055=COMPLETE
 
 The AF-01 convergence and closeout work after canonical Stack C is documentation/task-state only. No product source, workflow, Cargo manifest, dependency lock, ruleset intent, security policy, oracle identity, or frozen corpus is changed by this closeout candidate.
 
-AF-01 still does not claim completion of AF-02, AF-03, or AF-04. Those assurance units retain their separate planning/authorization requirements.
+AF-01 does not claim completion of AF-02, AF-03, or AF-04. Those assurance units retain their separate planning/authorization requirements.
 
 Post-Stack-C dependency updates remain separately qualified work and are not folded into AF-01 closure.
 
 ## T056 — canonical closeout gate
 
-T055 evidence is complete. T056 is represented by this docs-only closeout candidate under the same canonical-closeout pattern used by prior commandF slices:
+T055 evidence is complete. T056 was represented by the docs-only closeout candidate under the same canonical-closeout pattern used by prior commandF slices:
 
-1. this exact closeout head/tree must be identified in authoritative GitHub PR/commit metadata and retained in a PR qualification checkpoint;
-2. every path-applicable mandatory workflow on this exact closeout head must be terminal and successful;
-3. fresh Qodo and CodeRabbit truth must be obtained when available;
-4. every substantive returned finding must be dispositioned;
-5. unresolved substantive review threads must be `0`;
-6. merge must use an exact expected-head guard and merge method `merge`;
-7. canonical post-merge `main` SHA/tree and live rulesets must be re-read.
+1. the exact closeout head/tree was identified in authoritative GitHub PR/commit metadata and retained in a PR qualification checkpoint;
+2. every path-applicable mandatory workflow on that exact closeout head was terminal and successful;
+3. fresh Qodo and CodeRabbit truth was obtained;
+4. every substantive returned finding was dispositioned;
+5. unresolved substantive review threads were `0`;
+6. merge used an exact expected-head guard and merge method `merge`;
+7. canonical post-merge `main` SHA/tree and live rulesets were re-read.
 
-The temporal evidence produced after this commit exists — workflow run IDs, check-run IDs, artifact IDs/digests, exact reviewer outcomes, and the final live-policy re-read — belongs in the PR qualification checkpoint. It must not be committed back into this same candidate merely to make the candidate describe its own future evidence, because that would create a new SHA and invalidate the evidence being recorded.
+The temporal evidence produced after the closeout commit existed — workflow run IDs, check-run IDs, artifact IDs/digests, exact reviewer outcomes, and final live-policy read-back — is retained in the PR qualification checkpoint and post-merge evidence comment. It was not committed back into the same candidate, avoiding a circular head mutation.
 
-Until those steps complete, this branch remains `CLOSEOUT_CANDIDATE` and no canonical closure claim is made.
-
-If and only if this exact docs-only closeout qualifies and merges unchanged, canonical repository truth may classify:
+### Exact closeout qualification and merge
 
 ```text
+PR: #52
+qualified head: 65d44c9050e92236ae49c0e8537adc79e178d14e
+qualified tree: a7cac5a52d7a6b2b4d89b17018d084c835de312c
+merge commit: b494cc2f76a3acf1b30770b6c986fefa1f314e35
+canonical main tree: a7cac5a52d7a6b2b4d89b17018d084c835de312c
+qualification checkpoint: PR #52 comment 5440752132
+retained owner-authorized live-policy evidence: PR #52 comment 5440874428
+post-merge canonical verification: PR #52 comment 5440980681
+```
+
+All five path-applicable pull-request workflows completed successfully on exact qualified head `65d44c9050e92236ae49c0e8537adc79e178d14e`. Qodo current-head review comment `5440762043` reported no remaining substantive issue. CodeRabbit final current-head comment `5440896109` reported no remaining substantive issue, no current false-PASS risk, and no false closure claim. GitHub reported zero review threads before the guarded merge.
+
+### T056 post-merge proof
+
+Canonical `main` after the exact guarded merge:
+
+```text
+main: b494cc2f76a3acf1b30770b6c986fefa1f314e35
+tree: a7cac5a52d7a6b2b4d89b17018d084c835de312c
+parent 1: 652207aaed1d9a28f3a326ca92e8fd93229fd028
+parent 2: 65d44c9050e92236ae49c0e8537adc79e178d14e
+```
+
+Post-merge Scorecard:
+
+```text
+workflow: af01-scorecard
+run: 33084634090
+event: push
+source SHA: b494cc2f76a3acf1b30770b6c986fefa1f314e35
+result: success
+artifact: 9651594247
+GitHub digest: sha256:2bfa053889ad078507792472f7134c324cb3eb139a052297110d66c3030b7c46
+```
+
+Post-merge assurance proof:
+
+```text
+workflow: af01-assurance-proof
+run: 33084634098
+job/check: 98560815472
+event: push
+source SHA: b494cc2f76a3acf1b30770b6c986fefa1f314e35
+result: success
+artifact: 9651712618
+GitHub digest: sha256:5c3566d096e77c5128bd591bd27eff5dbda0827715a3b5e0382df98fc01202c7
+AF01_ASSURANCE_SHA256: 755851fa5557a698c2c504c235e9d0b5947a92a15b680fb2bd5a053e675df0be
+```
+
+The retained assurance summary recomputes to that digest and binds:
+
+```text
+source.sha: b494cc2f76a3acf1b30770b6c986fefa1f314e35
+source.tree: a7cac5a52d7a6b2b4d89b17018d084c835de312c
+source status: clean
+```
+
+A final owner-authorized live read-back after the post-merge workflows completed confirmed both rulesets remain active on `refs/heads/main` with the reviewed semantics:
+
+```text
+21652953 commandF main assurance
+  enforcement: active
+  bypass actors: none
+  current user bypass: never
+  deletion/non-fast-forward: blocked
+  required checks: rust, assurance-proof, scorecard
+  integration: 15368 for each
+
+21652974 commandF main review governance
+  enforcement: active
+  merge method: merge
+  approvals: 1
+  code-owner review: required
+  latest-push approval: required
+  stale approvals: dismissed
+  review-thread resolution: required
+  bypass: RepositoryRole actor 5, pull_request only
+  current user bypass: pull_requests_only
+```
+
+Therefore all T056 conditions are complete and canonical repository truth classifies:
+
+```text
+T056=COMPLETE
 AF-01=CLOSED_CANONICAL
 ```
 
-At that point AF-01 no longer blocks the next repository-authorized product implementation. AF-02/AF-03/AF-04 remain retained, separately planned assurance units rather than implied completions.
+This state-reconciliation documentation records an already-established canonical result; it is not a new T056 precondition. AF-01 no longer blocks the next repository-authorized product implementation. AF-02/AF-03/AF-04 remain retained, separately planned assurance units rather than implied completions.
