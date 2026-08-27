@@ -33,6 +33,7 @@ ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
 PATH_ASSIGNMENT_RE = re.compile(r"^PATH(?:\+)?=")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
 VARIABLE_WRITE_BUILTINS = frozenset({"getopts", "mapfile", "read", "readarray"})
+RESOLUTION_MUTATION_BUILTINS = frozenset({"alias", "enable", "hash", "unalias"})
 ACTION_SOURCE_BUILTINS = frozenset({".", "source"})
 EXECUTION_WRAPPERS = frozenset(
     {"command", "env", "exec", "nice", "nohup", "stdbuf", "sudo", "timeout"}
@@ -74,7 +75,7 @@ def _only_redirections(tokens: list[str]) -> bool:
 
 
 def _heredoc_prefix_executes_shell(prefix: str) -> bool:
-    """Recognize fixed, absolute-path, and wrapped shell interpreters before a heredoc."""
+    """Recognize shell authority before a heredoc and fail closed on execution wrappers."""
     try:
         tokens = shlex.split(prefix, comments=True, posix=True)
     except ValueError:
@@ -87,6 +88,14 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
     if not tokens:
         return False
 
+    # Wrapper option grammars have operand-bearing forms (`env -u NAME`, `env -S STRING`,
+    # `timeout 5 ...`, and others). A heredoc attached through a wrapper is executable input
+    # authority that this constrained parser intentionally does not normalize. Reject it rather
+    # than trusting a partially resolved command token.
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is not None and _basename(tokens[raw_index]) in EXECUTION_WRAPPERS:
+        return True
+
     command_index = core._command_token_index(tokens)
     if command_index is not None and command_index < len(tokens):
         command = tokens[command_index]
@@ -94,13 +103,7 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
             return True
         if "$" in command or "`" in command:
             return True
-
-    raw_index = _raw_executable_index(tokens)
-    if raw_index is None:
-        return False
-    if _basename(tokens[raw_index]) not in EXECUTION_WRAPPERS:
-        return False
-    return any(_basename(token) in core.SHELL_INTERPRETERS for token in tokens[raw_index + 1 :])
+    return False
 
 
 def _shell_heredoc_findings(path: str, scope: str, script: str) -> list[core.Finding]:
@@ -411,8 +414,31 @@ def _builtin_writes_path(command: str, args: list[str]) -> bool:
     return False
 
 
+def _resolution_mutation_is_unsupported(tokens: list[str]) -> bool:
+    """Reject command-resolution mutation because bare names must retain runner-owned resolution."""
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is None or raw_index >= len(tokens):
+        return False
+    raw_command = _basename(tokens[raw_index])
+    raw_args = tokens[raw_index + 1 :]
+    if raw_command in RESOLUTION_MUTATION_BUILTINS:
+        return True
+    if raw_command == "builtin" and any(
+        _basename(arg) in RESOLUTION_MUTATION_BUILTINS for arg in raw_args if not arg.startswith("-")
+    ):
+        return True
+    command_index = core._command_token_index(tokens)
+    if command_index is not None and command_index < len(tokens):
+        if _basename(tokens[command_index]) in RESOLUTION_MUTATION_BUILTINS:
+            return True
+    return False
+
+
 def _path_search_mutation_is_unsupported(tokens: list[str]) -> bool:
-    """Reject PATH mutation because bare executable resolution becomes non-local Action authority."""
+    """Reject PATH/resolution mutation that can redirect a bare executable outside audit authority."""
+    if _resolution_mutation_is_unsupported(tokens):
+        return True
+
     index = 0
     while index < len(tokens) and tokens[index] in core.SHELL_CONTROL_WORDS:
         index += 1
