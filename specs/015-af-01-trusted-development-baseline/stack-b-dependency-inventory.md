@@ -32,7 +32,7 @@ artifact name: af01-t020-dependency-inventory
 artifact digest: sha256:370637ff98963b3804780bec3439275ab7c1ec80c63f123722d493fe2cd54247
 ```
 
-The artifact was generated from the locked graph and uploaded by a full-SHA-pinned `actions/upload-artifact` action.
+The artifact was generated from the locked graph and uploaded by a full-SHA-pinned `actions/upload-artifact` action. That initial evidence established package/license/source counts; later reviewer hardening changed the inventory representation from manifest dependency names to exact Cargo resolved edges, so final T028 evidence must come from the hardened schema described below rather than treating this early artifact as final graph-edge proof.
 
 ## Exact graph summary
 
@@ -50,6 +50,28 @@ Workspace crates:
 - `commandf-pkg`
 
 The current workspace direct dependency surface is declared in the root/member manifests and includes `clap`, `flate2`, `semver`, `serde`, `serde_json`, `sha2`, `tar`, `thiserror`, `ureq`, and `tempfile`, plus the local path dependency from `commandf` to `commandf-pkg`.
+
+### Resolved-graph authority and reviewer remediation
+
+Qodo identified two material correctness defects in the original T020 summarizer:
+
+1. malformed `packages[].dependencies` records could be silently filtered from the output; and
+2. dependency relationships were projected from manifest declarations and reduced to names, so two resolved versions of the same crate could not be distinguished on individual edges.
+
+Both findings were remediated before T028 qualification. The inventory schema is now `2` and fails closed unless:
+
+- every package and manifest dependency record has the required structure and string identity fields;
+- `resolve.nodes` exists and contains one unique node for every package in the resolved graph;
+- every resolved edge has a dependency name plus exact target package ID;
+- every edge target resolves to a known package record;
+- Cargo's `dependencies` and `deps[].pkg` resolved-node representations agree; and
+- every package in the metadata package set is represented by a resolved node.
+
+Each emitted dependency edge now records the dependency edge name plus the exact selected `package_id`, resolved package name, version, and source. This preserves distinctions such as `getrandom@0.2.17` versus `getrandom@0.4.3` instead of collapsing them to `getrandom`.
+
+Regression coverage in `.github/scripts/test_summarize_cargo_metadata.py` includes exact multi-version edge preservation, malformed dependency-array/record/name rejection, unknown resolved target rejection, disagreement between Cargo's two resolved dependency representations, and missing resolved-node rejection. The suite is re-exported through the existing universal AF-01 workflow-trust unittest discovery surface so these regressions cannot be omitted while that gate remains authoritative.
+
+The original Qodo threads became resolved/outdated only after the implementation changed. T029 still requires a fresh exact-head Qodo review; this remediation record is not a substitute for that review.
 
 ## Observed license expressions
 
@@ -179,7 +201,7 @@ The PR head and GitHub's temporary merge ref had the same tree, so the scanner i
 
 Observed calibration results:
 
-- dependency inventory: `SUCCESS`;
+- dependency inventory: `SUCCESS` under the earlier representation, superseded for final resolved-edge proof by schema 2;
 - cargo-deny action `v2.1.1` at commit `3c6349835b2b7b196a839186cb8b78e02f7b5f25`, cargo-deny `0.20.2`: `SUCCESS` for advisories, bans, licenses, and sources;
 - RustSec cargo-audit `0.22.2`: exit `0` against exact `Cargo.lock`;
 - RustSec advisory database origin: `https://github.com/RustSec/advisory-db.git`;
@@ -188,10 +210,10 @@ Observed calibration results:
 - zizmor action `v0.6.2` at commit `3dc1ecc9bcb9e94e9b2c709687979e1298497054`, zizmor `1.29.0`, `min-severity=medium`, online audits disabled: `SUCCESS` with no blocking medium/high finding;
 - security waivers: zero.
 
-This observed baseline freezes the initial zizmor gate at `medium`; it does not authorize lowering the threshold around a future finding. T026 therefore has no current high/medium finding to disposition. Any later finding must be fixed or explicitly dispositioned under the AF-01 waiver policy without silently weakening the gate.
+This observed baseline freezes the initial zizmor gate at `medium`; it does not authorize lowering the threshold around a future finding. T026 therefore has no current zizmor high/medium finding to disposition. Any later finding must be fixed or explicitly dispositioned under the AF-01 waiver policy without silently weakening the gate.
 
 ## T020 decision
 
 `T020 = COMPLETE`
 
-The current graph, source authority, license surface, duplicate families, and initial scanner calibration are documented. T021–T027 implement the checked-in dependency/workflow security gates and waiver/coverage policy. Final Stack B PASS remains governed by T028 exact-head workflow evidence and T029 exact-head independent reviews plus canonical merge truth.
+The current graph, source authority, license surface, duplicate families, resolved-edge representation, fail-closed inventory validation, and initial scanner calibration are documented. T021–T027 implement the checked-in dependency/workflow security gates and waiver/coverage policy. Final Stack B PASS remains governed by T028 exact-head workflow evidence and T029 exact-head independent reviews plus canonical merge truth.
