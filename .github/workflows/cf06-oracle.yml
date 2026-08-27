@@ -12,7 +12,8 @@ permissions:
 jobs:
   oracle-self-smoke:
     name: oracle-self-smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
@@ -94,7 +95,8 @@ jobs:
 
   oracle-changed-profile:
     name: oracle-changed-profile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
@@ -277,7 +279,9 @@ jobs:
     needs:
       - oracle-self-smoke
       - oracle-changed-profile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
     steps:
       - name: Enforce all CF-06 oracle validation suites
         env:

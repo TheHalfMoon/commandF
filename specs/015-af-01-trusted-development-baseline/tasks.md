@@ -1,6 +1,6 @@
 # AF-01 Tasks — Trusted Development Baseline
 
-Status: PLANNING_CANDIDATE
+Status: CLOSED_CANONICAL
 
 ## Task-state rules
 
@@ -9,6 +9,8 @@ Status: PLANNING_CANDIDATE
 - Product semantics remain frozen throughout AF-01.
 - No implementation task begins until T005 is canonical.
 - AF-01 cannot close while the live `main` ruleset/branch-policy requirement remains unproven.
+- Phase 4 entered from canonical `main=a683dfaba7feb607145400eaa75d771e5df3c608`, tree `623a5b20eba83c618d4da288677c1cd3d2826f61`, with T043 `CLOSED_CANONICAL`.
+- T054, T055, and T056 are evidence-complete. Closeout PR #52 qualified on exact head `65d44c9050e92236ae49c0e8537adc79e178d14e`, merged with an expected-head guard, and canonical post-merge `main=b494cc2f76a3acf1b30770b6c986fefa1f314e35` was re-verified with successful assurance/Scorecard push proof and unchanged live rulesets.
 
 ## Phase 0 — planning and authority
 
@@ -16,68 +18,84 @@ Status: PLANNING_CANDIDATE
 - [x] **T002** Audit current repository assurance gaps: unprotected `main`; mixed mutable/immutable workflow references; missing cargo-deny/cargo-audit/zizmor/Scorecard; no fuzz/mutation/coverage/portability/release assurance program; stale README capability surface.
 - [x] **T003** Research current primary guidance for GitHub Actions full-SHA pinning, SLSA v1.2, Sigstore bundles, Rust fuzzing/mutation/coverage/security tooling, and HL7 FHIR release status.
 - [x] **T004** Add `docs/COMMAND_F_ASSURANCE_PROGRAM_2026-08-26.md` and AF-01 Spec Kit planning package; preserve CF-14/15/16 identities.
-- [ ] **T005** Planning gate: exact final planning head passes all path-applicable CI, independent CodeRabbit/Qodo review truth is recorded without invented PASS, zero unresolved substantive planning findings remain, and planning PR is merged to canonical `main`.
+- [x] **T005** Planning gate: exact final planning head passes all path-applicable CI, independent CodeRabbit/Qodo review truth is recorded without invented PASS, zero unresolved substantive planning findings remain, and planning PR is merged to canonical `main`.
 
 ## Phase 1 / Stack A — workflow trust audit and baseline hardening
 
 Depends on T005.
 
-- [ ] **T010** Inventory every tracked `.github/workflows/*.yml|*.yaml`, every tracked Action metadata file named `action.yml` or `action.yaml` at any repository depth, every external `uses:` reference, runner label, workflow/job permission, checkout credential setting, job/service container image identity, and cargo lockfile-consuming command on canonical planning main.
-- [ ] **T011** Define a minimal checked-in AF-01 workflow-trust policy format that makes allowed workflow/job permissions and proof-container identity modes machine-checkable, including any narrowly scoped exception schema with reason/revisit condition.
-- [ ] **T012** Implement repository-owned deterministic workflow-trust audit with complete workflow plus `action.yml`/`action.yaml` discovery, local-action allowance, full-40-hex external action/reusable-workflow requirement, checkout credential check, effective workflow/job permission normalization plus allowlist enforcement, proof-critical job/service container digest enforcement, and proof-runner policy.
-- [ ] **T013** Add positive and counterexample tests for T012, including mutable external `uses:` in `action.yaml`, tag/branch/short-SHA rejection, missing `persist-credentials: false`, overbroad permission rejection, unresolved inherited/default permission rejection, proof-critical mutable job/service container rejection, new-workflow/action-metadata coverage, malformed input fail-closed behavior, and deterministic repeat output.
-- [ ] **T014** Harden `.github/workflows/ci.yml` to full-SHA external Actions, credentialless checkout, explicit machine-checkable least permissions, fixed supported runner label, bounded timeout, and preserved existing semantic/test steps.
-- [ ] **T015** Reconcile every other existing workflow and repository Action metadata file to the AF-01 baseline, including permission declarations and proof-critical container digest identity, without changing its product/oracle/proof semantics or path-filter authority except where later universal required-check aggregation is explicitly introduced.
-- [ ] **T016** Add a regression that discovers both `action.yml` and `action.yaml` anywhere in the tracked tree and fails if a future workflow, Action metadata file, permission grant, external Action ref, checkout credential setting, or proof-critical container identity escapes AF-01 trust auditing.
-- [ ] **T017** Run mandatory workspace gates and every path-applicable existing proof/oracle workflow on the exact Stack A head.
-- [ ] **T018** Request CodeRabbit and Qodo on exact Stack A head; disposition every substantive returned finding and require zero unresolved material review threads.
-- [ ] **T019** Merge Stack A only from its exact qualified head and record canonical merge/main/tree.
+- [x] **T010** Inventory every tracked `.github/workflows/*.yml|*.yaml`, every tracked Action metadata file named `action.yml` or `action.yaml` at any repository depth, every external `uses:` reference, runner label, workflow/job permission, checkout credential setting, job/service container image identity, and cargo lockfile-consuming command on canonical planning main.
+- [x] **T011** Define a minimal checked-in AF-01 workflow-trust policy format that makes allowed workflow/job permissions and proof-container identity modes machine-checkable, including any narrowly scoped exception schema with reason/revisit condition.
+- [x] **T012** Implement repository-owned deterministic workflow-trust audit with complete workflow plus `action.yml`/`action.yaml` discovery, local-action allowance, full-40-hex external action/reusable-workflow requirement, checkout credential check, effective workflow/job permission normalization plus allowlist enforcement, proof-critical job/service container digest enforcement, and proof-runner policy.
+- [x] **T013** Add positive and counterexample tests for T012, including mutable external `uses:` in `action.yaml`, tag/branch/short-SHA rejection, missing `persist-credentials: false`, overbroad permission rejection, unresolved inherited/default permission rejection, proof-critical mutable job/service container rejection, new-workflow/action-metadata coverage, malformed input fail-closed behavior, and deterministic repeat output.
+- [x] **T014** Harden `.github/workflows/ci.yml` to full-SHA external Actions, credentialless checkout, explicit machine-checkable least permissions, fixed supported runner label, bounded timeout, and preserved existing semantic/test steps.
+- [x] **T015** Reconcile every other existing workflow and repository Action metadata file to the AF-01 baseline, including permission declarations and proof-critical container digest identity, without changing its product/oracle/proof semantics or path-filter authority except where later universal required-check aggregation is explicitly introduced.
+- [x] **T016** Add a regression that discovers both `action.yml` and `action.yaml` anywhere in the tracked tree and fails if a future workflow, Action metadata file, permission grant, external Action ref, checkout credential setting, or proof-critical container identity escapes AF-01 trust auditing.
+- [x] **T017** Run mandatory workspace gates and every path-applicable existing proof/oracle workflow on the exact Stack A head.
+- [x] **T018** Request CodeRabbit and Qodo on exact Stack A head; disposition every substantive returned finding and require zero unresolved material review threads.
+- [x] **T019** Merge Stack A only from its exact qualified head and record canonical merge/main/tree.
 
 ## Phase 2 / Stack B — dependency and CI security gates
 
 Depends on canonical T019.
 
-- [ ] **T020** Inspect the exact current Cargo dependency graph and license/source metadata; document intended direct/transitive source and license policy before generating `deny.toml`.
-- [ ] **T021** Add checked-in `deny.toml` covering licenses, bans/duplicates, advisories, and sources with narrow reviewed exceptions only.
-- [ ] **T022** Add pinned `cargo-deny` execution in an independently diagnosable CI job; retain machine-readable or complete textual evidence.
-- [ ] **T023** Add pinned RustSec `cargo-audit` execution against exact `Cargo.lock`; retain advisory database/tool identity where available.
-- [ ] **T024** Define waiver documentation requirements for any advisory/security exception: identity, rationale, scope, compensating evidence, and revisit/removal condition.
-- [ ] **T025** Add pinned `zizmor` audit over all repository workflows/actions; freeze initial severity policy from observed baseline rather than guessing around findings.
-- [ ] **T026** Fix valid high/medium workflow findings or amend the plan/tasks with explicit reviewed disposition; do not lower the gate silently.
-- [ ] **T027** Add regressions proving dependency/workflow security configurations and both Action metadata filename forms are included in relevant workflow path/coverage logic so policy mutations cannot bypass gates.
-- [ ] **T028** Run mandatory workspace gates plus all path-applicable existing proof/oracle workflows on exact Stack B head.
-- [ ] **T029** Obtain and disposition CodeRabbit/Qodo review on exact Stack B head, merge only from exact qualified head, and record canonical merge/main/tree.
+- [x] **T020** Inspect the exact current Cargo dependency graph and license/source metadata; document intended direct/transitive source and license policy before generating `deny.toml`.
+- [x] **T021** Add checked-in `deny.toml` covering licenses, bans/duplicates, advisories, and sources with narrow reviewed exceptions only.
+- [x] **T022** Add pinned `cargo-deny` execution in an independently diagnosable CI job; retain machine-readable or complete textual evidence.
+- [x] **T023** Add pinned RustSec `cargo-audit` execution against exact `Cargo.lock`; retain advisory database/tool identity where available.
+- [x] **T024** Define waiver documentation requirements for any advisory/security exception: identity, rationale, scope, compensating evidence, and revisit/removal condition.
+- [x] **T025** Add pinned `zizmor` audit over all repository workflows/actions; freeze initial severity policy from observed baseline rather than guessing around findings.
+- [x] **T026** Fix valid high/medium workflow findings or amend the plan/tasks with explicit reviewed disposition; do not lower the gate silently.
+- [x] **T027** Add regressions proving dependency/workflow security configurations and both Action metadata filename forms are included in relevant workflow path/coverage logic so policy mutations cannot bypass gates.
+- [x] **T028** Run mandatory workspace gates plus all path-applicable existing proof/oracle workflows on exact Stack B head.
+- [x] **T029** Obtain and disposition CodeRabbit/Qodo review on exact Stack B head, merge only from exact qualified head, and record canonical merge/main/tree.
 
 ## Phase 3 / Stack C — posture evidence, AF-01 proof, and main enforcement
 
 Depends on canonical T029.
 
-- [ ] **T030** Add pinned OpenSSF Scorecard integration in least-authority mode appropriate for this public repository; retain per-check evidence and do not use aggregate score as commandF correctness authority. Any required write/id-token permission must be scoped to the exact Scorecard job and added to the checked-in permission policy.
-- [ ] **T031** Inspect Scorecard results for at least Branch-Protection, Dangerous-Workflow, Pinned-Dependencies, Token-Permissions, Security-Policy where applicable, and Vulnerabilities; disposition material findings.
-- [ ] **T032** Implement `.github/workflows/af01-assurance-proof.yml` with complete AF-01 policy coverage, including workflows and both `action.yml`/`action.yaml`, and immutable/pinned execution inputs consistent with commandF proof policy, including digest-pinned proof-critical job/service containers where containers are used.
-- [ ] **T033** Define stable `assurance-summary.json` schema and deterministic `AF01_ASSURANCE_SHA256`, binding exact source/tree, policy/config blobs, workflow audit, dependency audit, RustSec audit, zizmor evidence, and tool/action/container identities.
-- [ ] **T034** Add proof tests for repeated summary equality, source/tree mismatch, missing required evidence, malformed evidence, permission-policy mismatch, mutable proof-container identity, missing `action.yaml` coverage, and dirty/unexpected source where applicable.
-- [ ] **T035** Determine final required status-check names **and trigger topology** from canonical implementation workflows. Prove every selected required check produces a terminal result on every protected-branch PR at the latest head; path-filtered whole workflows that can remain pending are not eligible as direct required checks.
-- [ ] **T036** Add a required-check topology regression/counterexample: a docs-only or otherwise path-nonmatching PR must still receive a terminal result for every check selected by T035. Where heavy validation is conditional, add/identify an always-triggered lightweight aggregation gate that reports the applicable heavy-job result without forcing irrelevant heavy work.
-- [ ] **T037** Prepare exact `main` ruleset configuration: PR required, at least one review, required conversations resolved, stale/latest-push review protection, only universally terminal selected status checks required, branch deletion/force-push blocked, and narrowly documented bypass actors only.
-- [ ] **T038** Apply T037 through an authorized GitHub administrator path. Current connector read capability does not count as mutation authority.
-- [ ] **T039** Query live GitHub after T038 and retain evidence proving the active ruleset/branch policy actually applies to `refs/heads/main` with intended enforcement and exact required-check names.
-- [ ] **T040** Negative governance proof: demonstrate or otherwise verify from authoritative GitHub configuration/check topology that direct/force/deletion/stale-head bypasses are blocked and no selected required check can remain pending solely because an entire workflow was path/branch/commit-message skipped, without destructively rewriting repository history.
-- [ ] **T041** Run exact-head AF-01 proof, mandatory workspace gates, and every path-applicable existing product proof/oracle workflow; retain artifact IDs/digests and tool/source identities.
-- [ ] **T042** Obtain exact-head CodeRabbit/Qodo review; require zero unresolved substantive findings.
-- [ ] **T043** Merge Stack C only from exact qualified head and verify post-merge `main`, tree, proof applicability, universal required-check topology, and live ruleset state.
+- [x] **T030** Add pinned OpenSSF Scorecard integration in least-authority mode appropriate for this public repository; retain per-check evidence and do not use aggregate score as commandF correctness authority. Any required write/id-token permission must be scoped to the exact Scorecard job and added to the checked-in permission policy.
+- [x] **T031** Inspect Scorecard results for at least Branch-Protection, Dangerous-Workflow, Pinned-Dependencies, Token-Permissions, Security-Policy where applicable, and Vulnerabilities; disposition material findings.
+- [x] **T032** Implement `.github/workflows/af01-assurance-proof.yml` with complete AF-01 policy coverage, including workflows and both `action.yml`/`action.yaml`, and immutable/pinned execution inputs consistent with commandF proof policy, including digest-pinned proof-critical job/service containers where containers are used.
+- [x] **T033** Define stable `assurance-summary.json` schema and deterministic `AF01_ASSURANCE_SHA256`, binding exact source/tree, policy/config blobs, workflow audit, dependency audit, RustSec audit, zizmor evidence, and tool/action/container identities.
+- [x] **T034** Add proof tests for repeated summary equality, source/tree mismatch, missing required evidence, malformed evidence, permission-policy mismatch, mutable proof-container identity, missing `action.yaml` coverage, and dirty/unexpected source where applicable.
+- [x] **T035** Determine final required status-check names **and trigger topology** from canonical implementation workflows. Prove every selected required check produces a terminal result on every protected-branch PR at the latest head; path-filtered whole workflows that can remain pending are not eligible as direct required checks.
+- [x] **T036** Add a required-check topology regression/counterexample: a docs-only or otherwise path-nonmatching PR must still receive a terminal result for every check selected by T035. Where heavy validation is conditional, add/identify an always-triggered lightweight aggregation gate that reports the applicable heavy-job result without forcing irrelevant heavy work.
+- [x] **T037** Prepare exact `main` ruleset configuration: PR required, at least one review, required conversations resolved, stale/latest-push review protection, only universally terminal selected status checks required, branch deletion/force-push blocked, and narrowly documented bypass actors only.
+- [x] **T038** Apply T037 through an authorized GitHub administrator path. Current connector read capability does not count as mutation authority.
+- [x] **T039** Query live GitHub after T038 and retain evidence proving the active ruleset/branch policy actually applies to `refs/heads/main` with intended enforcement and exact required-check names.
+- [x] **T040** Negative governance proof: demonstrate or otherwise verify from authoritative GitHub configuration/check topology that direct/force/deletion/stale-head bypasses are blocked and no selected required check can remain pending solely because an entire workflow was path/branch/commit-message skipped, without destructively rewriting repository history.
+- [x] **T041** Run exact-head AF-01 proof, mandatory workspace gates, and every path-applicable existing product proof/oracle workflow; retain artifact IDs/digests and tool/source identities.
+- [x] **T042** Obtain exact-head CodeRabbit/Qodo review; require zero unresolved substantive findings.
+- [x] **T043** Merge Stack C only from exact qualified head and verify post-merge `main`, tree, proof applicability, universal required-check topology, and live ruleset state.
 
 ## Phase 4 — convergence
 
 Depends on T043.
 
-- [ ] **T050** Re-read `spec.md`, `plan.md`, `tasks.md`, assurance-program document, constitution, AGENTS, live GitHub policy, and implementation tree; reconcile any drift.
-- [ ] **T051** Create `convergence.md` recording planning/Stack A/B/C identities, workflow run/job/artifact/digest evidence, dependency/security tool identities, reviewer dispositions, live ruleset evidence, required-check topology, limits, and deferrals.
-- [ ] **T052** Confirm product-semantic diff from pre-AF-01 canonical base contains no unauthorized CF semantic change; any incidental product source mutation requires separate task/justification and full semantic qualification.
-- [ ] **T053** Record remaining assurance work under AF-02/AF-03/AF-04 rather than falsely claiming fuzz/mutation/portability/release/performance completion.
-- [ ] **T054** Exact convergence head receives path-applicable CI/review truth with zero unresolved substantive findings.
-- [ ] **T055** Merge convergence PR and verify canonical post-merge main/tree plus live source-control policy and universally terminal required checks.
-- [ ] **T056** Mark `AF-01=CLOSED_CANONICAL` only after T055 evidence is complete.
+- [x] **T050** Re-read `spec.md`, `plan.md`, `tasks.md`, assurance-program document, constitution, AGENTS, live GitHub policy, and implementation tree; reconcile any drift.
+- [x] **T051** Create `convergence.md` recording planning/Stack A/B/C identities, workflow run/job/artifact/digest evidence, dependency/security tool identities, reviewer dispositions, live ruleset evidence, required-check topology, limits, and deferrals.
+- [x] **T052** Confirm product-semantic diff from pre-AF-01 canonical base contains no unauthorized CF semantic change; any incidental product source mutation requires separate task/justification and full semantic qualification.
+- [x] **T053** Record remaining assurance work under AF-02/AF-03/AF-04 rather than falsely claiming fuzz/mutation/portability/release/performance completion.
+- [x] **T054** Exact convergence head receives path-applicable CI/review truth with zero unresolved substantive findings.
+  - exact convergence head `ae8967a933832c4331d895f6389a9e086c23e661` passed all five path-applicable workflows;
+  - Qodo accepted the retained non-circular temporal evidence model on the unchanged head;
+  - CodeRabbit independently re-verified the exact head and reported no remaining substantive issue or false-PASS concern;
+  - unresolved substantive review threads = `0`.
+- [x] **T055** Merge convergence PR and verify canonical post-merge main/tree plus live source-control policy and universally terminal required checks.
+  - PR #51 merged from exact qualified head using an expected-head guard;
+  - canonical post-merge `main=652207aaed1d9a28f3a326ca92e8fd93229fd028`, tree `6b98c5582f40681ac9049451025486bbdd1de4fa`;
+  - post-merge `af01-assurance-proof` run `33079909197` and `af01-scorecard` run `33079909183` succeeded on that exact merge SHA;
+  - retained assurance artifact `9649667139` binds the exact merge source/tree, recomputes `AF01_ASSURANCE_SHA256=e1359325c5be4bd93cd4833d9cc51bdde6ecb1d5f440b2c30ef68b248ce833e1`, and records clean source status;
+  - live assurance ruleset `21652953` and review-governance ruleset `21652974` remain active on `refs/heads/main` with the reviewed semantics.
+- [x] **T056** Mark `AF-01=CLOSED_CANONICAL` only after T055 evidence is complete.
+  - closeout PR #52 qualified unchanged on exact head `65d44c9050e92236ae49c0e8537adc79e178d14e` with all five path-applicable workflows successful, fresh Qodo/CodeRabbit review truth clean, and zero unresolved substantive review threads;
+  - PR #52 merged with `merge` from the exact qualified head using an expected-head guard;
+  - canonical post-merge `main=b494cc2f76a3acf1b30770b6c986fefa1f314e35`, tree `a7cac5a52d7a6b2b4d89b17018d084c835de312c`;
+  - post-merge `af01-scorecard` run `33084634090` and `af01-assurance-proof` run `33084634098` completed successfully on that exact merge SHA;
+  - retained assurance artifact `9651712618` binds the exact merge source/tree, recomputes `AF01_ASSURANCE_SHA256=755851fa5557a698c2c504c235e9d0b5947a92a15b680fb2bd5a053e675df0be`, and records clean source status;
+  - final owner-authorized live read-back confirms assurance ruleset `21652953` and review-governance ruleset `21652974` remain active on `refs/heads/main` with the reviewed semantics;
+  - T056 post-merge evidence is retained in PR #52 comment `5440980681`.
 
 ## AF-02 handoff retained, not authorized by AF-01 implementation
 
