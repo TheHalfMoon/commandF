@@ -91,4 +91,73 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # placeholder-invalid
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit exact Cargo.lock
+        run: |
+          set +e
+          cargo audit --file Cargo.lock --json > af01-cargo-audit.json
+          audit_status=$?
+          set -e
+          printf '%s\n' "$audit_status" > af01-cargo-audit.exit
+      - name: Record cargo-audit and advisory database identity
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          db = Path.home() / ".cargo" / "advisory-db"
+          exit_path = Path("af01-cargo-audit.exit")
+          result_path = Path("af01-cargo-audit.json")
+          if not exit_path.is_file() or not result_path.is_file() or not (db / ".git").is_dir():
+              raise SystemExit("cargo-audit evidence or advisory database identity is missing")
+
+          proof = {
+              "advisory_db_commit": subprocess.check_output(
+                  ["git", "-C", str(db), "rev-parse", "HEAD"], text=True
+              ).strip(),
+              "advisory_db_origin": subprocess.check_output(
+                  ["git", "-C", str(db), "remote", "get-url", "origin"], text=True
+              ).strip(),
+              "cargo_audit_version": "0.22.2",
+              "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
+              "command": "cargo audit --file Cargo.lock --json",
+              "exit_code": int(exit_path.read_text(encoding="utf-8").strip()),
+              "head_sha": os.environ["GITHUB_SHA"],
+              "schema": 1,
+          }
+          Path("af01-cargo-audit-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(proof, indent=2, sort_keys=True))
+          PY
+      - name: Upload cargo-audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-cargo-audit
+          path: |
+            af01-cargo-audit.json
+            af01-cargo-audit.exit
+            af01-cargo-audit-proof.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce cargo-audit result
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path("af01-cargo-audit.exit")
+          if not path.is_file():
+              raise SystemExit("cargo-audit exit evidence is missing")
+          sys.exit(int(path.read_text(encoding="utf-8").strip()))
+          PY
