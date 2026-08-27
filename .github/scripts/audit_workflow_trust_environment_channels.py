@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on GitHub environment channels that can change later-step command resolution."""
+"""Fail closed on environment authority that can alter shell execution across steps."""
 
 from __future__ import annotations
 
@@ -13,8 +13,14 @@ from typing import Iterable
 CHANNEL_NAME_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?P<channel>GITHUB_PATH|GITHUB_ENV)(?![A-Za-z0-9_])"
 )
+SHELL_STARTUP_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<startup>BASH_ENV|ENV|ZDOTDIR)(?![A-Za-z0-9_])"
+)
 INDIRECT_PARAMETER_RE = re.compile(r"\$\{!")
 GITHUB_PREFIX_FRAGMENT_RE = re.compile(r"(?<![A-Za-z0-9_])GITHUB_(?![A-Za-z0-9_])")
+SHELL_STARTUP_FRAGMENT_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:BASH_|ZDOT)(?![A-Za-z0-9_])"
+)
 SHELL_SHEBANG_RE = re.compile(r"^#![^\n]*\b(?:bash|dash|ksh|sh|zsh)\b")
 
 
@@ -62,7 +68,7 @@ def _read_authority_text(root: Path, path: str) -> tuple[str | None, str | None]
         return None, "tracked authority file is not valid UTF-8"
 
 
-def _channel_findings(path: str, text: str) -> list[dict[str, str]]:
+def _authority_findings(path: str, text: str) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for matched in CHANNEL_NAME_RE.finditer(text):
         channel = matched.group("channel")
@@ -77,14 +83,27 @@ def _channel_findings(path: str, text: str) -> list[dict[str, str]]:
                 "path": path,
             }
         )
+    for matched in SHELL_STARTUP_NAME_RE.finditer(text):
+        startup = matched.group("startup")
+        findings.append(
+            {
+                "channel": startup,
+                "code": "unsupported_shell_startup_environment",
+                "detail": (
+                    f"{startup} can change shell startup-file authority before visible run commands "
+                    "and is outside the AF-01 constrained shell authority"
+                ),
+                "path": path,
+            }
+        )
     if INDIRECT_PARAMETER_RE.search(text) is not None:
         findings.append(
             {
                 "channel": "",
                 "code": "unsupported_indirect_parameter_expansion",
                 "detail": (
-                    "indirect shell parameter expansion can resolve a forbidden GitHub "
-                    "environment channel and is outside AF-01 authority"
+                    "indirect shell parameter expansion can resolve forbidden environment authority "
+                    "and is outside AF-01 authority"
                 ),
                 "path": path,
             }
@@ -101,13 +120,25 @@ def _channel_findings(path: str, text: str) -> list[dict[str, str]]:
                 "path": path,
             }
         )
+    if SHELL_STARTUP_FRAGMENT_RE.search(text) is not None:
+        findings.append(
+            {
+                "channel": "",
+                "code": "unsupported_shell_startup_name_fragment",
+                "detail": (
+                    "shell-startup variable name fragments can construct hidden startup-file "
+                    "authority and are outside AF-01 authority"
+                ),
+                "path": path,
+            }
+        )
     return findings
 
 
 def audit_repository_environment_channels(
     root: Path, tracked_files: Iterable[str]
 ) -> dict[str, object]:
-    """Reject direct or indirect GitHub PATH/ENV channels in tracked shell authority."""
+    """Reject cross-step and shell-startup environment authority in tracked shell surfaces."""
     findings: list[dict[str, str]] = []
     for path in sorted(set(tracked_files)):
         text, read_error = _read_authority_text(root, path)
@@ -123,7 +154,7 @@ def audit_repository_environment_channels(
             continue
         if text is None:
             continue
-        findings.extend(_channel_findings(path, text))
+        findings.extend(_authority_findings(path, text))
     findings.sort(key=lambda item: (item["path"], item["channel"], item["code"], item["detail"]))
     return {"findings": findings, "ok": not findings, "schema": 1}
 
