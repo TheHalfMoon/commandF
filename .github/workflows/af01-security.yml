@@ -32,3 +32,54 @@ jobs:
           path: af01-t020-dependency-inventory.json
           if-no-files-found: error
           retention-days: 7
+
+  cargo-deny:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+      - name: Record cargo-deny proof identity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          def sha256(path: str) -> str:
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          proof = {
+              "action_commit": "3c6349835b2b7b196a839186cb8b78e02f7b5f25",
+              "action_release": "v2.1.1",
+              "cargo_deny_version": "0.20.2",
+              "cargo_lock_sha256": sha256("Cargo.lock"),
+              "checks": ["advisories", "bans", "licenses", "sources"],
+              "command": "cargo deny --all-features check advisories bans licenses sources",
+              "deny_toml_sha256": sha256("deny.toml"),
+              "head_sha": os.environ["GITHUB_SHA"],
+              "schema": 1,
+          }
+          Path("af01-cargo-deny-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(proof, indent=2, sort_keys=True))
+          PY
+      - name: Enforce cargo-deny dependency policy
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 / cargo-deny 0.20.2
+        with:
+          command: check
+          arguments: --all-features
+          command-arguments: advisories bans licenses sources
+          log-level: warn
+      - name: Upload cargo-deny proof identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-cargo-deny-proof
+          path: af01-cargo-deny-proof.json
+          if-no-files-found: error
+          retention-days: 7
