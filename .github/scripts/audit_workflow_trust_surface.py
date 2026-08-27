@@ -30,6 +30,7 @@ VARIABLE_COMMAND_RE = re.compile(
     r"^[\"']?\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})[\"']?$"
 )
 ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
+PATH_ASSIGNMENT_RE = re.compile(r"^PATH(?:\+)?=")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
 ACTION_SOURCE_BUILTINS = frozenset({".", "source"})
 EXECUTION_WRAPPERS = frozenset(
@@ -384,6 +385,32 @@ def _direct_path_executable_is_unsupported(command: str) -> bool:
     return "/" in command
 
 
+def _path_search_mutation_is_unsupported(tokens: list[str]) -> bool:
+    """Reject PATH mutation because bare executable resolution becomes non-local Action authority."""
+    index = 0
+    while index < len(tokens) and tokens[index] in core.SHELL_CONTROL_WORDS:
+        index += 1
+    while index < len(tokens):
+        token = tokens[index]
+        if PATH_ASSIGNMENT_RE.match(token):
+            return True
+        if core.SHELL_ASSIGNMENT_RE.fullmatch(token) or ASSIGNMENT_RE.fullmatch(token):
+            index += 1
+            continue
+        break
+
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is None or raw_index >= len(tokens):
+        return False
+    command = _basename(tokens[raw_index])
+    args = tokens[raw_index + 1 :]
+    if command in ASSIGNMENT_BUILTINS or command == "env":
+        return any(PATH_ASSIGNMENT_RE.match(arg) for arg in args)
+    if command == "unset":
+        return any(arg == "PATH" for arg in args if not arg.startswith("-"))
+    return False
+
+
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
     """Return exact static GITHUB_ACTION_PATH shell targets and unsupported delegation."""
     targets: list[str] = []
@@ -392,6 +419,9 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         try:
             tokens = shlex.split(segment, comments=True, posix=True)
         except ValueError:
+            continue
+        if _path_search_mutation_is_unsupported(tokens):
+            unsupported.append(segment)
             continue
         command_index = core._command_token_index(tokens)
         if _unresolved_wrapper_can_delegate_action_script(tokens, command_index):
