@@ -20,6 +20,7 @@ import audit_workflow_trust as core
 SHELL_HEREDOC_RE = re.compile(
     r"(?:^|\s)(?:bash|dash|ksh|sh|zsh)\b[^\n;]*(?:<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?)"
 )
+DOUBLE_BRACKET_RE = re.compile(r"\[\[(?:(?!\]\]).)*\]\]", re.DOTALL)
 ACTION_LOCAL_SCRIPT_RE = re.compile(
     r"^\$(?:GITHUB_ACTION_PATH|\{GITHUB_ACTION_PATH\})/"
     r"(?P<path>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)$"
@@ -55,6 +56,28 @@ def _shell_heredoc_findings(path: str, scope: str, script: str) -> list[core.Fin
                 )
             )
     return findings
+
+
+def _mask_double_bracket_tests(
+    path: str, scope: str, script: str
+) -> tuple[str, list[core.Finding]]:
+    """Mask non-executable [[ expressions while rejecting dynamic command substitution inside them."""
+    findings: list[core.Finding] = []
+
+    def replace(matched: re.Match[str]) -> str:
+        expression = matched.group(0)
+        if "$(" in expression or "`" in expression:
+            findings.append(
+                _finding(
+                    "unsupported_cargo_indirect",
+                    path,
+                    scope,
+                    f"command substitution inside [[ ... ]] is not statically auditable: {expression}",
+                )
+            )
+        return "[[ true ]]"
+
+    return DOUBLE_BRACKET_RE.sub(replace, script), findings
 
 
 def _assignment_class(value: str) -> str:
@@ -100,9 +123,11 @@ def _direct_cargo_findings(
 ) -> list[core.Finding]:
     """Audit direct Cargo and fail closed on executable indirection that may resolve to Cargo."""
     findings = _shell_heredoc_findings(path, scope, script)
+    command_script, expression_findings = _mask_double_bracket_tests(path, scope, script)
+    findings.extend(expression_findings)
     variable_states: dict[str, str] = {}
 
-    for segment in core._logical_shell_segments(script):
+    for segment in core._logical_shell_segments(command_script):
         try:
             tokens = shlex.split(segment, comments=True, posix=True)
         except ValueError as error:
