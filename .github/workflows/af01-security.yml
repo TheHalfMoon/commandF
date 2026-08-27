@@ -97,10 +97,10 @@ jobs:
       - name: Audit exact Cargo.lock
         run: |
           set +e
-          cargo audit --file Cargo.lock --json > af01-cargo-audit.json
+          cargo audit --file Cargo.lock --json > af01-rustsec-audit.json
           audit_status=$?
           set -e
-          printf '%s\n' "$audit_status" > af01-cargo-audit.exit
+          printf '%s\n' "$audit_status" > af01-rustsec-audit.exit
       - name: Record cargo-audit and advisory database identity
         if: always()
         run: |
@@ -113,8 +113,8 @@ jobs:
           from pathlib import Path
 
           db = Path.home() / ".cargo" / "advisory-db"
-          exit_path = Path("af01-cargo-audit.exit")
-          result_path = Path("af01-cargo-audit.json")
+          exit_path = Path("af01-rustsec-audit.exit")
+          result_path = Path("af01-rustsec-audit.json")
           if not exit_path.is_file() or not result_path.is_file() or not (db / ".git").is_dir():
               raise SystemExit("cargo-audit evidence or advisory database identity is missing")
 
@@ -132,7 +132,7 @@ jobs:
               "head_sha": os.environ["GITHUB_SHA"],
               "schema": 1,
           }
-          Path("af01-cargo-audit-proof.json").write_text(
+          Path("af01-rustsec-audit-proof.json").write_text(
               json.dumps(proof, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
@@ -142,11 +142,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: af01-cargo-audit
+          name: af01-rustsec-audit
           path: |
-            af01-cargo-audit.json
-            af01-cargo-audit.exit
-            af01-cargo-audit-proof.json
+            af01-rustsec-audit.json
+            af01-rustsec-audit.exit
+            af01-rustsec-audit-proof.json
           if-no-files-found: error
           retention-days: 7
       - name: Enforce cargo-audit result
@@ -156,7 +156,7 @@ jobs:
           from pathlib import Path
           import sys
 
-          path = Path("af01-cargo-audit.exit")
+          path = Path("af01-rustsec-audit.exit")
           if not path.is_file():
               raise SystemExit("cargo-audit exit evidence is missing")
           sys.exit(int(path.read_text(encoding="utf-8").strip()))
@@ -203,7 +203,6 @@ jobs:
           persona: regular
           min-severity: medium
           version: 1.29.0
-          token: ""
           advanced-security: false
           color: false
           annotations: false
