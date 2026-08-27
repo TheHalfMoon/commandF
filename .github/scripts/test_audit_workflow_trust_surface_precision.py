@@ -94,6 +94,24 @@ class SurfacePrecisionTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
 
+    def test_dot_slash_direct_script_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action("./scripts/build.sh"), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_bare_relative_direct_script_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action("scripts/build.sh"), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_workspace_direct_script_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml", action('"$GITHUB_WORKSPACE/scripts/build.sh"'), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
