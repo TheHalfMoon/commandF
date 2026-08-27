@@ -126,6 +126,17 @@ runs:
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertIn("unsupported_trust_syntax", self.codes(findings))
 
+    def test_quoted_job_permission_override_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Test\n"
+            "        run: cargo test --locked --workspace"
+        ).replace(
+            "    steps:\n",
+            "    \"permissions\":\n      contents: write\n    steps:\n",
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_trust_syntax", self.codes(findings))
+
     def test_quoted_image_under_env_is_not_container_authority(self) -> None:
         text = workflow(
             "      - name: Test\n"
