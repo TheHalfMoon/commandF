@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / node24
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # 1.97.1
         with:
           components: rustfmt, clippy
 
@@ -43,37 +43,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          retry() {
-            local attempt=1
-            until "$@"; do
-              if (( attempt >= 3 )); then
-                echo "real primary registry probe failed after ${attempt} attempts" >&2
-                return 1
-              fi
-              echo "real primary registry probe failed on attempt ${attempt}; retrying" >&2
-              sleep $((attempt * 5))
-              attempt=$((attempt + 1))
-            done
-          }
-          retry cargo test --locked -p commandf-pkg registry::tests::real_primary_us_core_is_direct_gzip -- --ignored --exact
+          for attempt in 1 2 3; do
+            if cargo test --locked -p commandf-pkg registry::tests::real_primary_us_core_is_direct_gzip -- --ignored --exact; then
+              break
+            fi
+            if (( attempt >= 3 )); then
+              echo "real primary registry probe failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            echo "real primary registry probe failed on attempt ${attempt}; retrying" >&2
+            sleep $((attempt * 5))
+          done
 
       - name: Real secondary redirect-to-tarball response
         shell: bash
         run: |
           set -euo pipefail
-          retry() {
-            local attempt=1
-            until "$@"; do
-              if (( attempt >= 3 )); then
-                echo "real secondary registry probe failed after ${attempt} attempts" >&2
-                return 1
-              fi
-              echo "real secondary registry probe failed on attempt ${attempt}; retrying" >&2
-              sleep $((attempt * 5))
-              attempt=$((attempt + 1))
-            done
-          }
-          retry cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact
+          for attempt in 1 2 3; do
+            if cargo test --locked -p commandf-pkg registry::tests::real_secondary_us_core_follows_only_expected_tarball -- --ignored --exact; then
+              break
+            fi
+            if (( attempt >= 3 )); then
+              echo "real secondary registry probe failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            echo "real secondary registry probe failed on attempt ${attempt}; retrying" >&2
+            sleep $((attempt * 5))
+          done
 
       - name: End-to-end exact VSAC fallback resolve and verify
         shell: bash
