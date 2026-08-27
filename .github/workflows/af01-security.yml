@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  AF01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   dependency-inventory:
     runs-on: ubuntu-24.04
@@ -16,11 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
+          ref: ${{ env.AF01_SOURCE_SHA }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
       - name: Generate exact locked dependency inventory
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
           cargo metadata --locked --format-version 1 > /tmp/commandf-dependency-metadata.json
           python3 .github/scripts/summarize_cargo_metadata.py \
             < /tmp/commandf-dependency-metadata.json \
@@ -39,10 +44,12 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
+          ref: ${{ env.AF01_SOURCE_SHA }}
           persist-credentials: false
       - name: Record cargo-deny proof identity
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
           python3 - <<'PY'
           import hashlib
           import json
@@ -60,7 +67,7 @@ jobs:
               "checks": ["advisories", "bans", "licenses", "sources"],
               "command": "cargo deny --all-features check advisories bans licenses sources",
               "deny_toml_sha256": sha256("deny.toml"),
-              "head_sha": os.environ["GITHUB_SHA"],
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
               "schema": 1,
           }
           Path("af01-cargo-deny-proof.json").write_text(
@@ -90,8 +97,11 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
+          ref: ${{ env.AF01_SOURCE_SHA }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Assert exact source checkout
+        run: test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
       - name: Install pinned cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit exact Cargo.lock
@@ -129,7 +139,7 @@ jobs:
               "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
               "command": "cargo audit --file Cargo.lock --json",
               "exit_code": int(exit_path.read_text(encoding="utf-8").strip()),
-              "head_sha": os.environ["GITHUB_SHA"],
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
               "schema": 1,
           }
           Path("af01-rustsec-audit-proof.json").write_text(
@@ -168,10 +178,12 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
+          ref: ${{ env.AF01_SOURCE_SHA }}
           persist-credentials: false
       - name: Record zizmor policy identity
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
           python3 - <<'PY'
           import json
           import os
@@ -182,7 +194,7 @@ jobs:
               "action_release": "v0.6.2",
               "advanced_security": False,
               "collect": "all",
-              "head_sha": os.environ["GITHUB_SHA"],
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
               "min_severity": "medium",
               "online_audits": False,
               "schema": 1,
