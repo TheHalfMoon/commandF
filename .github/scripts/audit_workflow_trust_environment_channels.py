@@ -10,10 +10,11 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
-CHANNEL_RE = re.compile(
-    r"\$(?P<plain>GITHUB_PATH|GITHUB_ENV)(?![A-Za-z0-9_])"
-    r"|\$\{(?P<braced>GITHUB_PATH|GITHUB_ENV)(?=[^A-Za-z0-9_}]|\})"
+CHANNEL_NAME_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<channel>GITHUB_PATH|GITHUB_ENV)(?![A-Za-z0-9_])"
 )
+INDIRECT_PARAMETER_RE = re.compile(r"\$\{!")
+GITHUB_PREFIX_FRAGMENT_RE = re.compile(r"(?<![A-Za-z0-9_])GITHUB_(?![A-Za-z0-9_])")
 SHELL_SHEBANG_RE = re.compile(r"^#![^\n]*\b(?:bash|dash|ksh|sh|zsh)\b")
 
 
@@ -61,10 +62,52 @@ def _read_authority_text(root: Path, path: str) -> tuple[str | None, str | None]
         return None, "tracked authority file is not valid UTF-8"
 
 
+def _channel_findings(path: str, text: str) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    for matched in CHANNEL_NAME_RE.finditer(text):
+        channel = matched.group("channel")
+        findings.append(
+            {
+                "channel": channel,
+                "code": "unsupported_github_environment_channel",
+                "detail": (
+                    f"{channel} can mutate later-step environment/command resolution and "
+                    "is outside the AF-01 constrained shell authority"
+                ),
+                "path": path,
+            }
+        )
+    if INDIRECT_PARAMETER_RE.search(text) is not None:
+        findings.append(
+            {
+                "channel": "",
+                "code": "unsupported_indirect_parameter_expansion",
+                "detail": (
+                    "indirect shell parameter expansion can resolve a forbidden GitHub "
+                    "environment channel and is outside AF-01 authority"
+                ),
+                "path": path,
+            }
+        )
+    if GITHUB_PREFIX_FRAGMENT_RE.search(text) is not None:
+        findings.append(
+            {
+                "channel": "",
+                "code": "unsupported_github_environment_name_fragment",
+                "detail": (
+                    "standalone GITHUB_ name fragments can construct a forbidden GitHub "
+                    "environment channel and are outside AF-01 authority"
+                ),
+                "path": path,
+            }
+        )
+    return findings
+
+
 def audit_repository_environment_channels(
     root: Path, tracked_files: Iterable[str]
 ) -> dict[str, object]:
-    """Reject GitHub PATH/ENV command channels in tracked workflow and shell authority."""
+    """Reject direct or indirect GitHub PATH/ENV channels in tracked shell authority."""
     findings: list[dict[str, str]] = []
     for path in sorted(set(tracked_files)):
         text, read_error = _read_authority_text(root, path)
@@ -80,19 +123,7 @@ def audit_repository_environment_channels(
             continue
         if text is None:
             continue
-        for matched in CHANNEL_RE.finditer(text):
-            channel = matched.group("plain") or matched.group("braced") or ""
-            findings.append(
-                {
-                    "channel": channel,
-                    "code": "unsupported_github_environment_channel",
-                    "detail": (
-                        f"{channel} can mutate later-step environment/command resolution and "
-                        "is outside the AF-01 constrained shell authority"
-                    ),
-                    "path": path,
-                }
-            )
+        findings.extend(_channel_findings(path, text))
     findings.sort(key=lambda item: (item["path"], item["channel"], item["code"], item["detail"]))
     return {"findings": findings, "ok": not findings, "schema": 1}
 
