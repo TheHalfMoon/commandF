@@ -21,16 +21,64 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Run OpenSSF Scorecard
+      - name: Run OpenSSF Scorecard against exact checked-out source
         uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4 / Scorecard v5.5.0
         with:
-          results_file: af01-scorecard.json
+          results_file: af01-scorecard-local.json
           results_format: json
           publish_results: false
+      - name: Run repository-aware Scorecard posture scan
+        env:
+          GITHUB_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive=/tmp/scorecard_5.5.0_linux_amd64.tar.gz
+          install_dir=/tmp/af01-scorecard-cli
+          curl --fail --location --silent --show-error \
+            https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_linux_amd64.tar.gz \
+            --output "$archive"
+          printf '%s  %s\n' \
+            '83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff' \
+            "$archive" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir"
+          "$install_dir/scorecard" \
+            --repo="github.com/${GITHUB_REPOSITORY}" \
+            --checks=Branch-Protection,Dangerous-Workflow,Dependency-Update-Tool,Pinned-Dependencies,Security-Policy,Token-Permissions,Vulnerabilities \
+            --format=json \
+            --show-details \
+            > af01-scorecard-repository.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("af01-scorecard-repository.json")
+          result = json.loads(path.read_text(encoding="utf-8"))
+          expected = {
+              "Branch-Protection",
+              "Dangerous-Workflow",
+              "Dependency-Update-Tool",
+              "Pinned-Dependencies",
+              "Security-Policy",
+              "Token-Permissions",
+              "Vulnerabilities",
+          }
+          repo = result.get("repo", {})
+          checks = result.get("checks")
+          if repo.get("name") != "github.com/TheHalfMoon/commandF":
+              raise SystemExit(f"unexpected repository identity: {repo!r}")
+          if not isinstance(checks, list):
+              raise SystemExit("repository Scorecard output has no checks array")
+          names = {item.get("name") for item in checks if isinstance(item, dict)}
+          if names != expected:
+              raise SystemExit(f"repository Scorecard checks mismatch: {sorted(names)!r}")
+          PY
       - name: Retain per-check Scorecard evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: af01-scorecard
-          path: af01-scorecard.json
+          path: |
+            af01-scorecard-local.json
+            af01-scorecard-repository.json
           if-no-files-found: error
           retention-days: 7
