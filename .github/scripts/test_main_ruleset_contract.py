@@ -7,46 +7,30 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TOPOLOGY = ROOT / ".github" / "required-checks.json"
-RULESET = ROOT / ".github" / "main-ruleset.json"
+ASSURANCE_RULESET = ROOT / ".github" / "main-ruleset.json"
+REVIEW_RULESET = ROOT / ".github" / "main-review-ruleset.json"
 GITHUB_ACTIONS_INTEGRATION_ID = 15368
+ADMIN_REPOSITORY_ROLE_ID = 5
+MAIN_CONDITIONS = {"ref_name": {"include": ["refs/heads/main"], "exclude": []}}
 
 
 class MainRulesetContractTests(unittest.TestCase):
-    def test_ruleset_matches_required_check_topology_and_governance(self) -> None:
+    def test_assurance_ruleset_is_unbypassable_and_matches_required_checks(self) -> None:
         topology = json.loads(TOPOLOGY.read_text(encoding="utf-8"))
-        ruleset = json.loads(RULESET.read_text(encoding="utf-8"))
+        ruleset = json.loads(ASSURANCE_RULESET.read_text(encoding="utf-8"))
 
         self.assertEqual(ruleset.get("name"), "commandF main assurance")
         self.assertEqual(ruleset.get("target"), "branch")
         self.assertEqual(ruleset.get("enforcement"), "active")
         self.assertEqual(ruleset.get("bypass_actors"), [])
-        self.assertEqual(
-            ruleset.get("conditions"),
-            {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
-        )
+        self.assertEqual(ruleset.get("conditions"), MAIN_CONDITIONS)
 
         rules = ruleset.get("rules")
         self.assertIsInstance(rules, list)
         by_type = {rule.get("type"): rule for rule in rules if isinstance(rule, dict)}
-        self.assertEqual(
-            set(by_type),
-            {"deletion", "non_fast_forward", "pull_request", "required_status_checks"},
-        )
+        self.assertEqual(set(by_type), {"deletion", "non_fast_forward", "required_status_checks"})
         self.assertEqual(by_type["deletion"], {"type": "deletion"})
         self.assertEqual(by_type["non_fast_forward"], {"type": "non_fast_forward"})
-
-        pull_request = by_type["pull_request"].get("parameters")
-        self.assertEqual(
-            pull_request,
-            {
-                "allowed_merge_methods": ["merge"],
-                "dismiss_stale_reviews_on_push": True,
-                "require_code_owner_review": True,
-                "require_last_push_approval": True,
-                "required_approving_review_count": 1,
-                "required_review_thread_resolution": True,
-            },
-        )
 
         required = by_type["required_status_checks"].get("parameters")
         self.assertIsInstance(required, dict)
@@ -54,10 +38,7 @@ class MainRulesetContractTests(unittest.TestCase):
         self.assertTrue(required.get("strict_required_status_checks_policy"))
         actual = required.get("required_status_checks", [])
         expected = [
-            {
-                "context": item["context"],
-                "integration_id": item["integration_id"],
-            }
+            {"context": item["context"], "integration_id": item["integration_id"]}
             for item in topology["checks"]
         ]
         self.assertEqual(actual, expected)
@@ -70,29 +51,60 @@ class MainRulesetContractTests(unittest.TestCase):
             ],
         )
 
+    def test_review_ruleset_requires_review_with_admin_pr_only_escape_hatch(self) -> None:
+        ruleset = json.loads(REVIEW_RULESET.read_text(encoding="utf-8"))
+        self.assertEqual(ruleset.get("name"), "commandF main review governance")
+        self.assertEqual(ruleset.get("target"), "branch")
+        self.assertEqual(ruleset.get("enforcement"), "active")
+        self.assertEqual(ruleset.get("conditions"), MAIN_CONDITIONS)
+        self.assertEqual(
+            ruleset.get("bypass_actors"),
+            [
+                {
+                    "actor_id": ADMIN_REPOSITORY_ROLE_ID,
+                    "actor_type": "RepositoryRole",
+                    "bypass_mode": "pull_request",
+                }
+            ],
+        )
+
+        rules = ruleset.get("rules")
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0].get("type"), "pull_request")
+        self.assertEqual(
+            rules[0].get("parameters"),
+            {
+                "allowed_merge_methods": ["merge"],
+                "dismiss_stale_reviews_on_push": True,
+                "require_code_owner_review": True,
+                "require_last_push_approval": True,
+                "required_approving_review_count": 1,
+                "required_review_thread_resolution": True,
+            },
+        )
+
+    def test_admin_review_bypass_cannot_bypass_assurance_rules(self) -> None:
+        assurance = json.loads(ASSURANCE_RULESET.read_text(encoding="utf-8"))
+        review = json.loads(REVIEW_RULESET.read_text(encoding="utf-8"))
+        self.assertEqual(assurance["bypass_actors"], [])
+        self.assertNotIn("pull_request", {rule["type"] for rule in assurance["rules"]})
+        self.assertEqual({rule["type"] for rule in review["rules"]}, {"pull_request"})
+        self.assertNotIn("required_status_checks", {rule["type"] for rule in review["rules"]})
+        self.assertNotIn("deletion", {rule["type"] for rule in review["rules"]})
+        self.assertNotIn("non_fast_forward", {rule["type"] for rule in review["rules"]})
+
     def test_every_required_check_is_bound_to_github_actions(self) -> None:
         topology = json.loads(TOPOLOGY.read_text(encoding="utf-8"))
         for check in topology["checks"]:
             self.assertEqual(check.get("integration_id"), GITHUB_ACTIONS_INTEGRATION_ID)
 
-        ruleset = json.loads(RULESET.read_text(encoding="utf-8"))
+        ruleset = json.loads(ASSURANCE_RULESET.read_text(encoding="utf-8"))
         required_rule = next(
             rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks"
         )
         for check in required_rule["parameters"]["required_status_checks"]:
             self.assertEqual(set(check), {"context", "integration_id"})
             self.assertEqual(check["integration_id"], GITHUB_ACTIONS_INTEGRATION_ID)
-
-    def test_workflow_changes_require_code_owner_review(self) -> None:
-        ruleset = json.loads(RULESET.read_text(encoding="utf-8"))
-        pull_request_rule = next(
-            rule for rule in ruleset["rules"] if rule["type"] == "pull_request"
-        )
-        parameters = pull_request_rule["parameters"]
-        self.assertIs(parameters.get("require_code_owner_review"), True)
-        self.assertIs(parameters.get("dismiss_stale_reviews_on_push"), True)
-        self.assertIs(parameters.get("require_last_push_approval"), True)
-        self.assertGreaterEqual(parameters.get("required_approving_review_count", 0), 1)
 
 
 if __name__ == "__main__":
