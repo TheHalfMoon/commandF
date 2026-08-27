@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,17 @@ LOCKED = {"bench", "build", "check", "clippy", "doc", "metadata", "run", "test"}
 
 def codes(findings: list[object]) -> list[str]:
     return [finding.code for finding in findings]
+
+
+def action(run: str) -> str:
+    return f"""name: fixture
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: {run}
+"""
 
 
 class SurfacePrecisionTests(unittest.TestCase):
@@ -54,6 +66,33 @@ class SurfacePrecisionTests(unittest.TestCase):
             LOCKED,
         )
         self.assertIn("unsupported_cargo_indirect", codes(findings))
+
+    def _audit_env_delegation(self, delegated_script: str) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                action('env -u UNUSED bash "$GITHUB_ACTION_PATH/scripts/build.sh"'),
+                encoding="utf-8",
+            )
+            (root / "scripts" / "build.sh").write_text(delegated_script, encoding="utf-8")
+            return SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+
+    def test_env_option_operand_wrapper_rejects_locked_action_delegation(self) -> None:
+        result = self._audit_env_delegation(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_env_option_operand_wrapper_rejects_unlocked_action_delegation(self) -> None:
+        result = self._audit_env_delegation("#!/usr/bin/env bash\ncargo test --workspace\n")
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
 
 
 if __name__ == "__main__":
