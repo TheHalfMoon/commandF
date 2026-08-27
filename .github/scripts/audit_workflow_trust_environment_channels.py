@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
+
+import audit_workflow_trust as core
 
 CHANNEL_NAME_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?P<channel>GITHUB_PATH|GITHUB_ENV)(?![A-Za-z0-9_])"
@@ -22,6 +25,9 @@ SHELL_STARTUP_FRAGMENT_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:BASH_|ZDOT)(?![A-Za-z0-9_])"
 )
 SHELL_SHEBANG_RE = re.compile(r"^#![^\n]*\b(?:bash|dash|ksh|sh|zsh)\b")
+ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
+VARIABLE_TARGET_BUILTINS = frozenset({"read", "mapfile", "readarray", "unset"})
+COMMAND_BUILTIN_WRAPPERS = frozenset({"builtin", "command"})
 
 
 def _tracked_files(root: Path) -> list[str]:
@@ -66,6 +72,156 @@ def _read_authority_text(root: Path, path: str) -> tuple[str | None, str | None]
         return raw.decode("utf-8"), None
     except UnicodeDecodeError:
         return None, "tracked authority file is not valid UTF-8"
+
+
+def _dynamic_name(value: str) -> bool:
+    return "$" in value or "`" in value
+
+
+def _basename(token: str) -> str:
+    return token.rsplit("/", 1)[-1]
+
+
+def _raw_command_index(tokens: list[str]) -> int | None:
+    index = 0
+    while index < len(tokens) and core.SHELL_ASSIGNMENT_RE.fullmatch(tokens[index]):
+        index += 1
+    while index < len(tokens) and tokens[index] in core.SHELL_CONTROL_WORDS:
+        index += 1
+    return index if index < len(tokens) else None
+
+
+def _normalized_writer(tokens: list[str]) -> tuple[str, list[str]] | None:
+    index = _raw_command_index(tokens)
+    if index is None:
+        return None
+    command = _basename(tokens[index])
+    index += 1
+    if command in COMMAND_BUILTIN_WRAPPERS and index < len(tokens):
+        while index < len(tokens) and tokens[index].startswith("-"):
+            index += 1
+        if index >= len(tokens):
+            return None
+        command = _basename(tokens[index])
+        index += 1
+    return command, tokens[index:]
+
+
+def _before_redirection(args: list[str]) -> list[str]:
+    result: list[str] = []
+    for token in args:
+        if token in {"<", ">", ">>", "<<", "<<<", "<>", ">&", "<&"}:
+            break
+        if re.match(r"^(?:\d*)?(?:>>?|<<?|<>|>&|<&)", token):
+            break
+        result.append(token)
+    return result
+
+
+def _dynamic_writer_detail(tokens: list[str]) -> str | None:
+    normalized = _normalized_writer(tokens)
+    if normalized is None:
+        return None
+    command, args = normalized
+
+    if command in ASSIGNMENT_BUILTINS:
+        for arg in args:
+            if arg.startswith("-"):
+                continue
+            name = arg.split("=", 1)[0]
+            if _dynamic_name(name):
+                return f"{command} writes a dynamically constructed variable name: {arg}"
+        return None
+
+    if command == "printf":
+        for index, arg in enumerate(args):
+            if arg == "-v" and index + 1 < len(args) and _dynamic_name(args[index + 1]):
+                return f"printf -v writes a dynamically constructed variable name: {args[index + 1]}"
+        return None
+
+    if command in VARIABLE_TARGET_BUILTINS:
+        candidates = _before_redirection(args)
+        for arg in candidates:
+            if arg.startswith("-"):
+                continue
+            if _dynamic_name(arg):
+                return f"{command} writes a dynamically constructed variable target: {arg}"
+        return None
+
+    if command == "getopts":
+        positional = [arg for arg in args if not arg.startswith("-")]
+        if len(positional) >= 2 and _dynamic_name(positional[1]):
+            return f"getopts writes a dynamically constructed variable target: {positional[1]}"
+        return None
+
+    if command == "env":
+        for arg in args:
+            if arg.startswith("-"):
+                continue
+            if "=" in arg:
+                name = arg.split("=", 1)[0]
+                if _dynamic_name(name):
+                    return f"env constructs a dynamic environment variable name: {arg}"
+                continue
+            if _dynamic_name(arg):
+                return f"env has an unresolved dynamic environment/command operand: {arg}"
+            break
+    return None
+
+
+def _shell_scripts(path: str, text: str) -> list[str]:
+    if _is_yaml_authority(path):
+        lines = text.splitlines()
+        return core._run_scripts(lines, -1, len(lines))
+    return [text]
+
+
+def _dynamic_variable_write_findings(path: str, text: str) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    for script in _shell_scripts(path, text):
+        for segment in core._logical_shell_segments(script):
+            try:
+                tokens = shlex.split(segment, comments=True, posix=True)
+            except ValueError as error:
+                if "$" in segment and any(
+                    name in segment
+                    for name in (
+                        "export",
+                        "declare",
+                        "local",
+                        "readonly",
+                        "typeset",
+                        "printf",
+                        "read",
+                        "mapfile",
+                        "readarray",
+                        "getopts",
+                        "unset",
+                        "env",
+                    )
+                ):
+                    findings.append(
+                        {
+                            "channel": "",
+                            "code": "unsupported_dynamic_variable_write",
+                            "detail": f"cannot safely parse dynamic variable-writing shell segment: {error}: {segment}",
+                            "path": path,
+                        }
+                    )
+                continue
+            if not tokens:
+                continue
+            detail = _dynamic_writer_detail(tokens)
+            if detail is not None:
+                findings.append(
+                    {
+                        "channel": "",
+                        "code": "unsupported_dynamic_variable_write",
+                        "detail": detail,
+                        "path": path,
+                    }
+                )
+    return findings
 
 
 def _authority_findings(path: str, text: str) -> list[dict[str, str]]:
@@ -132,6 +288,7 @@ def _authority_findings(path: str, text: str) -> list[dict[str, str]]:
                 "path": path,
             }
         )
+    findings.extend(_dynamic_variable_write_findings(path, text))
     return findings
 
 
