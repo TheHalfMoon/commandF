@@ -73,6 +73,19 @@ Regression coverage in `.github/scripts/test_summarize_cargo_metadata.py` includ
 
 The original Qodo threads became resolved/outdated only after the implementation changed. T029 still requires a fresh exact-head Qodo review; this remediation record is not a substitute for that review.
 
+### Private path wildcard boundary and CodeRabbit remediation
+
+A fresh CodeRabbit review of previously qualified head `45629125e8e09f7d6cd6869fee82e4ae00f8483c` identified a high-severity policy-scope defect: `allow-wildcard-paths = true` was a global cargo-deny exception for private path dependencies, not an exception scoped only to the intended `commandf -> commandf-pkg` workspace edge.
+
+The finding was fixed rather than waived:
+
+- `deny.toml` now sets `allow-wildcard-paths = false`, so `wildcards = "deny"` applies to private path dependencies too;
+- the intended repository-owned edge is declared as `commandf-pkg = { path = "../commandf-pkg", version = "=0.0.0" }`, giving it an exact version requirement rather than relying on a global bypass;
+- `.github/scripts/test_audit_workflow_trust_af01_coverage.py` parses both `deny.toml` and the CLI manifest and fails if the global bypass is re-enabled or if the intended edge loses its exact version requirement; and
+- no cargo-deny skip, waiver, alternate source authority, or wildcard exception was added.
+
+Because this remediation changed `Cargo.toml`, all prior T028 workflow evidence and review evidence for `45629125e8e09f7d6cd6869fee82e4ae00f8483c` is stale. The replacement head must be requalified from scratch, including every proof workflow that becomes path-applicable because `Cargo.toml` changed.
+
 ## Observed license expressions
 
 The exact locked graph contains the following distinct dependency license expressions:
@@ -139,11 +152,12 @@ T021 policy intent and implemented boundary:
 
 - keep duplicate versions visible and machine-diagnosable;
 - use `multiple-versions = "warn"` initially rather than creating opaque skip lists for the current graph;
-- keep external wildcard dependency requirements fail-closed;
-- permit the repository-owned unpublished workspace path edge with `allow-wildcard-paths = true` because the local path requirement has no registry version requirement to pin;
+- keep wildcard dependency requirements fail-closed for registry, git, and private path dependencies;
+- express the repository-owned unpublished `commandf -> commandf-pkg` path edge with the exact requirement `=0.0.0` instead of disabling wildcard enforcement for a class of dependencies;
+- keep `allow-wildcard-paths = false`; and
 - do not add `skip` or `skip-tree` entries unless a later exact finding proves a narrow necessity and records a reason/revisit condition.
 
-`allow-wildcard-paths = true` does not authorize wildcard version requirements for crates.io, git, or alternate registries. Source policy remains independently fail-closed.
+This boundary means a future private workspace crate cannot acquire an unversioned path dependency merely because it is private. Source policy remains independently fail-closed.
 
 ## Source policy intent
 
@@ -216,4 +230,4 @@ This observed baseline freezes the initial zizmor gate at `medium`; it does not 
 
 `T020 = COMPLETE`
 
-The current graph, source authority, license surface, duplicate families, resolved-edge representation, fail-closed inventory validation, and initial scanner calibration are documented. T021–T027 implement the checked-in dependency/workflow security gates and waiver/coverage policy. Final Stack B PASS remains governed by T028 exact-head workflow evidence and T029 exact-head independent reviews plus canonical merge truth.
+The current graph, source authority, license surface, duplicate families, resolved-edge representation, fail-closed inventory validation, exact private-path wildcard boundary, and initial scanner calibration are documented. T021–T027 implement the checked-in dependency/workflow security gates and waiver/coverage policy. Final Stack B PASS remains governed by T028 exact-head workflow evidence and T029 exact-head independent reviews plus canonical merge truth.
