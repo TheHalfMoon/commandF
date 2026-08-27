@@ -132,7 +132,8 @@ def _find_action(lines: list[str], repository: str) -> tuple[str, dict[str, str]
 
 
 def _require_exact_shell_line(lines: list[str], command: str, label: str) -> None:
-    count = sum(1 for line in lines if line.strip() == command)
+    accepted = {command, f"run: {command}"}
+    count = sum(1 for line in lines if line.strip() in accepted)
     if count != 1:
         raise ScannerContractError(f"{label} exact command must appear once, found {count}")
 
