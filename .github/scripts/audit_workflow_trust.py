@@ -54,7 +54,7 @@ LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
 )
 CARGO_INFO_FLAGS = frozenset({"--version", "-V"})
 DYNAMIC_COMMAND_BUILTINS = frozenset({"eval", "alias"})
-SHELL_COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup", "retry"})
+SHELL_COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup"})
 SHELL_INTERPRETERS = frozenset({"bash", "dash", "ksh", "sh", "zsh"})
 SHELL_CONTROL_WORDS = frozenset({"!", "do", "if", "then", "until", "while"})
 BOOLEAN_RULES = frozenset(
