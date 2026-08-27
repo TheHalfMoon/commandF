@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,10 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "required-checks.json"
 WORKFLOWS = ROOT / ".github" / "workflows"
 GITHUB_ACTIONS_INTEGRATION_ID = 15368
+JOB_ID_RE = re.compile(r"^  (?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?:\s*#.*)?$")
+JOB_FIELD_RE = re.compile(
+    r"^    (?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<value>.*)$"
+)
 
 
 def display_path(path: Path) -> str:
@@ -19,11 +24,22 @@ def display_path(path: Path) -> str:
         return str(path)
 
 
+def _scalar(value: str) -> str:
+    value = value.strip()
+    if " #" in value:
+        value = value.split(" #", 1)[0].rstrip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    return value
+
+
 def pull_request_children(lines: list[str]) -> list[str]:
     try:
         start = lines.index("  pull_request:")
     except ValueError as error:
-        raise AssertionError("required-check workflow must use a mapping-form pull_request trigger") from error
+        raise AssertionError(
+            "required-check workflow must use a mapping-form pull_request trigger"
+        ) from error
     children: list[str] = []
     for line in lines[start + 1 :]:
         if line and not line.startswith(" "):
@@ -35,11 +51,35 @@ def pull_request_children(lines: list[str]) -> list[str]:
     return children
 
 
-def job_range(lines: list[str], job: str) -> tuple[int, int]:
+def _jobs_index(lines: list[str]) -> int:
     try:
-        jobs_index = lines.index("jobs:")
+        return lines.index("jobs:")
     except ValueError as error:
         raise AssertionError("required-check workflow has no jobs mapping") from error
+
+
+def static_job_ids(lines: list[str]) -> list[str]:
+    jobs_index = _jobs_index(lines)
+    job_ids: list[str] = []
+    for line in lines[jobs_index + 1 :]:
+        if line and not line.startswith(" "):
+            break
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line.startswith("  ") and not line.startswith("    "):
+            matched = JOB_ID_RE.fullmatch(line)
+            if matched is None:
+                raise AssertionError(
+                    "workflow jobs mapping contains quoted, dynamic, or unsupported job key syntax"
+                )
+            job_ids.append(matched.group("key"))
+    if len(set(job_ids)) != len(job_ids):
+        raise AssertionError("workflow jobs mapping contains duplicate static job ids")
+    return job_ids
+
+
+def job_range(lines: list[str], job: str) -> tuple[int, int]:
+    jobs_index = _jobs_index(lines)
     target = f"  {job}:"
     try:
         start = lines.index(target, jobs_index + 1)
@@ -57,6 +97,29 @@ def job_range(lines: list[str], job: str) -> tuple[int, int]:
     return start, end
 
 
+def job_top_level_fields(
+    lines: list[str], start: int, end: int, *, path: Path | None = None, job: str = ""
+) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in lines[start + 1 : end]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line.startswith("    ") and not line.startswith("      "):
+            matched = JOB_FIELD_RE.fullmatch(line)
+            if matched is None:
+                location = (
+                    f"{display_path(path)} job {job!r}" if path is not None else "workflow job"
+                )
+                raise AssertionError(
+                    f"{location} contains quoted, dynamic, or unsupported top-level job field syntax"
+                )
+            key = matched.group("key")
+            if key in fields:
+                raise AssertionError(f"workflow job has duplicate top-level field {key!r}")
+            fields[key] = matched.group("value").strip()
+    return fields
+
+
 def assert_universal_required_job(path: Path, job: str) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     children = pull_request_children(lines)
@@ -64,12 +127,21 @@ def assert_universal_required_job(path: Path, job: str) -> None:
         raise AssertionError(
             f"{display_path(path)} pull_request trigger is filtered or narrowed: {children!r}"
         )
+    static_job_ids(lines)
     start, end = job_range(lines, job)
-    for line in lines[start + 1 : end]:
-        if line.startswith("    if:"):
-            raise AssertionError(
-                f"{display_path(path)} job {job!r} has a job-level conditional and is not universally terminal"
-            )
+    fields = job_top_level_fields(lines, start, end, path=path, job=job)
+    if "if" in fields:
+        raise AssertionError(
+            f"{display_path(path)} job {job!r} has a job-level conditional and is not universally terminal"
+        )
+    if "needs" in fields:
+        raise AssertionError(
+            f"{display_path(path)} job {job!r} has job dependencies and is not independently universally terminal"
+        )
+    if "continue-on-error" in fields:
+        raise AssertionError(
+            f"{display_path(path)} job {job!r} tolerates failure and is not a valid required check"
+        )
 
 
 def workflow_paths(root: Path = WORKFLOWS) -> list[Path]:
@@ -80,15 +152,14 @@ def workflow_paths(root: Path = WORKFLOWS) -> list[Path]:
     )
 
 
-def literal_job_name(lines: list[str], start: int, end: int) -> str | None:
-    names = [line[9:].strip() for line in lines[start + 1 : end] if line.startswith("    name:")]
-    if len(names) > 1:
-        raise AssertionError("workflow job has multiple top-level name fields")
-    if not names:
+def literal_job_name(
+    lines: list[str], start: int, end: int, *, path: Path | None = None, job: str = ""
+) -> str | None:
+    fields = job_top_level_fields(lines, start, end, path=path, job=job)
+    raw_value = fields.get("name")
+    if raw_value is None:
         return None
-    value = names[0]
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        value = value[1:-1]
+    value = _scalar(raw_value)
     if not value:
         raise AssertionError("workflow job has an empty name")
     if "${{" in value:
@@ -100,20 +171,13 @@ def literal_job_name(lines: list[str], start: int, end: int) -> str | None:
 
 def job_check_contexts(path: Path) -> list[tuple[str, str]]:
     lines = path.read_text(encoding="utf-8").splitlines()
-    try:
-        jobs_index = lines.index("jobs:")
-    except ValueError:
+    if "jobs:" not in lines:
         return []
-    job_ids: list[str] = []
-    for line in lines[jobs_index + 1 :]:
-        if line and not line.startswith(" "):
-            break
-        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
-            job_ids.append(line.strip()[:-1])
+    job_ids = static_job_ids(lines)
     result: list[tuple[str, str]] = []
     for job_id in job_ids:
         start, end = job_range(lines, job_id)
-        explicit_name = literal_job_name(lines, start, end)
+        explicit_name = literal_job_name(lines, start, end, path=path, job=job_id)
         result.append((job_id, explicit_name or job_id))
     return result
 
@@ -204,6 +268,18 @@ class RequiredCheckTopologyTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "job-level conditional"):
                 assert_universal_required_job(path, "gate")
 
+    def test_counterexample_quoted_job_level_if_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.yml"
+            path.write_text(
+                'name: example\non:\n  pull_request:\njobs:\n  gate:\n    "if": false\n    runs-on: ubuntu-24.04\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                AssertionError, "quoted, dynamic, or unsupported top-level job field syntax"
+            ):
+                assert_universal_required_job(path, "gate")
+
     def test_counterexample_duplicate_or_named_spoof_context_is_detected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -225,6 +301,20 @@ class RequiredCheckTopologyTests(unittest.TestCase):
                 ],
             )
 
+    def test_counterexample_named_spoof_with_yaml_comment_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "authoritative.yml").write_text(
+                "name: authoritative\njobs:\n  rust:\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            (root / "spoof.yml").write_text(
+                "name: spoof\njobs:\n  harmless-id:\n    name: rust # emitted context is still rust\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            producers = required_context_producers(root, {"rust"})
+            self.assertEqual(len(producers["rust"]), 2)
+
     def test_counterexample_dynamic_job_name_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -233,7 +323,35 @@ class RequiredCheckTopologyTests(unittest.TestCase):
                 "name: dynamic\njobs:\n  harmless-id:\n    name: ${{ github.event.pull_request.title }}\n    runs-on: ubuntu-24.04\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(AssertionError, "dynamic workflow job names are forbidden"):
+            with self.assertRaisesRegex(
+                AssertionError, "dynamic workflow job names are forbidden"
+            ):
+                job_check_contexts(path)
+
+    def test_counterexample_quoted_dynamic_job_name_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "quoted-name.yml"
+            path.write_text(
+                'name: dynamic\njobs:\n  harmless-id:\n    "name": ${{ \'rust\' }}\n    runs-on: ubuntu-24.04\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                AssertionError, "quoted, dynamic, or unsupported top-level job field syntax"
+            ):
+                job_check_contexts(path)
+
+    def test_counterexample_quoted_job_id_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "quoted-job.yml"
+            path.write_text(
+                'name: dynamic\njobs:\n  "rust":\n    runs-on: ubuntu-24.04\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                AssertionError, "quoted, dynamic, or unsupported job key syntax"
+            ):
                 job_check_contexts(path)
 
 
