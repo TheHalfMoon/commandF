@@ -49,6 +49,16 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
         findings = SURFACE._shell_heredoc_findings("wf.yml", "build", script)
         self.assertNotIn("unsupported_shell_heredoc", codes(findings))
 
+    def test_double_bracket_boolean_expression_is_not_executable(self) -> None:
+        script = 'if [[ "$code" == "0" || "$code" == "2" ]]; then\n  echo ok\nfi'
+        findings = SURFACE._direct_cargo_findings("script.sh", "action-script", script, LOCKED)
+        self.assertNotIn("unsupported_cargo_indirect", codes(findings))
+
+    def test_double_bracket_command_substitution_fails_closed(self) -> None:
+        script = 'if [[ "$(printf test)" == "test" ]]; then\n  echo ok\nfi'
+        findings = SURFACE._direct_cargo_findings("script.sh", "action-script", script, LOCKED)
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
     def test_action_yml_unlocked_cargo_fails(self) -> None:
         findings = SURFACE.audit_action_text(
             "action.yml", action("cargo test --workspace"), LOCKED
