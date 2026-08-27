@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import subprocess
+import tomllib
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -103,14 +104,18 @@ def surface_digest(root: Path, paths: list[str]) -> str:
     return digest.hexdigest()
 
 
-def canonical_graph_sha256(packages: list[dict[str, object]]) -> str:
+def canonical_json_sha256(value: object) -> str:
     rendered = json.dumps(
-        packages,
+        value,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
     ).encode("utf-8")
     return sha256_bytes(rendered)
+
+
+def canonical_graph_sha256(packages: list[dict[str, object]]) -> str:
+    return canonical_json_sha256(packages)
 
 
 def require_string(value: object, message: str) -> str:
@@ -157,7 +162,6 @@ def validate_dependency_inventory(evidence: dict[str, Any]) -> str:
         raise AssuranceError("dependency inventory package count is inconsistent")
 
     required_package_keys = {
-        "checksum",
         "dependencies",
         "license",
         "name",
@@ -188,11 +192,6 @@ def validate_dependency_inventory(evidence: dict[str, Any]) -> str:
         license_expr = package.get("license")
         if license_expr is not None and not isinstance(license_expr, str):
             raise AssuranceError(f"dependency inventory package {package_id} has invalid license")
-        checksum = package.get("checksum")
-        if checksum is not None and (
-            not isinstance(checksum, str) or HEX64.fullmatch(checksum) is None
-        ):
-            raise AssuranceError(f"dependency inventory package {package_id} has invalid checksum")
         workspace = package.get("workspace")
         if not isinstance(workspace, bool):
             raise AssuranceError(f"dependency inventory package {package_id} has invalid workspace flag")
@@ -203,10 +202,6 @@ def validate_dependency_inventory(evidence: dict[str, Any]) -> str:
             raise AssuranceError(f"dependency inventory package {package_id} has inconsistent workspace class")
         if source_class == "crates.io" and source != CRATES_IO_SOURCE:
             raise AssuranceError(f"dependency inventory package {package_id} has inconsistent crates.io source")
-        if source_class == "workspace" and checksum is not None:
-            raise AssuranceError(f"workspace package {package_id} unexpectedly carries a registry checksum")
-        if source_class == "crates.io" and checksum is None:
-            raise AssuranceError(f"crates.io package {package_id} is missing its registry checksum")
 
         dependencies = package.get("dependencies")
         if not isinstance(dependencies, list):
@@ -285,6 +280,66 @@ def validate_dependency_inventory(evidence: dict[str, Any]) -> str:
     return graph_sha
 
 
+def validate_inventory_against_cargo_lock(
+    root: Path, packages: list[dict[str, object]]
+) -> str:
+    try:
+        lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
+        raise AssuranceError(f"Cargo.lock cannot be parsed for package identity proof: {error}") from error
+    lock_packages = lock.get("package")
+    if not isinstance(lock_packages, list):
+        raise AssuranceError("Cargo.lock is missing package records")
+
+    canonical_lock: list[dict[str, object]] = []
+    lock_by_identity: dict[tuple[str, str, object], dict[str, object]] = {}
+    for index, package in enumerate(lock_packages):
+        if not isinstance(package, dict):
+            raise AssuranceError(f"Cargo.lock package {index} is not an object")
+        name = require_string(package.get("name"), f"Cargo.lock package {index} has invalid name")
+        version = require_string(
+            package.get("version"), f"Cargo.lock package {index} has invalid version"
+        )
+        source = package.get("source")
+        if source is not None and not isinstance(source, str):
+            raise AssuranceError(f"Cargo.lock package {name}@{version} has invalid source")
+        checksum = package.get("checksum")
+        if checksum is not None and (
+            not isinstance(checksum, str) or HEX64.fullmatch(checksum) is None
+        ):
+            raise AssuranceError(f"Cargo.lock package {name}@{version} has invalid checksum")
+        if source == CRATES_IO_SOURCE and checksum is None:
+            raise AssuranceError(f"Cargo.lock crates.io package {name}@{version} is missing checksum")
+        identity = (name, version, source)
+        if identity in lock_by_identity:
+            raise AssuranceError(f"Cargo.lock contains duplicate package identity: {name}@{version}")
+        record = {
+            "checksum": checksum,
+            "name": name,
+            "source": source,
+            "version": version,
+        }
+        lock_by_identity[identity] = record
+        canonical_lock.append(record)
+
+    inventory_identities = {
+        (str(package["name"]), str(package["version"]), package["source"])
+        for package in packages
+    }
+    lock_identities = set(lock_by_identity)
+    if inventory_identities != lock_identities:
+        missing = sorted(str(value) for value in lock_identities - inventory_identities)
+        extra = sorted(str(value) for value in inventory_identities - lock_identities)
+        raise AssuranceError(
+            f"dependency inventory does not match Cargo.lock package identities: missing={missing[:1]} extra={extra[:1]}"
+        )
+
+    canonical_lock.sort(
+        key=lambda item: (str(item["name"]), str(item["version"]), str(item["source"]))
+    )
+    return canonical_json_sha256(canonical_lock)
+
+
 def require_head(proof: dict[str, Any], source_sha: str, label: str) -> None:
     if proof.get("schema") != 1 or proof.get("head_sha") != source_sha:
         raise AssuranceError(f"{label} proof is not bound to the exact source SHA")
@@ -355,6 +410,9 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
 
     validate_workflow_trust(workflow_trust, workflows, actions)
     graph_sha = validate_dependency_inventory(dependency_inventory)
+    lock_packages_sha = validate_inventory_against_cargo_lock(
+        root, dependency_inventory["packages"]
+    )
 
     cargo_lock_sha = sha256_file(root / "Cargo.lock")
     deny_sha = sha256_file(root / "deny.toml")
@@ -410,6 +468,7 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
     return {
         "config_sha256": config,
         "dependency_graph": {
+            "cargo_lock_packages_sha256": lock_packages_sha,
             "graph_sha256": graph_sha,
             "package_count": dependency_inventory["package_count"],
             "schema": dependency_inventory["schema"],
