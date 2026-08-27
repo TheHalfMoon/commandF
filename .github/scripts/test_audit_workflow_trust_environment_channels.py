@@ -89,6 +89,15 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
             }
         )
 
+    def _dynamic_startup_action_findings(self, delegated_script: str) -> list[dict[str, str]]:
+        return findings_for(
+            {
+                "action.yml": """name: fixture\ndescription: fixture\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: |\n        prefix=BASH\n        export \"${prefix}_ENV=$GITHUB_ACTION_PATH/scripts/hidden.sh\"\n        bash \"$GITHUB_ACTION_PATH/scripts/entry.sh\"\n""",
+                "scripts/hidden.sh": delegated_script,
+                "scripts/entry.sh": "#!/usr/bin/env bash\necho entry\n",
+            }
+        )
+
     def test_bash_env_rejects_locked_hidden_action_script(self) -> None:
         findings = self._startup_action_findings(
             "BASH_ENV", "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
@@ -102,6 +111,58 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
         )
         self.assertIn("unsupported_shell_startup_environment", codes(findings))
         self.assertIn("BASH_ENV", [item["channel"] for item in findings])
+
+    def test_dynamic_bash_env_export_rejects_locked_hidden_action_script(self) -> None:
+        findings = self._dynamic_startup_action_findings(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_dynamic_bash_env_export_rejects_unlocked_hidden_action_script(self) -> None:
+        findings = self._dynamic_startup_action_findings(
+            "#!/usr/bin/env bash\ncargo test --workspace\n"
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_dynamic_posix_env_export_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env ksh\nprefix=E\nexport \"${prefix}NV=/tmp/bootstrap.ksh\"\nprint ok\n"
+            }
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_dynamic_zdotdir_export_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env zsh\nprefix=ZDOT\nexport \"${prefix}DIR=/tmp/action-dotfiles\"\nprint ok\n"
+            }
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_dynamic_printf_v_startup_target_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\nprefix=BASH\nprintf -v \"${prefix}_ENV\" '%s' /tmp/bootstrap.sh\n"
+            }
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_dynamic_env_assignment_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\nprefix=BASH\nenv \"${prefix}_ENV=/tmp/bootstrap.sh\" bash -c 'echo ok'\n"
+            }
+        )
+        self.assertIn("unsupported_dynamic_variable_write", codes(findings))
+
+    def test_static_variable_name_with_dynamic_value_remains_allowed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\nreport=/tmp/report.json\nexport REPORT_PATH=\"$report\"\nprintf -v REPORT_COPY '%s' \"$report\"\n"
+            }
+        )
+        self.assertEqual([], findings)
 
     def test_workflow_bash_env_fails_closed(self) -> None:
         findings = findings_for(
