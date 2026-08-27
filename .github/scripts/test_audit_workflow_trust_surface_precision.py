@@ -112,6 +112,68 @@ class SurfacePrecisionTests(unittest.TestCase):
         )
         self.assertIn("unsupported_action_script", codes(findings))
 
+    def _audit_path_resolved_delegation(self, delegated_script: str) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                """name: fixture
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        PATH="$GITHUB_ACTION_PATH/scripts:$PATH"
+        build.sh
+""",
+                encoding="utf-8",
+            )
+            (root / "scripts" / "build.sh").write_text(delegated_script, encoding="utf-8")
+            return SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+
+    def test_path_resolved_locked_action_script_fails_closed(self) -> None:
+        result = self._audit_path_resolved_delegation(
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_path_resolved_unlocked_action_script_fails_closed(self) -> None:
+        result = self._audit_path_resolved_delegation(
+            "#!/usr/bin/env bash\ncargo test --workspace\n"
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_scoped_path_assignment_before_bare_command_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action('PATH="$GITHUB_ACTION_PATH/scripts:$PATH" build.sh'),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_env_path_assignment_before_bare_command_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action('env PATH="$GITHUB_ACTION_PATH/scripts:$PATH" build.sh'),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_path_assignment_text_as_argument_is_not_path_mutation(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("printf 'PATH=/tmp/example\\n'"),
+            LOCKED,
+        )
+        self.assertNotIn("unsupported_action_script", codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
