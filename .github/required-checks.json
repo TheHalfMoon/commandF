@@ -4,16 +4,19 @@
   "checks": [
     {
       "context": "rust",
+      "integration_id": 15368,
       "workflow": ".github/workflows/ci.yml",
       "job": "rust"
     },
     {
       "context": "assurance-proof",
+      "integration_id": 15368,
       "workflow": ".github/workflows/af01-assurance-proof.yml",
       "job": "assurance-proof"
     },
     {
       "context": "scorecard",
+      "integration_id": 15368,
       "workflow": ".github/workflows/af01-scorecard.yml",
       "job": "scorecard"
     }
