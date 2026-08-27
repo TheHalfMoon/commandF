@@ -30,6 +30,7 @@ SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
 LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
     {"bench", "build", "check", "clippy", "doc", "metadata", "run", "test"}
 )
+CARGO_INFO_FLAGS = frozenset({"--version", "-V"})
 BOOLEAN_RULES = frozenset(
     {
         "require_container_digest",
@@ -453,6 +454,8 @@ def _cargo_findings(
                     )
                     continue
                 subcommand = tokens[command_index]
+                if subcommand in CARGO_INFO_FLAGS and command_index == len(tokens) - 1:
+                    continue
                 if subcommand.startswith("-"):
                     findings.append(
                         Finding(
