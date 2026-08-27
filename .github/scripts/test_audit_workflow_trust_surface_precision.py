@@ -174,6 +174,102 @@ runs:
         )
         self.assertNotIn("unsupported_action_script", codes(findings))
 
+    def _audit_builtin_path_writer(self, writer: str, delegated_script: str) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "scripts").mkdir()
+            (root / "action.yml").write_text(
+                f"""name: fixture
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        {writer}
+        build.sh
+""",
+                encoding="utf-8",
+            )
+            (root / "scripts" / "build.sh").write_text(delegated_script, encoding="utf-8")
+            return SURFACE.audit_repository_surface(
+                root,
+                {"rules": {"cargo_locked_subcommands": sorted(LOCKED)}},
+                tracked_files=["action.yml", "scripts/build.sh"],
+            )
+
+    def test_read_path_writer_rejects_locked_bare_action_script(self) -> None:
+        result = self._audit_builtin_path_writer(
+            'read -r PATH <<< "$GITHUB_ACTION_PATH/scripts:$PATH"',
+            "#!/usr/bin/env bash\ncargo test --locked --workspace\n",
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_read_path_writer_rejects_unlocked_bare_action_script(self) -> None:
+        result = self._audit_builtin_path_writer(
+            'read -r PATH <<< "$GITHUB_ACTION_PATH/scripts:$PATH"',
+            "#!/usr/bin/env bash\ncargo test --workspace\n",
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("unsupported_action_script", [item["code"] for item in result["findings"]])
+
+    def test_printf_v_path_writer_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("printf -v PATH '%s' /tmp/bin"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_mapfile_path_writer_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("mapfile PATH </tmp/paths"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_readarray_path_writer_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("readarray PATH </tmp/paths"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_getopts_path_writer_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("getopts ab PATH"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_nameref_builtin_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("declare -n SEARCH_PATH=PATH"),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_read_non_path_target_is_allowed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("read -r VALUE </tmp/value"),
+            LOCKED,
+        )
+        self.assertNotIn("unsupported_action_script", codes(findings))
+
+    def test_printf_v_non_path_target_is_allowed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action("printf -v VALUE '%s' ok"),
+            LOCKED,
+        )
+        self.assertNotIn("unsupported_action_script", codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
