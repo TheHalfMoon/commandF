@@ -3,7 +3,7 @@
 
 The primary workflow audit intentionally uses a constrained parser. This companion gate closes
 shell-authority boundaries that require source-aware handling: shell-interpreter heredocs,
-composite Action run steps, and statically referenced local Action shell scripts.
+composite Action run steps, and recursively referenced tracked local Action shell scripts.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _shell_heredoc_findings(path: str, scope: str, script: str) -> list[core.Fin
 def _direct_cargo_findings(
     path: str, scope: str, script: str, locked_subcommands: set[str]
 ) -> list[core.Finding]:
-    """Audit direct/obviously indirect Cargo in a shell source without treating text as authority."""
+    """Audit direct and obviously indirect Cargo in shell source."""
     findings = _shell_heredoc_findings(path, scope, script)
     cargo_variables: set[str] = set()
 
@@ -161,7 +161,6 @@ def _direct_cargo_findings(
         if subcommand in core.CARGO_INFO_FLAGS and subcommand_index == len(tokens) - 1:
             continue
         if subcommand.startswith("-"):
-            # `command -v cargo` is normalized by the primary scanner and is not a Cargo invocation.
             continue
         if subcommand in locked_subcommands and "--locked" not in tokens[command_index:]:
             findings.append(
@@ -176,7 +175,7 @@ def _direct_cargo_findings(
 
 
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
-    """Return statically exposed GITHUB_ACTION_PATH shell targets and unsupported dynamic targets."""
+    """Return static GITHUB_ACTION_PATH shell targets and unsupported Action shell delegation."""
     targets: list[str] = []
     unsupported: list[str] = []
     for segment in core._logical_shell_segments(script):
@@ -190,7 +189,10 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         if tokens[command_index] not in core.SHELL_INTERPRETERS:
             continue
         args = tokens[command_index + 1 :]
-        if "-c" in args or "<<" in segment:
+        if "-c" in args:
+            unsupported.append(segment)
+            continue
+        if "<<" in segment:
             continue
         script_arg = next((arg for arg in args if not arg.startswith("-")), None)
         if script_arg is None:
@@ -204,9 +206,29 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
             else:
                 targets.append(relative)
             continue
-        if "$" in script_arg or "`" in script_arg or script_arg.startswith("$("):
-            unsupported.append(segment)
+        # Composite Action shell source must be repository-owned and rooted at GITHUB_ACTION_PATH.
+        # Relative, absolute, variable, and command-substituted script paths can resolve to caller
+        # workspace or runtime-controlled authority and therefore fail closed.
+        unsupported.append(segment)
     return sorted(set(targets)), sorted(set(unsupported))
+
+
+def _unsupported_action_script_findings(
+    path: str, scope: str, scripts: Iterable[str]
+) -> list[core.Finding]:
+    findings: list[core.Finding] = []
+    for script in scripts:
+        _, unsupported = _action_local_targets(script)
+        for segment in unsupported:
+            findings.append(
+                _finding(
+                    "unsupported_action_script",
+                    path,
+                    scope,
+                    f"Action shell source is dynamic or not statically repository-owned: {segment}",
+                )
+            )
+    return findings
 
 
 def audit_action_text(
@@ -215,20 +237,21 @@ def audit_action_text(
     locked_subcommands: set[str],
 ) -> list[core.Finding]:
     lines = text.splitlines()
+    scripts = _scripts(lines)
     findings: list[core.Finding] = []
-    for script in _scripts(lines):
+    for script in scripts:
         findings.extend(_direct_cargo_findings(path, "composite-action", script, locked_subcommands))
-        _, unsupported = _action_local_targets(script)
-        for segment in unsupported:
-            findings.append(
-                _finding(
-                    "unsupported_action_script",
-                    path,
-                    "composite-action",
-                    f"Action shell source is dynamic or not statically exposed: {segment}",
-                )
-            )
+    findings.extend(_unsupported_action_script_findings(path, "composite-action", scripts))
     return findings
+
+
+def _action_target_path(action_path: str, relative: str) -> str | None:
+    action_dir = Path(action_path).parent
+    target_path = action_dir / relative
+    if target_path.is_absolute() or ".." in target_path.parts:
+        return None
+    target = target_path.as_posix()
+    return target[2:] if target.startswith("./") else target
 
 
 def _audit_local_action_script(
@@ -237,11 +260,21 @@ def _audit_local_action_script(
     relative: str,
     tracked: set[str],
     locked_subcommands: set[str],
+    seen: set[str],
 ) -> list[core.Finding]:
-    action_dir = Path(action_path).parent
-    target = (action_dir / relative).as_posix()
-    if target.startswith("./"):
-        target = target[2:]
+    target = _action_target_path(action_path, relative)
+    if target is None:
+        return [
+            _finding(
+                "unsupported_action_script",
+                action_path,
+                "composite-action",
+                f"Action shell source escapes the Action directory: {relative}",
+            )
+        ]
+    if target in seen:
+        return []
+    seen.add(target)
     if target not in tracked:
         return [
             _finding(
@@ -262,7 +295,30 @@ def _audit_local_action_script(
                 f"cannot read tracked Action shell source {target}: {error}",
             )
         ]
-    return _direct_cargo_findings(target, "action-script", source, locked_subcommands)
+
+    findings = _direct_cargo_findings(target, "action-script", source, locked_subcommands)
+    targets, unsupported = _action_local_targets(source)
+    for segment in unsupported:
+        findings.append(
+            _finding(
+                "unsupported_action_script",
+                target,
+                "action-script",
+                f"Action shell source delegates dynamically or outside GITHUB_ACTION_PATH: {segment}",
+            )
+        )
+    for nested in targets:
+        findings.extend(
+            _audit_local_action_script(
+                root,
+                action_path,
+                nested,
+                tracked,
+                locked_subcommands,
+                seen,
+            )
+        )
+    return findings
 
 
 def audit_repository_surface(
@@ -288,8 +344,10 @@ def audit_repository_surface(
 
     for action_path in actions:
         text = (root / action_path).read_text(encoding="utf-8")
+        action_scripts = _scripts(text.splitlines())
         findings.extend(audit_action_text(action_path, text, locked_subcommands))
-        for script in _scripts(text.splitlines()):
+        seen: set[str] = set()
+        for script in action_scripts:
             targets, _ = _action_local_targets(script)
             for relative in targets:
                 findings.extend(
@@ -299,6 +357,7 @@ def audit_repository_surface(
                         relative,
                         tracked,
                         locked_subcommands,
+                        seen,
                     )
                 )
 
