@@ -379,6 +379,11 @@ def _unresolved_wrapper_can_delegate_action_script(
     )
 
 
+def _direct_path_executable_is_unsupported(command: str) -> bool:
+    """Reject direct path execution unless it was already recognized as Action-root authority."""
+    return "/" in command
+
+
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
     """Return exact static GITHUB_ACTION_PATH shell targets and unsupported delegation."""
     targets: list[str] = []
@@ -422,6 +427,8 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
             continue
 
         if command_basename not in core.SHELL_INTERPRETERS:
+            if _direct_path_executable_is_unsupported(command):
+                unsupported.append(segment)
             continue
         if "-c" in args:
             unsupported.append(segment)
