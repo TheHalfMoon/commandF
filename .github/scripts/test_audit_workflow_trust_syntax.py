@@ -185,6 +185,48 @@ runs:
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertIn("unsupported_cargo_syntax", self.codes(findings))
 
+    def test_variable_expanded_cargo_command_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Indirect\n"
+            "        run: |\n"
+            "          tool=cargo\n"
+            "          \"$tool\" test --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
+    def test_command_substitution_cargo_command_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Indirect\n"
+            "        run: $(command -v cargo) test --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
+    def test_eval_cargo_command_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Indirect\n"
+            "        run: eval 'cargo test --workspace'"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
+    def test_nested_shell_cargo_command_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Indirect\n"
+            "        run: bash -c 'cargo test --workspace'"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
+    def test_dynamic_path_executable_does_not_false_positive(self) -> None:
+        text = workflow(
+            "      - name: Java\n"
+            "        run: \"$JAVA_HOME/bin/java\" -version"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertNotIn("unsupported_cargo_indirect", self.codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
