@@ -23,6 +23,7 @@ FLOW_USES_RE = re.compile(r"[\[{,]\s*[\"']?uses[\"']?\s*:")
 QUOTED_USES_RE = re.compile(r"^\s*(?:-\s*)?[\"']uses[\"']\s*:")
 QUOTED_JOB_CONTAINER_RE = re.compile(r"^\s{4}[\"'](?:container|services)[\"']\s*:")
 QUOTED_IMAGE_RE = re.compile(r"^\s*(?:[\"']image[\"'])\s*:")
+QUOTED_PERMISSION_KEY_RE = re.compile(r"^(?: {4})?[\"']permissions[\"']\s*:")
 FLOW_SERVICES_RE = re.compile(r"^\s{4}services\s*:\s*[\[{]")
 BLOCK_SCALAR_RE = re.compile(r":\s*[|>][+-]?\s*(?:#.*)?$")
 SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
@@ -266,7 +267,11 @@ def _unsupported_trust_syntax(lines: list[str]) -> list[str]:
         if stripped.startswith("run:") or re.match(r"^-\s+run:\s*", stripped):
             continue
 
-        if QUOTED_USES_RE.search(line) or FLOW_USES_RE.search(line):
+        if (
+            QUOTED_USES_RE.search(line)
+            or FLOW_USES_RE.search(line)
+            or QUOTED_PERMISSION_KEY_RE.search(line)
+        ):
             unsupported.append(line.strip())
             continue
 
