@@ -24,6 +24,13 @@
   "workflows": {
     ".github/workflows/af01-security.yml": {
       "jobs": {
+        "cargo-deny": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        },
         "dependency-inventory": {
           "permissions": {
             "contents": "read"
