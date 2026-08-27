@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -34,6 +35,16 @@ def validate_manifest_dependencies(package: dict[str, Any], identity: str) -> No
             dependency.get("name"),
             f"manifest dependency {index} for {identity} has invalid name",
         )
+
+
+def graph_sha256(packages: list[dict[str, object]]) -> str:
+    rendered = json.dumps(
+        packages,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(rendered).hexdigest()
 
 
 def summarize(metadata: object) -> dict[str, object]:
@@ -214,6 +225,7 @@ def summarize(metadata: object) -> dict[str, object]:
     }
     return {
         "duplicates": duplicates,
+        "graph_sha256": graph_sha256(inventory),
         "licenses": licenses,
         "non_crates_io": sorted(non_crates_io),
         "ok": not unknown_license,
