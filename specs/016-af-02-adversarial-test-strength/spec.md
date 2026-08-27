@@ -2,11 +2,9 @@
 
 Status: PLANNING_CANDIDATE
 
-## Identity
+## Identity and authority
 
-`AF-02` is the second commandF Assurance Foundation unit. It measures whether commandF's existing deterministic product core fails safely under generated, malformed, mutated, adversarial, and reordered inputs.
-
-The Spec Kit directory sequence `016` is the next available repository planning sequence. It does **not** rename or consume product identity `CF-16`.
+`AF-02` is the second commandF Assurance Foundation unit. Spec directory sequence `016` is only repository ordering; it does not rename or consume product identity `CF-16`.
 
 Canonical planning base:
 
@@ -17,379 +15,305 @@ AF-01: CLOSED_CANONICAL
 CF-13: CLOSED_CANONICAL
 ```
 
-AF-02 does not depend on the separately blocked CF-06/CF-10 production-oracle path and does not authorize a CF-06 production-pin change.
+AF-02 does not authorize CF-14/15/16 implementation, a CF-06 production-oracle pin change, a CF-10 corpus change, or weakening AF-01 live source-control policy.
+
+## Normative document set
+
+The AF-02 authority set is:
+
+- `spec.md` — required outcomes and boundaries;
+- `evidence-contracts.md` — **normative executable evidence schemas, algorithms, limits, authority snapshots, and anti-forgery rules**;
+- `plan.md` — implementation sequence and design-freeze ordering;
+- `tasks.md` — repository execution gates;
+- `consistency.md` — architecture/review reconciliation;
+- `donors/af-02-adversarial-testing.yaml` — exact donor/tool provenance and acquisition modes.
+
+Where wording differs, the stricter fail-closed rule applies. `evidence-contracts.md` intentionally removes implementation discretion for proof canonicalization, resource/offline limits, surface discovery, corpus binding, tool provenance, coverage/mutation semantics, flaky retry behavior, authority preservation, and no-PHI artifact handling.
+
+No implementation task may begin before planning gate T006 is canonical.
 
 ## User problem
 
-commandF has strong example-based tests, deterministic exact-head CI, fail-closed validators, authoritative-oracle checks, and the canonical AF-01 trusted-development baseline. That proves that known scenarios behave as intended and that the development path is protected.
+commandF already has deterministic tests, fail-closed validators, exact-head CI, security gates, and protected `main`. That proves known behavior and trusted development flow; it does not prove that the tests detect hostile inputs, plausible logic mutations, hidden nondeterminism, evidence tampering, path escapes, retry-only passes, or newly introduced unclassified input boundaries.
 
-It does not yet prove that the tests themselves are strong enough against plausible implementation defects or hostile input families.
-
-The current product processes security- and correctness-sensitive structures including compressed FHIR package archives, JSON manifests/resources, lockfiles, source-map indexes, graph evidence, compatibility reports, suppressions, fingerprints, and canonical references. Many of these surfaces already enforce explicit limits and canonical ordering. Without property testing, fuzzing, mutation adequacy, coverage diagnostics, and explicit flaky-test policy, commandF can still have blind spots that ordinary regression examples do not reveal.
-
-The risk is not merely a crash. For commandF, a dangerous test gap can produce:
-
-- a false compatible/non-breaking result;
-- a non-deterministic report or fingerprint;
-- acceptance of malformed or non-canonical retained evidence;
-- path traversal or source-escape behavior;
-- silent graph/reference ambiguity;
-- a regression that passes only after retry;
-- a plausible logic mutation that the test suite fails to detect.
+The dangerous outcome is not only a crash. A test gap can produce a false compatible result, false green quality-gate evidence, non-canonical persisted evidence, source escape, ambiguous graph resolution, flaky retry-pass, or a plausible mutant surviving unnoticed.
 
 ## Outcome
 
-After AF-02 closes, commandF has an independently executable adversarial-testing evidence layer that:
+AF-02 closes only when commandF has an independently executable adversarial-testing evidence layer that:
 
-1. maintains a reviewed inventory of high-risk parser, validation, canonicalization, graph, report, and evidence boundaries;
-2. fuzzes raw and structure-aware inputs with exact tool identities and bounded harnesses;
-3. expresses algebraic/canonical invariants as property tests with shrinking and reproducible failing seeds;
-4. promotes every discovered crash or invariant violation into a minimized deterministic regression corpus before the fix is considered closed;
-5. measures targeted mutation adequacy and leaves no required surviving mutant unexplained;
-6. records coverage as a diagnostic floor derived from a measured canonical baseline rather than a vanity target;
-7. detects flaky retry-pass behavior as a failure rather than converting it to green;
-8. retains an exact-head adversarial proof artifact while clearly separating deterministic replay evidence from stochastic fuzz-discovery evidence;
-9. preserves all existing product semantics, `cargo test` authority, AF-01 source-control policy, and oracle identities.
+1. deterministically discovers and classifies critical external/untrusted input boundaries;
+2. uses exact, independently verified tool/package identities;
+3. fuzzes raw and structured inputs within executable resource/offline limits;
+4. expresses important invariants with property tests and independent models/oracles;
+5. promotes discovered failures to minimized deterministic corpus regressions with assertion binding;
+6. treats retry-pass as failure while retaining canonical `cargo test` authority;
+7. freezes coverage measurement design before seeing percentages and prevents same-PR floor gaming;
+8. freezes mutation scope/config/inventory before execution and leaves no unexplained required result;
+9. independently recomputes a canonical exact-head `AF02_ADVERSARIAL_SHA256` from validated raw evidence;
+10. continuously proves AF-01, CF-06, and CF-10 authority has not drifted;
+11. enforces synthetic/public provenance and safe handling of fuzz artifacts;
+12. separates deterministic qualification from stochastic discovery observations.
 
 ## Functional requirements
 
-### FR-001 — adversarial surface inventory
+### FR-001 — critical-surface policy
 
-Add a checked-in AF-02 surface manifest or equivalent machine-checkable policy that enumerates every required adversarial-testing boundary and its evidence mode.
+Implementation MUST provide `commandf.af02-surface-policy/v1` as defined in `evidence-contracts.md`.
 
-The initial required inventory must cover at least these existing commandF areas:
+The deterministic discovery rule MUST cover production parser/deserializer, archive/compression, filesystem/path, network/acquisition, cache/persistence, and subprocess boundaries under configured production source roots. Newly discovered unclassified boundaries fail validation. Stale surface entries whose source path, seam, or corpus binding disappears also fail closed.
 
-- compressed package/archive and manifest ingestion through a public product path such as package inspection;
-- `Lockfile` V1/V2 JSON parsing, validation, canonical serialization, and dependency-edge evidence;
-- SUSHI/FSH source-map index and serialized source-mapping validation, including portable path handling and source-escape defenses;
-- context-graph construction/canonical-reference resolution and deterministic ordering;
-- compatibility/check/quality-gate retained evidence, canonical fingerprints, suppressions, and report validation;
-- deterministic machine-readable serializers used by shipped commands where malformed retained evidence can affect policy.
+Initial coverage MUST include:
 
-The inventory must classify each surface as one or more of:
+- package acquisition/cache and archive/manifest/resource ingestion;
+- Lockfile V1/V2 parse/validation/canonical serialization;
+- source-map/SUSHI index and portable-path/root-containment behavior;
+- context graph/canonical reference resolution;
+- compatibility/check/quality-gate/fingerprint/suppression retained evidence;
+- deterministic serializers whose persisted output can affect policy.
 
-```text
-RAW_FUZZ
-STRUCTURED_FUZZ
-PROPERTY
-DIFFERENTIAL_OR_CROSS_PATH
-MUTATION_TARGET
-COVERAGE_CRITICAL
-CORPUS_REPLAY
-```
+Evidence modes are limited to the normative enum in `evidence-contracts.md`.
 
-A future parser or instance-data boundary, especially any CF-14 source-profiler input boundary, must explicitly reconcile this AF-02 inventory before that later feature can close canonically.
+### FR-002 — exact tool/package provenance
 
-### FR-002 — isolated fuzz workspace and exact tool identity
-
-Add a dedicated fuzz workspace/harness that does not become a normal commandF product runtime dependency.
-
-AF-02 planning freezes these initial tooling identities for implementation review:
+Every adopted AF-02 executable MUST have a `commandf.af02-tool-lock/v1` record. Allowed executable acquisition modes are only:
 
 ```text
-cargo-fuzz: 0.13.2
-upstream commit: 984c861c8dfea28055254c5f1d2659ab2cd63f76
-
-libfuzzer-sys: =0.4.13
-arbitrary: =1.4.2
-
-fuzz compiler: nightly-2026-08-25
+LOCKED_GIT_REV_SOURCE_BUILD
+IMMUTABLE_RELEASE_ASSET_WITH_SHA256
 ```
 
-The normal commandF workspace remains on its canonical stable Rust declaration (`1.97.1`) unless separately changed by authorized roadmap work. The nightly toolchain is fuzz-only and must not leak into product/release compatibility claims.
+CI MUST retain and verify source/release identity, install/build command, locked source or release digest, installed executable SHA-256, version output, compiler/cargo/target/features.
 
-The implementation must record registry checksums or equivalent exact package identity for fuzz-only crates when they are first locked.
-
-### FR-003 — raw and structure-aware fuzzing
-
-Provide bounded fuzz targets appropriate to the shape of each required boundary.
-
-Raw-byte fuzzing is required where malformed bytes are itself the security boundary, including archive/compression and JSON parsing surfaces.
-
-Structure-aware fuzzing is required where random bytes would spend most executions in trivial parser rejection and would fail to exercise meaningful invariants. Structured generators must favor semantically interesting combinations such as:
-
-- valid and invalid Lockfile V2 package/dependency graphs;
-- canonical references with versions/fragments/empty components;
-- source-map line ranges and portable path components;
-- report/suppression/fingerprint combinations;
-- graph node/edge order permutations and ambiguity cases.
-
-Fuzz harnesses must bound generated input sizes, collection lengths, recursion/depth, filesystem footprint, and per-case work so adversarial testing does not turn existing large product limits into routine multi-hundred-MiB CI allocations.
-
-No harness may use `unsafe` merely to increase fuzz throughput without a separately reviewed need.
-
-### FR-004 — differential and cross-path invariants
-
-Where commandF has two independently meaningful computation paths or an existing external/reference contract, AF-02 must compare them rather than merely assert "no panic".
-
-Eligible examples include:
-
-- constructor canonicalization followed by serialization/parsing versus persisted-evidence validation;
-- package resource inventory paths that are expected to agree on identity/count/order for the same synthetic archive;
-- report construction followed by independent report validation/recomputation;
-- canonical graph/fingerprint outputs produced from equivalent input permutations;
-- existing CF-06 oracle adapter/reconciliation contracts **without changing the frozen production oracle identity**.
-
-A comparison that uses the same underlying implementation twice must not be described as an independent oracle.
-
-Every discovered divergence must be classified. Unknown divergence fails closed until minimized and understood.
-
-### FR-005 — property-test layer
-
-Adopt `proptest = =1.11.0` as a development/test-only dependency where property generation and shrinking materially improve evidence. The upstream crate currently declares Rust MSRV `1.86`, compatible with commandF's current `1.97.1` workspace.
-
-Initial property families must include, where the current APIs permit them without semantic redesign:
-
-- valid Lockfile V2 canonical round-trip and byte-stable serialization;
-- constructor normalization versus rejection of non-canonical persisted V2 evidence;
-- deterministic set/order semantics for context graph and comparable report structures;
-- JSON object-key-order independence for canonical fingerprint identities;
-- quality-gate evaluate-then-validate consistency and rejection of tampered retained evidence;
-- suppression/baseline membership equivalence independent of caller input ordering;
-- portable-path rejection for absolute, traversal, empty-component, and drive/prefix forms;
-- deterministic serializers returning byte-identical output for equivalent canonical input.
-
-Property runs must use checked-in case-count/shrinking configuration. A failing seed/reproducer must be retained before the defect is marked fixed.
-
-### FR-006 — minimized regression corpus promotion
-
-Every fuzz crash, timeout caused by an input defect, invariant violation, unexpected acceptance, or property counterexample found by AF-02 must be reduced to a deterministic reproducer before closure of the corresponding fix.
-
-The promoted corpus must:
-
-- contain only synthetic or publicly redistributable non-PHI data;
-- preserve the smallest practical reproducer rather than an entire discovery corpus;
-- have stable scenario identity and digest;
-- name the affected boundary and expected fail-closed/accepted behavior;
-- execute through deterministic regression tests or an equivalent corpus-replay gate;
-- remain reviewable in repository size.
-
-Default committed regression payloads should remain at or below `256 KiB` each. A larger minimized reproducer requires explicit rationale, provenance, and a bounded aggregate-corpus review.
-
-Discovery corpora and generated coverage artifacts are not automatically committed.
-
-### FR-007 — targeted mutation adequacy
-
-Adopt targeted mutation testing with:
+Initial reviewed source commits:
 
 ```text
-cargo-mutants: 27.1.0
-upstream commit: 8ab1dc786a1f61a4e370416cc6c68b81a704e917
+cargo-fuzz 0.13.2      984c861c8dfea28055254c5f1d2659ab2cd63f76
+cargo-mutants 27.1.0   8ab1dc786a1f61a4e370416cc6c68b81a704e917
+cargo-llvm-cov 0.9.0   be59056988acd54c7f984b7c85643daea3711b29
+cargo-nextest 0.9.143  60fa45f638ffc3f35e74afa65737f45fcd32db2a
 ```
 
-The initial required mutation set must prioritize code where a plausible logic error could create false compatibility, evidence inconsistency, unsafe input acceptance, or non-determinism. Candidate modules include archive/lock/source-map/context/gate and compatibility validation surfaces after exact implementation-time inventory.
-
-AF-02 does **not** define one aggregate mutation percentage as correctness authority.
-
-For the required mutation target set:
-
-- killed mutants are retained as measured evidence;
-- timeouts/build failures are classified separately rather than silently counted as test kills;
-- every surviving mutant must either be killed by a new/strengthened test or be entered in a checked-in narrow waiver with exact source/mutation identity, rationale, compensating evidence, and revisit/removal condition;
-- broad file-level "skip everything" exclusions are prohibited for critical modules;
-- equivalent/trivial/generated mutations may be waived only after review.
-
-No unclassified required survivor is compatible with AF-02 closure.
-
-### FR-008 — coverage diagnostics and floors
-
-Adopt source-based coverage with:
+Test/fuzz library packages use exact crates.io versions plus Cargo registry checksums:
 
 ```text
-cargo-llvm-cov: 0.9.0
-upstream commit: be59056988acd54c7f984b7c85643daea3711b29
+proptest =1.11.0
+libfuzzer-sys =0.4.13
+arbitrary =1.4.2
 ```
 
-Coverage is evidence of exercised code, not proof of correctness.
+The fuzz-only compiler is `nightly-2026-08-25`; normal product Rust remains canonical stable `1.97.1` unless separately authorized.
 
-The implementation must first measure a canonical baseline on the exact planning/implementation base. Only then may it freeze initial floors. Floors must be derived from measured reality rather than guessed percentages.
+### FR-003 — bounded raw and structure-aware fuzzing
 
-At minimum retain:
+Fuzzing MUST use the normalized outcome classes and `commandf.af02-resource-policy/v1` from `evidence-contracts.md`.
 
-- workspace line coverage;
-- function and region coverage as diagnostics;
-- line coverage for AF-02 critical modules/surfaces where the tool can report it reliably;
-- the exact tool/compiler/source identities used for the baseline.
+Routine AF-02 fuzzing MUST enforce per-input timeout, max input bytes, memory, CPU, PIDs, temporary filesystem, generated/decompressed work, subprocess time, and artifact limits. Deterministic qualification runs offline after an independently verified acquisition phase, including OS/container network denial.
 
-A candidate that lowers a frozen floor must not weaken the floor in the same implementation change merely to regain green. A floor reduction requires an explicit reviewed policy change with rationale and revisit condition.
+No-crash duration is never represented as timeless correctness proof. Harness/resource failures are incomplete runs, not clean observations.
 
-Generated/vendor/fuzz harness code exclusions must be explicit; product modules may not disappear from coverage by broad glob accident.
+### FR-004 — property tests and independent models
 
-### FR-009 — flaky-as-failure execution
+`proptest =1.11.0` remains test-only. Every property family records generator domain, bounds, case count, seed/shrink policy, expected outcomes, and an independent model/oracle where a differential claim is made.
 
-Adopt nextest for additive flaky-test evidence with:
+Required initial models are frozen in `evidence-contracts.md` for archive/manifest, Lockfile, source-map/path, context graph, and quality-gate/fingerprint semantics.
+
+Calling the same production implementation twice is not an independent oracle.
+
+### FR-005 — deterministic corpus promotion
+
+Every crash, invariant violation, unexpected acceptance, oracle divergence, or property counterexample used to close a defect MUST become a minimized deterministic regression under `commandf.af02-corpus/v1`.
+
+Scenario identity format is `AF02-<SURFACE-SLUG>-NNNN`; digest is SHA-256 of raw stored bytes. Only `SYNTHETIC` and `PUBLIC_REDISTRIBUTABLE` provenance classes are allowed. Public inputs require source/redistribution evidence.
+
+Every manifest entry MUST bind to an executable assertion/replay target and be executed in CI. Orphan metadata or orphan assertions fail closed.
+
+Default limits are <=256 KiB per promoted fixture and <=8 MiB aggregate committed AF-02 corpus unless a separate reviewed policy change is already canonical.
+
+### FR-006 — no-PHI and artifact safety
+
+No PHI, private patient data, credentials, or unknown-provenance fixtures are allowed.
+
+The primary authority is machine-checkable fixture provenance. A scanner provides defense in depth. Fuzz crash inputs are treated as opaque untrusted data: never executed; never used as file names; only bounded regular files under a dedicated artifact root may be retained; symlinks/devices/FIFOs/sockets/executable files/path escapes are rejected; logs record bounded escaped previews plus digest/size rather than dumping arbitrary inputs.
+
+### FR-007 — nextest flaky-as-failure
+
+AF-02 adopts cargo-nextest 0.9.143 only as additive evidence. Canonical:
 
 ```text
-cargo-nextest: 0.9.143
-upstream commit: 60fa45f638ffc3f35e74afa65737f45fcd32db2a
+cargo test --workspace --all-features --locked
 ```
 
-AF-02 must configure a CI profile that allows bounded retry for diagnosis but treats a test that passes only after retry as failure. Initial intended semantics are:
+remains independently mandatory.
+
+Repository CI profile and command-line enforcement are normative:
 
 ```toml
 [profile.ci]
 retries = 2
 flaky-result = "fail"
+slow-timeout = { period = "60s", terminate-after = 2 }
 ```
-
-Any final timeout/slow-test profile must be based on observed repository behavior and be bounded.
-
-Canonical `cargo test --workspace --all-features` remains mandatory. `cargo nextest` adds flaky/retry evidence and must not replace `cargo test` or hide doctest/test-harness differences.
-
-A synthetic AF-02 self-test must prove that retry-pass is reported as failure without introducing a permanently flaky test into the ordinary product suite.
-
-### FR-010 — deterministic PR qualification versus stochastic discovery
-
-AF-02 must explicitly separate two evidence classes.
-
-**Deterministic/replayable qualification** may include:
-
-- compilation of every required fuzz target;
-- deterministic replay of every committed regression corpus input;
-- property tests with retained configuration and reproducible failing seeds;
-- ordinary `cargo test` and nextest no-flake result;
-- coverage against a fixed test/corpus set;
-- targeted mutation results for a frozen mutation set and exclusions.
-
-**Stochastic discovery evidence** includes bounded fuzz campaigns whose explored paths can differ between runs. Such campaigns must record exact source/tool/seed/budget/corpus identities where available, but a no-crash fuzz duration is not a proof of correctness and is not byte-deterministic product evidence.
-
-PR qualification must not claim that "fuzzed for N minutes with no crash" proves a candidate safe.
-
-### FR-011 — CI topology and bounded execution
-
-AF-02 CI must keep expensive adversarial work independently diagnosable and bounded.
-
-The intended topology is:
-
-1. **PR adversarial qualification** — fuzz target build, committed corpus replay, property tests, nextest flaky-as-failure, and coverage checks needed by the candidate;
-2. **bounded discovery campaign** — scheduled/manual fuzz discovery with retained crash/corpus metadata; failure means a real discovered defect, while no crash is only a bounded observation;
-3. **targeted mutation lane** — path/scope-aware mutation adequacy with exact survivor/waiver evidence;
-4. **AF-02 proof lane** — exact-head summary over the required deterministic evidence and retained stochastic observations.
-
-Heavy AF-02 workflows need not become universal `main` required checks. If any new check is proposed for the live AF-01 ruleset, it must first prove universal terminal topology and undergo separate checked-in/live-policy reconciliation. AF-02 must not weaken or silently replace existing required contexts `rust`, `assurance-proof`, or `scorecard`.
-
-Every new job must have an explicit timeout and least GitHub token authority consistent with canonical AF-01 policy.
-
-### FR-012 — exact-head adversarial proof artifact
-
-Add a dedicated retained AF-02 proof workflow or equivalent artifact with a stable schema recording at least:
-
-- exact source SHA and tree SHA;
-- hashes of AF-02 spec/plan/tasks/consistency and donor/policy files;
-- fuzz target inventory and exact build/toolchain identities;
-- committed corpus manifest, scenario IDs, and digests;
-- property-test configuration/outcome;
-- nextest configuration and proof that no retry-pass was converted to green;
-- coverage tool identity, baseline identity, frozen floors, and observed values;
-- mutation tool identity, target set, killed/surviving/timeout/build-failure classes, and waiver identities;
-- stochastic fuzz campaign bounds/results labeled as discovery evidence;
-- a deterministic final summary digest over normalized deterministic evidence, for example:
 
 ```text
-AF02_ADVERSARIAL_SHA256=<64 lowercase hex>
+--retries 2 --flaky-result fail
 ```
 
-Timestamps must not be used as evidence identity. Stochastic observations may carry timestamps as metadata, but the deterministic summary must not pretend their execution order/time is a semantic identity.
+The CLI values intentionally prevent weaker per-test retry/flaky-result overrides from making AF-02 green.
 
-### FR-013 — product and assurance authority non-regression
+An isolated non-workspace fixture MUST deterministically fail first attempt and pass on retry using an AF-02-owned temporary state file; expected process exit remains non-zero.
 
-AF-02 must not change or weaken:
+### FR-008 — measured coverage without same-PR gaming
 
-- CF-03 structural-diff semantics;
-- CF-04 compatibility classification/rule semantics;
-- CF-05 check/SARIF policy semantics;
-- CF-06 production oracle identity;
-- CF-07 terminology semantics;
-- CF-09 authored-source mapping semantics;
-- CF-10 frozen corpus;
-- CF-11/11G package/context graph identities;
-- CF-12 impact semantics;
-- CF-13 baseline/suppression/gate semantics;
-- AF-01 workflow-trust, dependency-security, required-check, or live source-control enforcement.
+Coverage uses cargo-llvm-cov 0.9.0 and the fixed pre-measurement descriptor in `evidence-contracts.md`:
 
-A minimal internal refactor made solely to expose a pure test seam is allowed only if it preserves public API and behavior and receives full semantic regression qualification. AF-02 must not add public product API solely for fuzz harness convenience.
+```text
+Linux/x86_64
+Rust 1.97.1 + llvm-tools-preview
+cargo llvm-cov --workspace --all-features --locked --json
+production source: crates/*/src/**
+```
 
-### FR-014 — reviewer truth
+Only explicit non-product exclusions are allowed initially. The raw report and normalized descriptor are retained.
 
-Every AF-02 planning and implementation stack must request CodeRabbit and Qodo when available. Findings are dispositioned against the exact current head. Reviewer timeout/rate limit/summary-only output is not a PASS.
+Initial floors are computed after design freeze but mechanically from measurement:
+
+- workspace production line floor = integer floor of measured percentage;
+- each `COVERAGE_CRITICAL` surface independently gets integer-floor line coverage;
+- no averaging of surface percentages;
+- function/region coverage is diagnostic initially.
+
+Floor reduction, source exclusion broadening, or descriptor weakening cannot make the same candidate green. Re-baselining requires a dedicated reviewed policy PR evaluated against the previous canonical policy and merged first.
+
+### FR-009 — targeted mutation adequacy
+
+Cargo-mutants 27.1.0 execution MUST be bound to exact source/tree, tool-lock identity, command/config, build profile, test command, parallelism, timeout policy, source scope, reviewed exclusions, JSON inventory digest, and stable required mutant IDs.
+
+The design-freeze MUST verify exact flags against the pinned version and freeze them before execution. JSON mutant listing (`--list --json` or exact-version equivalent) forms the source inventory.
+
+Required result classes:
+
+```text
+KILLED
+SURVIVED
+TIMEOUT
+UNVIABLE_OR_BUILD_FAILURE
+WAIVED_EQUIVALENT_OR_OUT_OF_SCOPE
+```
+
+Every required survivor must be killed or exactly waived. Every TIMEOUT/UNVIABLE result gets a bounded retry plus diagnosis; unresolved results require the same reviewed exact waiver standard and are never counted as killed. Incomplete/cancelled mutation runs fail.
+
+A newly added waiver or reduced required set cannot make the same PR green; weakening mutation-policy changes require a separate canonical policy PR.
+
+### FR-010 — exact-head proof and anti-forgery
+
+The final proof schema is `commandf.af02-adversarial-proof/v1`.
+
+`AF02_ADVERSARIAL_SHA256` is SHA-256 of the canonical JSON `deterministic` object using the exact normalization algorithm in `evidence-contracts.md`: recursively sorted keys, no floats, validated integer numerator/denominator coverage values, schema-defined array order, compact UTF-8 JSON, no trailing newline.
+
+The verifier MUST independently derive source/tree, policy/spec hashes, corpus digests, raw test/tool classifications, live/canonical authority values, and base-policy comparison. It constructs and hashes the deterministic object itself; producer-supplied green JSON/digest is not trusted.
+
+Stochastic campaign results are retained separately and excluded from deterministic proof identity.
+
+### FR-011 — base-policy anti-forgery
+
+A candidate cannot weaken its policy and use that weaker policy to prove itself green.
+
+Potential weakening includes coverage floor/exclusion changes, critical-surface removal, discovery exclusions, resource/offline relaxation, flaky-pass overrides, mutation-set reduction/new waiver, corpus assertion removal, no-PHI relaxation, or AF-01/CF-06/CF-10 authority-baseline changes.
+
+The candidate must pass the previous canonical policy as well or split the weakening into a dedicated independently reviewed policy PR merged before implementation. Strengthening uses the stricter base/candidate rule immediately.
+
+### FR-012 — authority preservation
+
+Every AF-02 stack and final proof MUST independently verify:
+
+- AF-01 assurance ruleset ID `21652953` semantic policy and required contexts;
+- AF-01 review-governance ruleset ID `21652974` semantic policy;
+- CF-06 production oracle `hapifhir/org.hl7.fhir.core` release `6.10.2`, source commit `d06577d...`, validator JAR SHA-256 `a3addad...`, R4 core context 4.0.1;
+- CF-10 unchanged C001/C002/C003 case membership plus retained head/run/artifact/digest identity.
+
+The canonical semantic digests and complete values are frozen in `evidence-contracts.md`. Live/read-derived values, not a candidate-edited baseline alone, are authority.
+
+### FR-013 — CI topology and partial-run semantics
+
+Required logical jobs are acquisition/tool verification, deterministic adversarial replay/property, nextest-flake, coverage, mutation, stochastic discovery, and exact-head adversarial proof.
+
+Every job uses AF-01 full-SHA Actions, least token authority, credentialless checkout, explicit timeout, bounded artifact retention, and immutable proof-critical execution identity.
+
+Current candidate cancellation/timeout/runner loss is failure. Scheduled discovery cancellation is `INCOMPLETE`, never clean no-crash. Network access is separated from deterministic execution.
+
+AF-02 does not add a live required `main` context by default. Any proposal to do so requires a separate universal-terminal topology proof, ruleset intent change, administrator application, and live read-back.
+
+### FR-014 — separate design-freeze gates
+
+Before dependent implementation code, each stack MUST first merge a separate reviewed design-freeze candidate:
+
+- Stack A: authority/surface/resource/tool acquisition/property models/corpus/no-PHI;
+- Stack B: nextest invocation/fixture/timeouts and coverage command/scope/descriptor/rebaseline policy;
+- Stack C: exact mutation command/config/inventory/waiver policy and proof canonicalization/verifier/CI retention topology.
+
+A candidate may not introduce new acceptance semantics and implementation depending on them together.
+
+### FR-015 — product semantic non-regression
+
+AF-02 MUST preserve CF-03/04/05/06/07/09/10/11/11G/12/13 semantics and AF-01 trust/security/live-policy authority. Minimal internal test-seam refactors are permitted only if public API remains unchanged and exact semantic regressions prove behavior preservation.
+
+No public product API may be added solely for fuzzing convenience.
+
+### FR-016 — reviewer truth
+
+Every planning/design-freeze/implementation/convergence candidate requests Qodo and CodeRabbit when available. Findings are dispositioned against the exact current head. Summary-only/rate-limit/timeout/bot absence is not PASS. Head mutation supersedes prior exact-head review qualification.
 
 ## Non-functional requirements
 
-### NFR-001 — determinism
+### NFR-001 — deterministic qualification
 
-All canonical product outputs, corpus replay, property assertions, coverage policy calculation, mutation policy parsing, and AF-02 deterministic summary construction must be reproducible from retained exact inputs.
-
-Fuzz discovery itself is stochastic and must be labeled accordingly rather than laundering randomness into deterministic evidence claims.
+Canonical product outputs, corpus replay, property assertions, coverage policy calculations, mutation inventory/classification, authority projections, and deterministic proof construction are reproducible from retained exact inputs.
 
 ### NFR-002 — fail closed
 
-Malformed retained evidence, unknown mutation survivor classification, missing required corpus replay, missing critical surface coverage, or missing required proof input fails AF-02 qualification.
+Malformed evidence, missing critical surface, unknown result class, stale corpus assertion, missing authority read-back, incomplete run, retry-pass, coverage floor breach, unclassified required mutant, or verifier mismatch fails qualification.
 
 ### NFR-003 — bounded resources
 
-Fuzz/property/mutation/coverage/nextest jobs require explicit timeout, case/input bounds, and finite corpus policies. Harnesses must not routinely exercise product maximums that imply hundreds of MiB per iteration unless a separate stress scenario explicitly requires and bounds that work.
+All AF-02 lanes use the checked-in resource policy. Routine AF-02 is not AF-04 stress testing.
 
-### NFR-004 — no hidden retries
+### NFR-004 — offline deterministic execution
 
-A retry-pass is evidence of flakiness and remains a failed AF-02 result. Retry exists to diagnose, not to manufacture green.
+After immutable tool/dependency acquisition, deterministic AF-02 execution must be network-denied at Cargo and OS/container layers as defined by the normative contract.
 
-### NFR-005 — no PHI
+### NFR-005 — no hidden retries
 
-No patient data or PHI is introduced. Synthetic/public conformance metadata only.
+Retry exists for diagnosis only; retry-pass remains failure.
 
-### NFR-006 — exact provenance
+### NFR-006 — no PHI
 
-Tool versions, upstream commits where applicable, Rust toolchains, crate registry checksums, corpus digests, policies, and source identities are retained.
+Synthetic/public redistributable data only. Unknown provenance fails.
 
-### NFR-007 — stackability
+### NFR-007 — exact provenance
 
-Implementation is split into small independently reviewable stacks. Do not combine every fuzz target, coverage policy, mutation program, and proof workflow into one opaque PR.
+Tool binaries and registry packages are bound to exact source/release/package checksums. Tags/versions alone are insufficient proof identity.
 
-### NFR-008 — no vanity metric
+## Explicit exclusions
 
-Coverage percentage, mutation score, number of fuzz executions, and fuzz duration are separate evidence dimensions. No single aggregate number becomes a commandF trust/correctness score.
+AF-02 does not claim:
 
-## Acceptance scenarios
+- all bugs are found by fuzzing;
+- coverage percentage proves semantic correctness;
+- mutation score is product correctness authority;
+- no-crash runtime proves safety;
+- AF-03 portability/release/SBOM/SLSA work is complete;
+- AF-04 performance/stress work is complete;
+- CF-14/15/16 product functionality is implemented;
+- blocked CF-06/CF-10 governance is resolved.
 
-1. Malformed/truncated gzip/tar input enters the archive fuzz boundary -> commandF returns a bounded error or accepted result and does not panic or escape configured harness limits.
-2. A valid generated Lockfile V2 built through canonical constructors -> serialize -> parse -> serialize produces equivalent object state and byte-identical canonical output.
-3. Persisted Lockfile V2 evidence with unsorted/duplicate roots, packages, or dependency edges -> validation rejects it rather than silently canonicalizing hostile retained evidence.
-4. A SUSHI source-map path containing `..`, absolute/root form, empty component, Windows drive/prefix form, or source escape -> fails closed.
-5. Equivalent context-graph inputs differing only in caller ordering -> canonical report bytes/normalized graph evidence remain identical.
-6. A finding whose embedded JSON objects have different object-key insertion order but identical semantic content -> `finding_fingerprint_v1` identity remains identical.
-7. A quality-gate report is built and then one retained fingerprint/disposition/evidence field is tampered -> validator rejects it.
-8. A controlled AF-02 test fixture passes only on a retry -> nextest AF-02 profile returns failure; ordinary product tests do not contain a permanently flaky fixture.
-9. A known plausible mutation in a required critical module survives -> mutation gate remains non-green until a test kills it or an exact reviewed waiver classifies it.
-10. Coverage on a candidate drops below a frozen floor -> gate fails; the same candidate cannot silently lower the floor to pass.
-11. A fuzz/property failure is fixed without a committed minimized deterministic reproducer -> AF-02 task remains incomplete.
-12. A bounded discovery fuzz run finds no crash -> result is recorded as a bounded observation, not a correctness PASS claim.
-13. A future parser boundary is added without AF-02 surface-manifest classification -> coverage audit fails or later feature closure remains blocked.
-14. Existing mandatory `cargo fmt`, `cargo clippy`, `cargo test`, path-applicable proof/oracle workflows, and AF-01 required checks remain green on every implementation head.
+## Planning status
 
-## Edge cases
+The initial PR #54 head `3224098403f6bfb64525bfab002e94d5c3d82e69` passed its existing workflows but Qodo and CodeRabbit found material planning gaps. Those findings are accepted, not waived. This amended planning package adds the normative executable contracts required to close them.
 
-- A fuzz target that only reaches trivial JSON syntax rejection is not sufficient structure-aware coverage for a structured invariant surface.
-- A fuzzer timeout caused by an intentionally tiny harness timeout is not automatically a product defect; timeout policy and reproducer must distinguish harness configuration from input-triggered pathological behavior.
-- A mutation that cannot compile is not a killed mutant unless the frozen mutation policy explicitly classifies compiler-rejected transformations separately.
-- An equivalent mutant is not silently deleted from results; it receives a narrow reviewed waiver.
-- Coverage can change because compiler/tool instrumentation changes. Tool/compiler identity must therefore be part of the baseline before interpreting drift.
-- Property-test shrinking can discover a smaller input than the original fuzz artifact; the smallest stable reproducer should be promoted.
-- Filesystem/source-map fuzzing must use isolated temporary directories and must never follow generated paths outside the harness root.
-- A scheduled fuzz workflow that is skipped/unavailable is not a clean fuzz result.
-- Cross-path comparison is not called "differential oracle" when both sides use the same implementation/semantic authority.
-- Existing very large legitimate package limits are product behavior, not a requirement that every fuzz iteration allocate near those limits.
+Fresh exact-head CI and fresh independent review are still required. Until T006 merges and post-merge authority is re-read:
 
-## Explicit non-goals
-
-AF-02 does not implement:
-
-- CF-14 source-profiler product behavior or real patient-instance ingestion;
-- CF-15 AutoFix recipes;
-- CF-16 mapping IR;
-- CF-06 production oracle pin changes;
-- CF-10 corpus mutation;
-- Linux/Windows/macOS release qualification, MSRV release gate, SBOM, signing, provenance, or public API/SemVer guard — AF-03;
-- benchmark performance budgets, large-scale resource claims, or external-service sentinel separation — AF-04;
-- a stable public release claim;
-- a universal trust score;
-- AI/model/agent authority.
+```text
+AF-02: PLANNING_CANDIDATE
+IMPLEMENTATION_AUTHORITY: NOT_GRANTED
+```
