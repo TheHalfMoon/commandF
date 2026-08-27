@@ -29,7 +29,7 @@
             "contents": "read"
           },
           "runner": "ubuntu-24.04",
-          "timeout_minutes": 35
+          "timeout_minutes": 30
         }
       }
     },
