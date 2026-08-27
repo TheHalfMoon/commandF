@@ -28,6 +28,8 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts -p 'test_audit_workflow_trust*.py'
       - name: AF-01 repository workflow trust audit
         run: python3 .github/scripts/audit_workflow_trust.py
+      - name: AF-01 executable authority surface audit
+        run: python3 .github/scripts/audit_workflow_trust_surface.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
