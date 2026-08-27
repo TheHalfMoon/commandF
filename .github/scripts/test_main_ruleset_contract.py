@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOPOLOGY = ROOT / ".github" / "required-checks.json"
 RULESET = ROOT / ".github" / "main-ruleset.json"
+GITHUB_ACTIONS_INTEGRATION_ID = 15368
 
 
 class MainRulesetContractTests(unittest.TestCase):
@@ -48,16 +49,36 @@ class MainRulesetContractTests(unittest.TestCase):
         self.assertIsInstance(required, dict)
         self.assertFalse(required.get("do_not_enforce_on_create"))
         self.assertTrue(required.get("strict_required_status_checks_policy"))
-        contexts = [item.get("context") for item in required.get("required_status_checks", [])]
-        expected = [item["context"] for item in topology["checks"]]
-        self.assertEqual(contexts, expected)
-        self.assertEqual(contexts, ["rust", "assurance-proof", "scorecard"])
+        actual = required.get("required_status_checks", [])
+        expected = [
+            {
+                "context": item["context"],
+                "integration_id": item["integration_id"],
+            }
+            for item in topology["checks"]
+        ]
+        self.assertEqual(actual, expected)
+        self.assertEqual(
+            actual,
+            [
+                {"context": "rust", "integration_id": GITHUB_ACTIONS_INTEGRATION_ID},
+                {"context": "assurance-proof", "integration_id": GITHUB_ACTIONS_INTEGRATION_ID},
+                {"context": "scorecard", "integration_id": GITHUB_ACTIONS_INTEGRATION_ID},
+            ],
+        )
 
-    def test_ruleset_has_no_unreviewed_integration_binding(self) -> None:
+    def test_every_required_check_is_bound_to_github_actions(self) -> None:
+        topology = json.loads(TOPOLOGY.read_text(encoding="utf-8"))
+        for check in topology["checks"]:
+            self.assertEqual(check.get("integration_id"), GITHUB_ACTIONS_INTEGRATION_ID)
+
         ruleset = json.loads(RULESET.read_text(encoding="utf-8"))
-        required_rule = next(rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks")
+        required_rule = next(
+            rule for rule in ruleset["rules"] if rule["type"] == "required_status_checks"
+        )
         for check in required_rule["parameters"]["required_status_checks"]:
-            self.assertEqual(set(check), {"context"})
+            self.assertEqual(set(check), {"context", "integration_id"})
+            self.assertEqual(check["integration_id"], GITHUB_ACTIONS_INTEGRATION_ID)
 
 
 if __name__ == "__main__":
