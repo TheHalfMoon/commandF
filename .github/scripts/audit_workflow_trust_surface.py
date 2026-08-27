@@ -76,8 +76,6 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
     try:
         tokens = shlex.split(prefix, comments=True, posix=True)
     except ValueError:
-        # A shell-looking executable prefix that cannot be parsed is executable authority and must
-        # not silently become heredoc data.
         return bool(
             re.search(
                 r"(?:^|\s|/)(?:bash|dash|ksh|sh|zsh)(?:\s|$)",
@@ -92,8 +90,6 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
         command = tokens[command_index]
         if _basename(command) in core.SHELL_INTERPRETERS:
             return True
-        # Unknown executable indirection can select a shell and the heredoc body would otherwise be
-        # removed by the core Cargo scanner.
         if "$" in command or "`" in command:
             return True
 
@@ -102,8 +98,6 @@ def _heredoc_prefix_executes_shell(prefix: str) -> bool:
         return False
     if _basename(tokens[raw_index]) not in EXECUTION_WRAPPERS:
         return False
-    # Fail closed on wrapper forms the core constrained normalizer does not fully understand (for
-    # example `env -u NAME bash` or an absolute `/usr/bin/env` wrapper).
     return any(_basename(token) in core.SHELL_INTERPRETERS for token in tokens[raw_index + 1 :])
 
 
@@ -161,7 +155,6 @@ def _assignment_class(value: str) -> str:
         return "cargo"
     if "$(" in candidate or "`" in candidate:
         return "unknown"
-    # A fixed final path component cannot turn into Cargo even when its parent path is expanded.
     if basename and "$" not in basename:
         return "non_cargo"
     return "unknown"
@@ -362,6 +355,30 @@ def _exact_action_local_target(token: str) -> str | None:
     return relative
 
 
+def _normalized_action_command_is_supported(command: str) -> bool:
+    return (
+        _exact_action_local_target(command) is not None
+        or command in ACTION_SOURCE_BUILTINS
+        or _basename(command) in core.SHELL_INTERPRETERS
+    )
+
+
+def _unresolved_wrapper_can_delegate_action_script(
+    tokens: list[str], command_index: int | None
+) -> bool:
+    """Reject wrapper option forms when the core resolver cannot prove the delegated executable."""
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is None or _basename(tokens[raw_index]) not in EXECUTION_WRAPPERS:
+        return False
+    if command_index is not None and command_index < len(tokens):
+        if _normalized_action_command_is_supported(tokens[command_index]):
+            return False
+    trailing = tokens[raw_index + 1 :]
+    return any("GITHUB_ACTION_PATH" in token for token in trailing) or any(
+        _basename(token) in core.SHELL_INTERPRETERS for token in trailing
+    )
+
+
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
     """Return exact static GITHUB_ACTION_PATH shell targets and unsupported delegation."""
     targets: list[str] = []
@@ -372,6 +389,9 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         except ValueError:
             continue
         command_index = core._command_token_index(tokens)
+        if _unresolved_wrapper_can_delegate_action_script(tokens, command_index):
+            unsupported.append(segment)
+            continue
         if command_index is None or command_index >= len(tokens):
             continue
 
@@ -381,8 +401,6 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
 
         direct_target = _exact_action_local_target(command)
         if direct_target is not None:
-            # Arguments can change delegated script behavior; keep the supported delegation shape
-            # intentionally narrow and deterministic.
             if args:
                 unsupported.append(segment)
             else:
@@ -409,7 +427,6 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
             unsupported.append(segment)
             continue
         if HEREDOC_OPERATOR_RE.search(segment):
-            # Heredoc authority is rejected separately by _shell_heredoc_findings.
             continue
         script_positions = [index for index, arg in enumerate(args) if not arg.startswith("-")]
         if not script_positions:
@@ -421,8 +438,6 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         if target is None:
             unsupported.append(segment)
             continue
-        # Any remaining positional arguments can influence the delegated script and are not part of
-        # the supported static delegation subset.
         if any(not arg.startswith("-") for arg in args[script_position + 1 :]):
             unsupported.append(segment)
             continue
