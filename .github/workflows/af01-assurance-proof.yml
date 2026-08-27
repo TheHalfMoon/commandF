@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
           python3 .github/scripts/test_build_af01_assurance_summary.py
+          python3 .github/scripts/test_verify_crate_checksums.py
           mkdir -p "$AF01_EVIDENCE_DIR"
       - name: Generate exact workflow-trust evidence
         run: |
@@ -42,6 +43,8 @@ jobs:
           second_metadata=/tmp/af01-dependency-metadata-repeat.json
           first_inventory="$AF01_EVIDENCE_DIR/dependency-inventory.json"
           second_inventory=/tmp/dependency-inventory-repeat.json
+          checksum_evidence="$AF01_EVIDENCE_DIR/crate-checksums.json"
+
           cargo metadata --locked --format-version 1 > "$first_metadata"
           python3 .github/scripts/summarize_cargo_metadata.py \
             < "$first_metadata" \
@@ -51,6 +54,14 @@ jobs:
             < "$second_metadata" \
             > "$second_inventory"
           cmp --silent "$first_inventory" "$second_inventory"
+
+          cargo fetch --locked
+          python3 .github/scripts/verify_crate_checksums.py \
+            --inventory "$first_inventory" \
+            --cargo-lock Cargo.lock \
+            --cargo-home "$CARGO_HOME" \
+            > "$checksum_evidence"
+
           python3 - <<'PY'
           import hashlib
           import json
@@ -59,11 +70,18 @@ jobs:
 
           evidence_dir = Path(os.environ["AF01_EVIDENCE_DIR"])
           inventory_path = evidence_dir / "dependency-inventory.json"
+          checksum_path = evidence_dir / "crate-checksums.json"
           inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+          checksum_evidence = json.loads(checksum_path.read_text(encoding="utf-8"))
+          if checksum_evidence.get("schema") != 1 or checksum_evidence.get("ok") is not True:
+              raise SystemExit("crate checksum evidence is not a successful schema-1 proof")
 
           proof = {
               "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
-              "command": ["cargo", "metadata", "--locked", "--format-version", "1"],
+              "command": ["cargo", "metadata", "--locked", "--format-version", 1],
+              "crate_checksum_package_count": checksum_evidence["package_count"],
+              "crate_checksums_sha256": hashlib.sha256(checksum_path.read_bytes()).hexdigest(),
+              "fetch_command": ["cargo", "fetch", "--locked"],
               "graph_sha256": inventory["graph_sha256"],
               "head_sha": os.environ["AF01_SOURCE_SHA"],
               "inventory_sha256": hashlib.sha256(inventory_path.read_bytes()).hexdigest(),
