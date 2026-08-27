@@ -1,0 +1,34 @@
+name: af01-security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/af01-stack-b-dependency-security
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Generate exact locked dependency inventory
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 > /tmp/commandf-cargo-metadata.json
+          python3 .github/scripts/summarize_cargo_metadata.py \
+            < /tmp/commandf-cargo-metadata.json \
+            | tee af01-t020-dependency-inventory.json
+      - name: Upload exact dependency inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-t020-dependency-inventory
+          path: af01-t020-dependency-inventory.json
+          if-no-files-found: error
+          retention-days: 7
