@@ -262,20 +262,38 @@ runs:
         self.assertNotIn("unsupported_cargo_indirect", codes)
         self.assertNotIn("cargo_unlocked", codes)
 
-    def test_retry_wrapped_locked_cargo_is_enforced_and_allowed(self) -> None:
+    def test_unverified_retry_wrapper_fails_closed(self) -> None:
         text = workflow(
             "      - name: Retry\n"
             "        run: retry cargo test --locked --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
+    def test_direct_locked_cargo_retry_loop_is_allowed(self) -> None:
+        text = workflow(
+            "      - name: Retry\n"
+            "        run: |\n"
+            "          for attempt in 1 2 3; do\n"
+            "            if cargo test --locked --workspace; then\n"
+            "              break\n"
+            "            fi\n"
+            "          done"
         )
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         codes = self.codes(findings)
         self.assertNotIn("unsupported_cargo_indirect", codes)
         self.assertNotIn("cargo_unlocked", codes)
 
-    def test_retry_wrapped_unlocked_cargo_fails(self) -> None:
+    def test_direct_unlocked_cargo_retry_loop_fails(self) -> None:
         text = workflow(
             "      - name: Retry\n"
-            "        run: retry cargo test --workspace"
+            "        run: |\n"
+            "          for attempt in 1 2 3; do\n"
+            "            if cargo test --workspace; then\n"
+            "              break\n"
+            "            fi\n"
+            "          done"
         )
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertIn("cargo_unlocked", self.codes(findings))
