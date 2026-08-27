@@ -114,6 +114,18 @@ af01-security: 33072451128 — success
 af01-assurance-proof: 33072451125 — success
 ```
 
+Exact required-check producer evidence for the final Stack C head:
+
+| Required context | Workflow / run | Check-run / job ID | `head_sha` | Status | Conclusion | GitHub Actions integration |
+|---|---|---:|---|---|---|---:|
+| `rust` | `ci` / `33072451162` | `98517896319` | `c82ef6e6f137805074cc5e0c453d47e0d2799839` | `completed` | `success` | `15368` |
+| `assurance-proof` | `af01-assurance-proof` / `33072451125` | `98517896115` | `c82ef6e6f137805074cc5e0c453d47e0d2799839` | `completed` | `success` | `15368` |
+| `scorecard` | `af01-scorecard` / `33072451121` | `98517896493` | `c82ef6e6f137805074cc5e0c453d47e0d2799839` | `completed` | `success` | `15368` |
+
+The checked-in required-check contract maps those contexts one-to-one to `.github/workflows/ci.yml#rust`, `.github/workflows/af01-assurance-proof.yml#assurance-proof`, and `.github/workflows/af01-scorecard.yml#scorecard`, all with `integration_id=15368`. The regression suite `test_required_check_topology.py` independently enforces that each selected producer is unique, uses an unfiltered mapping-form `pull_request:` trigger, has no job-level `if`, `needs`, or `continue-on-error`, and cannot be spoofed by a duplicate or dynamic job name. Its explicit `test_counterexample_path_filtered_workflow_is_rejected` counterexample rejects a `pull_request.paths` filter, which is the docs-only/path-nonmatching false-PASS class T035 is intended to prevent.
+
+On exact Stack C head `c82ef6e6...`, `rust` job/check-run `98517896319` completed successfully and its `AF-01 workflow trust audit tests` step completed successfully. That step runs `python3 -m unittest discover -s .github/scripts -p 'test_audit_workflow_trust*.py'`; the repository wrapper `test_audit_workflow_trust_required_check_topology.py` imports the `RequiredCheckTopologyTests` suite above. This binds the docs-only/path-nonmatching regression to a retained exact-head CI execution rather than leaving it as an unexecuted source assertion.
+
 Selected exact-head retained artifacts:
 
 | Evidence | Artifact ID | GitHub digest |
