@@ -92,11 +92,13 @@ def literal_job_name(lines: list[str], start: int, end: int) -> str | None:
     if not value:
         raise AssertionError("workflow job has an empty name")
     if "${{" in value:
-        return None
+        raise AssertionError(
+            "dynamic workflow job names are forbidden because they can spoof a required check context"
+        )
     return value
 
 
-def job_check_contexts(path: Path) -> list[tuple[str, str | None]]:
+def job_check_contexts(path: Path) -> list[tuple[str, str]]:
     lines = path.read_text(encoding="utf-8").splitlines()
     try:
         jobs_index = lines.index("jobs:")
@@ -108,7 +110,7 @@ def job_check_contexts(path: Path) -> list[tuple[str, str | None]]:
             break
         if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
             job_ids.append(line.strip()[:-1])
-    result: list[tuple[str, str | None]] = []
+    result: list[tuple[str, str]] = []
     for job_id in job_ids:
         start, end = job_range(lines, job_id)
         explicit_name = literal_job_name(lines, start, end)
@@ -124,7 +126,7 @@ def required_context_producers(
         relative = display_path(path)
         for job_id, context in job_check_contexts(path):
             if context in contexts:
-                producers[str(context)].append((relative, job_id))
+                producers[context].append((relative, job_id))
     return producers
 
 
@@ -222,6 +224,17 @@ class RequiredCheckTopologyTests(unittest.TestCase):
                     (str(root / "spoof.yml"), "harmless-id"),
                 ],
             )
+
+    def test_counterexample_dynamic_job_name_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "dynamic.yml"
+            path.write_text(
+                "name: dynamic\njobs:\n  harmless-id:\n    name: ${{ github.event.pull_request.title }}\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "dynamic workflow job names are forbidden"):
+                job_check_contexts(path)
 
 
 if __name__ == "__main__":
