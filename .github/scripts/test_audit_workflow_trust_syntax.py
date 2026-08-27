@@ -227,6 +227,26 @@ runs:
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertNotIn("unsupported_cargo_indirect", self.codes(findings))
 
+    def test_unrelated_command_substitution_does_not_false_positive(self) -> None:
+        text = workflow(
+            "      - name: Metadata\n"
+            "        run: |\n"
+            "          VALUE=\"$(python -c 'print(1)')\"\n"
+            "          test \"$VALUE\" = \"1\""
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        codes = self.codes(findings)
+        self.assertNotIn("unsupported_cargo_indirect", codes)
+        self.assertNotIn("unsupported_shell_syntax", codes)
+
+    def test_argument_variable_does_not_false_positive(self) -> None:
+        text = workflow(
+            "      - name: Retry\n"
+            "        run: echo \"attempt ${attempt}\""
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertNotIn("unsupported_cargo_indirect", self.codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
