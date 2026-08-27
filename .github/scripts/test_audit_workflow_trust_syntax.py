@@ -247,6 +247,47 @@ runs:
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertNotIn("unsupported_cargo_indirect", self.codes(findings))
 
+    def test_heredoc_cargo_text_is_data_not_shell_authority(self) -> None:
+        text = workflow(
+            "      - name: Evidence\n"
+            "        run: |\n"
+            "          python3 - <<'PY'\n"
+            "          import subprocess\n"
+            "          evidence = {'cargo': subprocess.check_output(['cargo', '--version'], text=True)}\n"
+            "          print(evidence)\n"
+            "          PY"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        codes = self.codes(findings)
+        self.assertNotIn("unsupported_cargo_indirect", codes)
+        self.assertNotIn("cargo_unlocked", codes)
+
+    def test_retry_wrapped_locked_cargo_is_enforced_and_allowed(self) -> None:
+        text = workflow(
+            "      - name: Retry\n"
+            "        run: retry cargo test --locked --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        codes = self.codes(findings)
+        self.assertNotIn("unsupported_cargo_indirect", codes)
+        self.assertNotIn("cargo_unlocked", codes)
+
+    def test_retry_wrapped_unlocked_cargo_fails(self) -> None:
+        text = workflow(
+            "      - name: Retry\n"
+            "        run: retry cargo test --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("cargo_unlocked", self.codes(findings))
+
+    def test_retry_wrapped_dynamic_executable_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Retry\n"
+            "        run: retry \"$tool\" test --workspace"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_indirect", self.codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
