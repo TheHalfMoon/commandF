@@ -36,7 +36,7 @@ action.yml
   -> scripts/github-action-run.sh
 ```
 
-Because those scripts can execute lockfile-consuming Cargo commands or delegate additional shell authority, Stack A treats the statically exposed `$GITHUB_ACTION_PATH/...` chain as part of the Action trust surface. Delegated Action shell sources must be tracked, recursively auditable, cycle-bounded, and exact-path static. Dynamic, relative, command-substituted, shell-`-c`, or prefix/suffix-expanded script authority fails closed. The Action runner binds execution to the built `$CARGO_TARGET_DIR/debug/commandf` path rather than accepting a runtime-selected executable argument.
+Because those scripts can execute lockfile-consuming Cargo commands or delegate additional shell authority, Stack A treats the statically exposed `$GITHUB_ACTION_PATH/...` chain as part of the Action trust surface. Delegated Action shell sources must be tracked, recursively auditable, cycle-bounded, and exact-path static. This includes shell-interpreter execution, `source` / `.` inclusion, and direct execution of an exact `$GITHUB_ACTION_PATH/...` script. Absolute shell interpreter paths are normalized by basename for authority checks. Dynamic, relative, command-substituted, shell-`-c`, prefix/suffix-expanded, argument-dependent, or non-Action-root script authority fails closed. The Action runner binds execution to the built `$CARGO_TARGET_DIR/debug/commandf` path rather than accepting a runtime-selected executable argument.
 
 ## Job authority inventory
 
@@ -90,7 +90,7 @@ Current containerized proof jobs use digest-bound Rust images. No service contai
 
 Current workflow commands that build/check/test/run against the Rust dependency graph already use `--locked` in the proof/oracle/registry workflows and in the relevant `ci.yml` clippy/test/run invocations. `cargo fmt` and `cargo --version` are not lockfile-consuming commands and are outside this rule.
 
-The source-backed Action also builds commandF from the repository lockfile. Its composite `run:` entries and recursively reachable tracked Action shell sources are therefore part of the same Cargo authority boundary. Variable-expanded executable positions must be proven statically non-Cargo; unknown or Cargo-resolving executable provenance fails closed.
+The source-backed Action also builds commandF from the repository lockfile. Its composite `run:` entries and recursively reachable tracked Action shell sources are therefore part of the same Cargo authority boundary. Variable-expanded executable positions must be proven statically non-Cargo; unknown or Cargo-resolving executable provenance fails closed. Cargo global-option syntax before the subcommand is outside the supported deterministic parser subset and fails closed rather than bypassing `--locked` enforcement.
 
 AF-01 audit treats at least these cargo subcommands as lockfile-consuming when present in workflow or Action shell commands:
 
@@ -114,9 +114,10 @@ test
 - all external `uses:` references are full 40-hex commit SHAs;
 - all checkout steps persist no credentials;
 - every job/service container reference, if present, is digest-bound with `sha256`;
-- all lockfile-consuming cargo invocations use `--locked`;
+- all lockfile-consuming cargo invocations use `--locked`, while unsupported Cargo global-option forms fail closed;
 - every tracked `action.yml` and `action.yaml` is scanned for external `uses:` references and composite `run:` Cargo authority;
-- every statically delegated `$GITHUB_ACTION_PATH/...` shell source is tracked and recursively audited, while dynamic or non-Action-root shell source selection fails closed.
+- every statically delegated `$GITHUB_ACTION_PATH/...` shell source is tracked and recursively audited whether invoked through a shell interpreter, `source` / `.`, or direct execution, while dynamic or non-Action-root shell source selection fails closed;
+- shell-interpreter heredocs are rejected even through supported wrappers or absolute interpreter paths so executable heredoc bodies cannot escape Cargo authority checks.
 
 ## Scope boundary
 
