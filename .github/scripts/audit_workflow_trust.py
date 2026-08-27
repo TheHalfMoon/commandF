@@ -30,6 +30,23 @@ SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
 SHELL_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
 BARE_DYNAMIC_COMMAND_RE = re.compile(r"^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$")
 CARGO_WORD_RE = re.compile(r"(?<![A-Za-z0-9_])cargo(?![A-Za-z0-9_])")
+DYNAMIC_EXECUTABLE_RE = re.compile(
+    r"""^\s*
+    (?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)\s+)*
+    (?:(?:!|do|if|then|until|while)\s+)*
+    (?:(?:env|command|exec|nohup)(?:\s+-[^\s]+|\s+[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)*\s+)*
+    [\"']?
+    (?:
+        \$(?:[A-Za-z_][A-Za-z0-9_]*(?=[\"']?(?:\s|$))|\{[A-Za-z_][A-Za-z0-9_]*\}(?=[\"']?(?:\s|$)))
+        |\$\(
+        |`
+    )
+    """,
+    re.VERBOSE,
+)
+DYNAMIC_SHELL_RE = re.compile(
+    r"^\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)\s+)*(?:(?:!|do|if|then|until|while)\s+)*(?:eval\b|(?:bash|dash|ksh|sh|zsh)\b[^\n]*\s-c(?:\s|$))"
+)
 
 LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
     {"bench", "build", "check", "clippy", "doc", "metadata", "run", "test"}
@@ -451,53 +468,22 @@ def _command_token_index(tokens: list[str]) -> int | None:
     return index
 
 
-def _indirect_cargo_finding(path: str, job: str, segment: str, tokens: list[str]) -> Finding | None:
-    """Fail closed when shell indirection could hide Cargo from static command analysis."""
-    command_index = _command_token_index(tokens)
-    if command_index is not None:
-        command = tokens[command_index]
-        if (
-            BARE_DYNAMIC_COMMAND_RE.fullmatch(command)
-            or command.startswith("$(")
-            or command.startswith("`")
-        ):
-            return Finding(
-                "unsupported_cargo_indirect",
-                path,
-                job,
-                f"dynamic executable token could resolve to Cargo: {segment}",
-            )
-        if command in DYNAMIC_COMMAND_BUILTINS:
-            return Finding(
-                "unsupported_cargo_indirect",
-                path,
-                job,
-                f"dynamic shell execution is not statically auditable for Cargo: {segment}",
-            )
-        if command in SHELL_INTERPRETERS and "-c" in tokens[command_index + 1 :]:
-            return Finding(
-                "unsupported_cargo_indirect",
-                path,
-                job,
-                f"nested shell execution is not statically auditable for Cargo: {segment}",
-            )
-
-    for token in tokens:
-        if token == "cargo":
-            continue
-        if CARGO_WORD_RE.search(token) and (
-            "=" in token
-            or " " in token
-            or "$(" in token
-            or "`" in token
-            or token.endswith(")")
-        ):
-            return Finding(
-                "unsupported_cargo_indirect",
-                path,
-                job,
-                f"Cargo appears inside an indirect shell token: {segment}",
-            )
+def _raw_indirect_cargo_finding(path: str, job: str, segment: str) -> Finding | None:
+    """Reject executable-position indirection without parsing unrelated shell arguments."""
+    if DYNAMIC_EXECUTABLE_RE.match(segment):
+        return Finding(
+            "unsupported_cargo_indirect",
+            path,
+            job,
+            f"dynamic executable position could resolve to Cargo: {segment}",
+        )
+    if DYNAMIC_SHELL_RE.match(segment):
+        return Finding(
+            "unsupported_cargo_indirect",
+            path,
+            job,
+            f"dynamic shell execution is not statically auditable for Cargo: {segment}",
+        )
     return None
 
 
@@ -512,8 +498,11 @@ def _cargo_findings(
     findings: list[Finding] = []
     for script in _run_scripts(lines, start, end):
         for segment in _logical_shell_segments(script):
-            interesting = "cargo" in segment or "$" in segment or "`" in segment
-            if not interesting:
+            indirect = _raw_indirect_cargo_finding(path, job, segment)
+            if indirect is not None:
+                findings.append(indirect)
+                continue
+            if "cargo" not in segment:
                 continue
             try:
                 tokens = shlex.split(segment, comments=True, posix=True)
@@ -523,65 +512,88 @@ def _cargo_findings(
                         "unsupported_shell_syntax",
                         path,
                         job,
-                        f"cannot safely parse potentially Cargo-related shell segment: {error}: {segment}",
+                        f"cannot safely parse Cargo-containing shell segment: {error}: {segment}",
                     )
                 )
                 continue
 
-            indirect = _indirect_cargo_finding(path, job, segment, tokens)
-            if indirect is not None:
-                findings.append(indirect)
+            command_index = _command_token_index(tokens)
+            if command_index is None:
+                if any(CARGO_WORD_RE.search(token) for token in tokens):
+                    findings.append(
+                        Finding(
+                            "unsupported_cargo_indirect",
+                            path,
+                            job,
+                            f"Cargo appears without a statically executable command: {segment}",
+                        )
+                    )
                 continue
 
-            for index, token in enumerate(tokens):
-                if token != "cargo":
-                    continue
-                command_index = index + 1
-                if command_index < len(tokens) and tokens[command_index].startswith("+"):
-                    command_index += 1
-                if command_index >= len(tokens):
-                    findings.append(
-                        Finding(
-                            "unsupported_cargo_syntax",
-                            path,
-                            job,
-                            f"cannot identify Cargo subcommand: {segment}",
-                        )
+            command = tokens[command_index]
+            if "$" in command or "`" in command:
+                findings.append(
+                    Finding(
+                        "unsupported_cargo_indirect",
+                        path,
+                        job,
+                        f"dynamic Cargo executable path is not supported: {segment}",
                     )
-                    continue
-                subcommand = tokens[command_index]
-                if subcommand in CARGO_INFO_FLAGS and command_index == len(tokens) - 1:
-                    continue
-                if subcommand.startswith("-"):
-                    findings.append(
-                        Finding(
-                            "unsupported_cargo_syntax",
-                            path,
-                            job,
-                            f"Cargo global-option syntax requires explicit auditor support: {segment}",
-                        )
-                    )
-                    continue
-                if subcommand not in locked_subcommands:
-                    continue
-                next_cargo = next(
-                    (
-                        position
-                        for position in range(command_index + 1, len(tokens))
-                        if tokens[position] == "cargo"
-                    ),
-                    len(tokens),
                 )
-                invocation = tokens[index:next_cargo]
-                if "--locked" not in invocation:
+                continue
+
+            is_direct_cargo = command == "cargo" or command.rsplit("/", 1)[-1] == "cargo"
+            if not is_direct_cargo:
+                if any(CARGO_WORD_RE.search(token) for token in tokens):
                     findings.append(
                         Finding(
-                            "cargo_unlocked",
+                            "unsupported_cargo_indirect",
                             path,
                             job,
-                            f"cargo {subcommand} invocation omits --locked: {' '.join(invocation)}",
+                            f"Cargo appears outside the statically executable command position: {segment}",
                         )
                     )
+                continue
+
+            index = command_index
+            subcommand_index = index + 1
+            if subcommand_index < len(tokens) and tokens[subcommand_index].startswith("+"):
+                subcommand_index += 1
+            if subcommand_index >= len(tokens):
+                findings.append(
+                    Finding(
+                        "unsupported_cargo_syntax",
+                        path,
+                        job,
+                        f"cannot identify Cargo subcommand: {segment}",
+                    )
+                )
+                continue
+            subcommand = tokens[subcommand_index]
+            if subcommand in CARGO_INFO_FLAGS and subcommand_index == len(tokens) - 1:
+                continue
+            if subcommand.startswith("-"):
+                findings.append(
+                    Finding(
+                        "unsupported_cargo_syntax",
+                        path,
+                        job,
+                        f"Cargo global-option syntax requires explicit auditor support: {segment}",
+                    )
+                )
+                continue
+            if subcommand not in locked_subcommands:
+                continue
+            invocation = tokens[index:]
+            if "--locked" not in invocation:
+                findings.append(
+                    Finding(
+                        "cargo_unlocked",
+                        path,
+                        job,
+                        f"cargo {subcommand} invocation omits --locked: {' '.join(invocation)}",
+                    )
+                )
     return findings
 
 
