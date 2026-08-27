@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,8 @@ CARGO_AUDIT_VERSION = "0.22.2"
 ZIZMOR_ACTION = "3dc1ecc9bcb9e94e9b2c709687979e1298497054"
 ZIZMOR_VERSION = "1.29.0"
 RUSTSEC_ORIGIN = "https://github.com/RustSec/advisory-db.git"
+CRATES_IO_SOURCE = "registry+https://github.com/rust-lang/crates.io-index"
+INVENTORY_COMMAND = ["cargo", "metadata", "--locked", "--format-version", "1"]
 CONFIG_PATHS = (
     ".github/workflow-trust-policy.json",
     "Cargo.lock",
@@ -26,12 +29,14 @@ CONFIG_PATHS = (
 EVIDENCE_FILES = {
     "workflow_trust": "workflow-trust.json",
     "dependency_inventory": "dependency-inventory.json",
+    "dependency_inventory_proof": "dependency-inventory-proof.json",
     "cargo_deny": "cargo-deny-proof.json",
     "cargo_audit": "cargo-audit-proof.json",
     "cargo_audit_result": "cargo-audit.json",
     "zizmor": "zizmor-proof.json",
 }
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class AssuranceError(ValueError):
@@ -98,6 +103,22 @@ def surface_digest(root: Path, paths: list[str]) -> str:
     return digest.hexdigest()
 
 
+def canonical_graph_sha256(packages: list[dict[str, object]]) -> str:
+    rendered = json.dumps(
+        packages,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return sha256_bytes(rendered)
+
+
+def require_string(value: object, message: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise AssuranceError(message)
+    return value
+
+
 def require_exact_source(root: Path, source_sha: str, tree_sha: str) -> None:
     if not HEX40.fullmatch(source_sha) or not HEX40.fullmatch(tree_sha):
         raise AssuranceError("source and tree identities must be lowercase 40-hex SHA-1 values")
@@ -125,20 +146,194 @@ def validate_workflow_trust(
         raise AssuranceError("workflow trust evidence does not cover both exact Action metadata forms")
 
 
-def validate_dependency_inventory(evidence: dict[str, Any]) -> None:
+def validate_dependency_inventory(evidence: dict[str, Any]) -> str:
     if evidence.get("schema") != 2 or evidence.get("ok") is not True:
         raise AssuranceError("dependency inventory is not a successful schema-2 exact graph")
     if evidence.get("unknown_license") != []:
         raise AssuranceError("dependency inventory contains unknown third-party license metadata")
-    if not isinstance(evidence.get("packages"), list) or evidence.get("package_count") != len(
-        evidence["packages"]
-    ):
+
+    packages = evidence.get("packages")
+    if not isinstance(packages, list) or evidence.get("package_count") != len(packages):
         raise AssuranceError("dependency inventory package count is inconsistent")
+
+    required_package_keys = {
+        "checksum",
+        "dependencies",
+        "license",
+        "name",
+        "package_id",
+        "source",
+        "source_class",
+        "version",
+        "workspace",
+    }
+    required_edge_keys = {"name", "package_id", "package_name", "source", "version"}
+    package_by_id: dict[str, dict[str, object]] = {}
+    source_classes: Counter[str] = Counter()
+
+    for index, package in enumerate(packages):
+        if not isinstance(package, dict) or set(package) != required_package_keys:
+            raise AssuranceError(f"dependency inventory package {index} has an invalid schema")
+        package_id = require_string(
+            package.get("package_id"), f"dependency inventory package {index} has invalid identity"
+        )
+        require_string(package.get("name"), f"dependency inventory package {index} has invalid name")
+        require_string(package.get("version"), f"dependency inventory package {index} has invalid version")
+        if package_id in package_by_id:
+            raise AssuranceError(f"dependency inventory contains duplicate package id: {package_id}")
+
+        source = package.get("source")
+        if source is not None and not isinstance(source, str):
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid source")
+        license_expr = package.get("license")
+        if license_expr is not None and not isinstance(license_expr, str):
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid license")
+        checksum = package.get("checksum")
+        if checksum is not None and (
+            not isinstance(checksum, str) or HEX64.fullmatch(checksum) is None
+        ):
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid checksum")
+        workspace = package.get("workspace")
+        if not isinstance(workspace, bool):
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid workspace flag")
+        source_class = package.get("source_class")
+        if source_class not in {"workspace", "crates.io", "other"}:
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid source class")
+        if workspace != (source_class == "workspace"):
+            raise AssuranceError(f"dependency inventory package {package_id} has inconsistent workspace class")
+        if source_class == "crates.io" and source != CRATES_IO_SOURCE:
+            raise AssuranceError(f"dependency inventory package {package_id} has inconsistent crates.io source")
+        if source_class == "workspace" and checksum is not None:
+            raise AssuranceError(f"workspace package {package_id} unexpectedly carries a registry checksum")
+        if source_class == "crates.io" and checksum is None:
+            raise AssuranceError(f"crates.io package {package_id} is missing its registry checksum")
+
+        dependencies = package.get("dependencies")
+        if not isinstance(dependencies, list):
+            raise AssuranceError(f"dependency inventory package {package_id} has invalid dependency edges")
+        package_by_id[package_id] = package
+        source_classes[str(source_class)] += 1
+
+    ordered_packages = sorted(
+        packages,
+        key=lambda item: (
+            str(item["name"]),
+            str(item["version"]),
+            str(item["source"]),
+            str(item["package_id"]),
+        ),
+    )
+    if packages != ordered_packages:
+        raise AssuranceError("dependency inventory package ordering is not canonical")
+
+    for package in packages:
+        package_id = str(package["package_id"])
+        dependencies = package["dependencies"]
+        seen_edges: set[tuple[str, str]] = set()
+        for edge_index, edge in enumerate(dependencies):
+            if not isinstance(edge, dict) or set(edge) != required_edge_keys:
+                raise AssuranceError(
+                    f"dependency edge {edge_index} for {package_id} has an invalid schema"
+                )
+            edge_name = require_string(
+                edge.get("name"), f"dependency edge {edge_index} for {package_id} has invalid name"
+            )
+            target_id = require_string(
+                edge.get("package_id"),
+                f"dependency edge {edge_index} for {package_id} has invalid target id",
+            )
+            target = package_by_id.get(target_id)
+            if target is None:
+                raise AssuranceError(
+                    f"dependency edge {edge_index} for {package_id} references unknown package id"
+                )
+            if (
+                edge.get("package_name") != target["name"]
+                or edge.get("version") != target["version"]
+                or edge.get("source") != target["source"]
+            ):
+                raise AssuranceError(
+                    f"dependency edge {edge_index} for {package_id} disagrees with target package identity"
+                )
+            identity = (edge_name, target_id)
+            if identity in seen_edges:
+                raise AssuranceError(f"dependency inventory contains duplicate edge for {package_id}")
+            seen_edges.add(identity)
+        ordered_edges = sorted(
+            dependencies,
+            key=lambda edge: (
+                str(edge["name"]),
+                str(edge["package_name"]),
+                str(edge["version"]),
+                str(edge["source"]),
+                str(edge["package_id"]),
+            ),
+        )
+        if dependencies != ordered_edges:
+            raise AssuranceError(f"dependency edges for {package_id} are not canonically ordered")
+
+    expected_source_classes = dict(sorted(source_classes.items()))
+    if evidence.get("source_classes") != expected_source_classes:
+        raise AssuranceError("dependency inventory source-class counts are inconsistent")
+
+    graph_sha = evidence.get("graph_sha256")
+    expected_graph_sha = canonical_graph_sha256(packages)
+    if not isinstance(graph_sha, str) or not HEX64.fullmatch(graph_sha):
+        raise AssuranceError("dependency inventory graph digest is missing or malformed")
+    if graph_sha != expected_graph_sha:
+        raise AssuranceError("dependency inventory graph digest does not match exact package records")
+    return graph_sha
 
 
 def require_head(proof: dict[str, Any], source_sha: str, label: str) -> None:
     if proof.get("schema") != 1 or proof.get("head_sha") != source_sha:
         raise AssuranceError(f"{label} proof is not bound to the exact source SHA")
+
+
+def validate_dependency_inventory_proof(
+    proof: dict[str, Any],
+    source_sha: str,
+    cargo_lock_sha: str,
+    inventory_sha: str,
+    graph_sha: str,
+) -> None:
+    require_head(proof, source_sha, "dependency inventory")
+    if (
+        proof.get("command") != INVENTORY_COMMAND
+        or proof.get("cargo_lock_sha256") != cargo_lock_sha
+        or proof.get("inventory_sha256") != inventory_sha
+        or proof.get("graph_sha256") != graph_sha
+    ):
+        raise AssuranceError("dependency inventory proof identity/graph mismatch")
+
+
+def validate_cargo_audit_result(
+    result: dict[str, Any], proof: dict[str, Any], package_count: int
+) -> None:
+    vulnerabilities = result.get("vulnerabilities")
+    if not isinstance(vulnerabilities, dict):
+        raise AssuranceError("cargo-audit result is missing vulnerabilities evidence")
+    if vulnerabilities.get("found") is not False:
+        raise AssuranceError("cargo-audit result does not explicitly prove zero vulnerabilities")
+    if vulnerabilities.get("count") != 0 or vulnerabilities.get("list") != []:
+        raise AssuranceError("cargo-audit zero-vulnerability fields are inconsistent")
+
+    lockfile = result.get("lockfile")
+    if not isinstance(lockfile, dict) or lockfile.get("dependency-count") != package_count:
+        raise AssuranceError("cargo-audit lockfile dependency count does not match exact inventory")
+
+    database = result.get("database")
+    if not isinstance(database, dict):
+        raise AssuranceError("cargo-audit result is missing advisory database evidence")
+    advisory_count = database.get("advisory-count")
+    if not isinstance(advisory_count, int) or isinstance(advisory_count, bool) or advisory_count < 0:
+        raise AssuranceError("cargo-audit advisory database count is invalid")
+    if database.get("last-commit") != proof.get("advisory_db_commit"):
+        raise AssuranceError("cargo-audit result advisory database commit does not match proof")
+    if not isinstance(database.get("last-updated"), str) or not database["last-updated"]:
+        raise AssuranceError("cargo-audit result advisory database timestamp is invalid")
+    if not isinstance(result.get("settings"), dict) or not isinstance(result.get("warnings"), dict):
+        raise AssuranceError("cargo-audit result is missing settings/warnings objects")
 
 
 def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str) -> dict[str, Any]:
@@ -150,16 +345,27 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
     workflows, actions = security_surfaces(paths)
     workflow_trust = read_json(evidence_dir / EVIDENCE_FILES["workflow_trust"])
     dependency_inventory = read_json(evidence_dir / EVIDENCE_FILES["dependency_inventory"])
+    dependency_inventory_proof = read_json(
+        evidence_dir / EVIDENCE_FILES["dependency_inventory_proof"]
+    )
     cargo_deny = read_json(evidence_dir / EVIDENCE_FILES["cargo_deny"])
     cargo_audit = read_json(evidence_dir / EVIDENCE_FILES["cargo_audit"])
     cargo_audit_result = read_json(evidence_dir / EVIDENCE_FILES["cargo_audit_result"])
     zizmor = read_json(evidence_dir / EVIDENCE_FILES["zizmor"])
 
     validate_workflow_trust(workflow_trust, workflows, actions)
-    validate_dependency_inventory(dependency_inventory)
+    graph_sha = validate_dependency_inventory(dependency_inventory)
 
     cargo_lock_sha = sha256_file(root / "Cargo.lock")
     deny_sha = sha256_file(root / "deny.toml")
+    inventory_sha = sha256_file(evidence_dir / EVIDENCE_FILES["dependency_inventory"])
+    validate_dependency_inventory_proof(
+        dependency_inventory_proof,
+        source_sha,
+        cargo_lock_sha,
+        inventory_sha,
+        graph_sha,
+    )
 
     require_head(cargo_deny, source_sha, "cargo-deny")
     if (
@@ -180,8 +386,9 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
         or not HEX40.fullmatch(str(cargo_audit.get("advisory_db_commit", "")))
     ):
         raise AssuranceError("cargo-audit proof identity/result mismatch")
-    if cargo_audit_result.get("vulnerabilities", {}).get("found") is True:
-        raise AssuranceError("cargo-audit result reports RustSec vulnerabilities")
+    validate_cargo_audit_result(
+        cargo_audit_result, cargo_audit, int(dependency_inventory["package_count"])
+    )
 
     require_head(zizmor, source_sha, "zizmor")
     if (
@@ -193,10 +400,7 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
     ):
         raise AssuranceError("zizmor proof identity/policy mismatch")
 
-    config = {
-        path: sha256_file(root / path)
-        for path in CONFIG_PATHS
-    }
+    config = {path: sha256_file(root / path) for path in CONFIG_PATHS}
     surface_paths = sorted(set(workflows + actions))
     evidence_sha256 = {
         key: sha256_file(evidence_dir / filename)
@@ -206,6 +410,7 @@ def build_summary(root: Path, evidence_dir: Path, source_sha: str, tree_sha: str
     return {
         "config_sha256": config,
         "dependency_graph": {
+            "graph_sha256": graph_sha,
             "package_count": dependency_inventory["package_count"],
             "schema": dependency_inventory["schema"],
         },
