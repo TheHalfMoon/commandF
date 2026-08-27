@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -27,6 +28,8 @@ CargoMetadataSummaryTests = SUMMARY_TESTS.CargoMetadataSummaryTests
 
 ROOT = Path(__file__).resolve().parents[2]
 SECURITY_WORKFLOW = ROOT / ".github" / "workflows" / "af01-security.yml"
+DENY_POLICY = ROOT / "deny.toml"
+CLI_MANIFEST = ROOT / "crates" / "commandf-cli" / "Cargo.toml"
 
 
 class Af01SecurityCoverageTests(unittest.TestCase):
@@ -81,6 +84,22 @@ class Af01SecurityCoverageTests(unittest.TestCase):
         )
         self.assertEqual(workflows, [".github/workflows/af01-security.yml"])
         self.assertEqual(actions, ["action.yml", "nested/action.yaml"])
+
+    def test_private_path_dependency_has_no_global_wildcard_bypass(self) -> None:
+        deny_policy = tomllib.loads(DENY_POLICY.read_text(encoding="utf-8"))
+        self.assertFalse(
+            deny_policy["bans"].get("allow-wildcard-paths", False),
+            "private path dependencies must remain subject to the wildcard requirement policy",
+        )
+
+        manifest = tomllib.loads(CLI_MANIFEST.read_text(encoding="utf-8"))
+        commandf_pkg = manifest["dependencies"]["commandf-pkg"]
+        self.assertEqual(commandf_pkg["path"], "../commandf-pkg")
+        self.assertEqual(
+            commandf_pkg["version"],
+            "=0.0.0",
+            "the intended workspace edge must carry an exact version requirement instead of a global bypass",
+        )
 
 
 if __name__ == "__main__":
