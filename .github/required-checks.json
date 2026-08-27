@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "protected_branch": "main",
+  "checks": [
+    {
+      "context": "rust",
+      "workflow": ".github/workflows/ci.yml",
+      "job": "rust"
+    },
+    {
+      "context": "assurance-proof",
+      "workflow": ".github/workflows/af01-assurance-proof.yml",
+      "job": "assurance-proof"
+    },
+    {
+      "context": "scorecard",
+      "workflow": ".github/workflows/af01-scorecard.yml",
+      "job": "scorecard"
+    }
+  ]
+}
