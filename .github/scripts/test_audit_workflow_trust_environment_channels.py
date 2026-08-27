@@ -26,6 +26,10 @@ def findings_for(files: dict[str, str]) -> list[dict[str, str]]:
         return result["findings"]
 
 
+def codes(findings: list[dict[str, str]]) -> list[str]:
+    return [item["code"] for item in findings]
+
+
 class EnvironmentChannelAuditTests(unittest.TestCase):
     def test_composite_action_github_path_write_fails_closed(self) -> None:
         findings = findings_for(
@@ -43,13 +47,39 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
         )
         self.assertIn("GITHUB_ENV", [item["channel"] for item in findings])
 
-    def test_indirect_channel_capture_fails_closed(self) -> None:
+    def test_channel_name_then_indirect_parameter_expansion_fails_closed(self) -> None:
         findings = findings_for(
             {
-                "scripts/build.sh": "#!/usr/bin/env bash\nchannel=\"$GITHUB_PATH\"\nprintf '%s\\n' /tmp/bin >> \"$channel\"\n"
+                "scripts/build.sh": "#!/usr/bin/env bash\nchannel=GITHUB_PATH\nprintf '%s\\n' /tmp/bin >> \"${!channel}\"\n"
             }
         )
         self.assertIn("GITHUB_PATH", [item["channel"] for item in findings])
+        self.assertIn("unsupported_indirect_parameter_expansion", codes(findings))
+
+    def test_indirect_parameter_expansion_is_always_unsupported(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\nchannel=SAFE_CHANNEL\nprintf '%s\\n' value >> \"${!channel}\"\n"
+            }
+        )
+        self.assertIn("unsupported_indirect_parameter_expansion", codes(findings))
+
+    def test_split_github_name_fragment_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\ntarget=\"$GITHUB_\"PATH\nprintf '%s\\n' /tmp/bin >> \"$target\"\n"
+            }
+        )
+        self.assertIn("unsupported_github_environment_name_fragment", codes(findings))
+
+    def test_literal_github_prefix_fragment_fails_closed(self) -> None:
+        findings = findings_for(
+            {
+                "scripts/build.sh": "#!/usr/bin/env bash\nprefix=GITHUB_\nchannel=\"${prefix}PATH\"\nprintf '%s\\n' /tmp/bin >> \"${!channel}\"\n"
+            }
+        )
+        self.assertIn("unsupported_github_environment_name_fragment", codes(findings))
+        self.assertIn("unsupported_indirect_parameter_expansion", codes(findings))
 
     def test_extensionless_shell_script_is_covered(self) -> None:
         findings = findings_for(
@@ -67,10 +97,10 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
         )
         self.assertEqual([], findings)
 
-    def test_plain_diagnostic_text_is_not_a_channel_use(self) -> None:
+    def test_human_diagnostic_without_special_variable_names_is_allowed(self) -> None:
         findings = findings_for(
             {
-                "scripts/diagnostic.sh": "#!/usr/bin/env bash\nprintf '%s\\n' 'GITHUB_PATH and GITHUB_ENV are forbidden channels'\n"
+                "scripts/diagnostic.sh": "#!/usr/bin/env bash\nprintf '%s\\n' 'GitHub path and environment command files are forbidden'\n"
             }
         )
         self.assertEqual([], findings)
@@ -78,7 +108,7 @@ class EnvironmentChannelAuditTests(unittest.TestCase):
     def test_repeat_output_is_deterministic(self) -> None:
         files = {
             "action.yml": """name: fixture\ndescription: fixture\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo /tmp/bin >> \"$GITHUB_PATH\"\n""",
-            "scripts/build.sh": "#!/usr/bin/env bash\nprintf 'PATH=/tmp/bin\\n' >> \"$GITHUB_ENV\"\n",
+            "scripts/build.sh": "#!/usr/bin/env bash\nchannel=GITHUB_ENV\nprintf 'PATH=/tmp/bin\\n' >> \"${!channel}\"\n",
         }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
