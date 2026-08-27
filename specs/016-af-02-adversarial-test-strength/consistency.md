@@ -2,7 +2,7 @@
 
 Status: PLANNING_CANDIDATE
 
-## Canonical planning base
+Canonical planning base:
 
 ```text
 main: 2b4033e237a5c74f3c45c12fbc7e7bfdc88067b1
@@ -10,206 +10,102 @@ tree: 804ce63c15edb501574bd4aba9a9aadc5bfb07f3
 AF-01: CLOSED_CANONICAL
 ```
 
-This analysis checks the AF-02 planning package for contradictions, false-PASS paths, identity drift, hidden implementation choices, and downstream roadmap collisions.
+## Authority consistency
 
-## Normative document consistency
-
-The authoritative precedence is now explicit and singular:
+AF-02 precedence is singular:
 
 1. repository governance/constitution/`AGENTS.md`;
-2. `verification-protocol.md` and machine-readable schemas;
-3. non-superseded `evidence-contracts.md` requirements;
+2. `verification-protocol.md`, checked-in machine policies and schemas;
+3. non-superseded `evidence-contracts.md`;
 4. `spec.md`;
 5. `plan.md`;
 6. `tasks.md`;
 7. this analysis and donor/provenance records.
 
-The earlier illustrative `commandf.af02-authority-baseline/v1` section in `evidence-contracts.md` is deprecated planning history. It cannot be used as an implementation schema. The only closed baseline is:
+Authority-baseline v1 remains deprecated and non-implementable. Baseline v2 is the only authority-baseline schema.
 
-```text
-commandf.af02-authority-baseline/v2
-schemas/af02-authority-baseline-v2.schema.json
-```
-
-The proof schema remains:
-
-```text
-commandf.af02-adversarial-proof/v1
-schemas/af02-adversarial-proof-v1.schema.json
-```
-
-This resolves the prior one-schema-name/two-shape ambiguity.
+The final proof path and schema id remain `schemas/af02-adversarial-proof-v1.schema.json` / `commandf.af02-adversarial-proof/v1`. During planning it was strengthened into an envelope over the byte-identical prior schema now retained as `af02-adversarial-proof-core-v1.schema.json`. The core preserves the previous 25 contract roles. The envelope adds 16 required extension roles, so the final deterministic proof binds 41 distinct contract files without discarding earlier structural constraints.
 
 ## Preserved external authority
 
-### AF-01
+AF-02 does not weaken the active AF-01 assurance/review rulesets. Required contexts remain `assurance-proof`, `rust`, `scorecard`, each GitHub Actions integration id 15368.
 
-AF-02 does not weaken live source-control assurance. The expected live rulesets remain:
+CF-06 remains HAPI FHIR `6.10.2`, source `d06577dbc5c62c74a2a8823fbc4830a3024d5b0b`, validator digest `a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6`, and R4 `hl7.fhir.r4.core@4.0.1`.
 
-```text
-21652953 commandF main assurance
-21652974 commandF main review governance
-```
+CF-10 retained run `31916124080` remains `failure`. Its manifest/donor/run/artifact locators are validated against a closed schema and reconstructed from GitHub identity fields. AF-02 never relabels that production gate as PASS.
 
-The closed projection schemas/digests are defined by `verification-protocol.md`, not the older looser examples in `evidence-contracts.md`.
+## Reviewer finding closure
 
-Any future AF-02 base-verifier required check is added only after its exact workflow has universal terminal topology and after separate live-ruleset reconciliation/read-back.
+The latest planning round is addressed as follows:
 
-### CF-06
+- **Waiver authority:** `waiver-policy.json` + closed schema; zero initial waivers; canonical ancestry and mutant binding are named semantic-verifier algorithms.
+- **Required-check provenance:** `required-check-policy.json` freezes repository, GitHub Actions app, workflow ids/paths/base blobs and job names; runtime provenance has a dedicated schema including run/job/check-suite/head/base identities.
+- **Retained locator semantics:** exact repository/commit/blob/run/artifact URL relationships have a closed retained-authority schema; supplied URLs are reconstructed rather than trusted.
+- **Prose-only semantic relations:** `semantic-contract.json` freezes algorithm ids, verifier package/path/entrypoint and required negative-fixture ids. Missing implementation/test mapping is non-green.
+- **Candidate parser/resource boundary:** `verifier-input-policy.json` freezes preparse size/containment/symlink limits, JSON/YAML depth/record/string constraints, YAML safe-loader restrictions and aggregate wall-time/memory bounds.
+- **Proof-critical policy schemas:** separate closed schemas now exist for surface, resource, corpus, coverage and mutation policy instances before dependent execution.
+- **Proof binding:** the proof envelope retains the original core schema and adds 16 exact extension contract roles plus final required-check provenance and extension-authority digests.
 
-Production oracle identity remains:
+## Anti-self-forgery consistency
 
-```text
-hapifhir/org.hl7.fhir.core
-release 6.10.2
-source d06577dbc5c62c74a2a8823fbc4830a3024d5b0b
-validator_cli.jar sha256 a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6
-R4 context hl7.fhir.r4.core@4.0.1
-```
+A candidate cannot define both the acceptance rule and its own success. A0 bootstraps policy/schema/verifier infrastructure only. After A0 canonicalization, the base-controlled `pull_request_target` gate executes canonical-base workflow/verifier/schema blobs, never candidate code, and parses candidate data only under the input-limit policy.
 
-AF-02 reconstructs this from canonical-base source files and does not authorize a pin change.
+A same-candidate waiver, source exclusion, mutation exclusion, coverage floor reduction, policy weakening, verifier weakening or locator substitution cannot make dependent evidence green.
 
-### CF-10
+## Source and coverage consistency
 
-CF-10 remains Draft/unmerged and its final production gate is still separately blocked by the current CF-06 production comparator contract.
-
-Frozen deltas remain:
+Surface discovery and coverage share the same Git-derived tracked Rust universe:
 
 ```text
-C001 hl7.fhir.us.core   8.0.1 -> 9.0.0
-C002 hl7.fhir.uv.ips    1.1.0 -> 2.0.1
-C003 hl7.fhir.us.mcode  3.0.0 -> 4.0.0
+crates/**/src/**/*.rs
+tools/**/src/**/*.rs
 ```
 
-Retained source/evidence locators are machine-readable in `retained-authority-sources.json`. They point to exact retained commit/blob identities rather than assuming CF-10 files exist on current `main`.
+minus canonical-base source exclusions only. Missing, unknown, duplicate-normalized or out-of-root paths fail instead of becoming implicit exclusions.
 
-Retained workflow run `31916124080` conclusion remains `failure`. AF-02 uses its retained package/corpus evidence without relabeling the production gate successful.
-
-### CF-14/15/16
-
-Spec Kit directory `016` does not consume product CF-16 identity. AF-02 does not grant implementation authority to CF-14/15/16.
-
-## Reviewer-driven consistency closure
-
-### First planning review
-
-Initial reviewers identified open design choices in tool provenance, deterministic boundary discovery, resource/offline policy, nextest override resistance, coverage descriptor/floor governance, mutation timeout closure, proof construction, no-PHI provenance, and same-candidate policy weakening.
-
-Those were reconciled into `evidence-contracts.md` and the initial closed protocol.
-
-### Qodo round 2
-
-Qodo then identified that the authority baseline, authority projection recomputation, proof schema, verifier anti-forgery, mutation selection, scanner semantics, assertion registry, resource proof, coverage accounting and nextest fixture were still not closed enough.
-
-`verification-protocol.md` and the machine schemas close those design choices.
-
-### Exact-head follow-up findings
-
-The final planning amendments address the later findings explicitly:
-
-- **CF-10 retained source availability:** exact retained commit/path/blob/API locators are checked in; current-main presence is not assumed.
-- **Mutation-selection contradiction:** `spec.md`, `plan.md`, and `tasks.md` now all require every listed mutant in the frozen target scope except exact pre-frozen exclusions. There is no later “choose required mutants” step.
-- **Authority baseline duplicate schema:** baseline v1 is deprecated; one closed v2 machine schema is authoritative.
-- **Nextest JUnit provenance:** the output mount starts empty; JUnit path is absent/non-symlink before run; base-controlled runner binds wait/exit/JUnit/stdout/stderr in one result envelope and validates owner/location/link count.
-- **Normative authority omission:** `verification-protocol.md` and schemas are explicitly in the spec/task authority set.
-- **Base verifier candidate control:** Stack A0 uses canonical-base `pull_request_target` workflow code, separate base/candidate trees, candidate-as-data-only, exact blob recording and fail-closed behavior.
-- **Proof type/range ambiguity:** the proof JSON Schema freezes structural validation and the protocol freezes semantic/cross-field validation; negative tests cover malformed types/formats/ranges/shapes/relations.
-- **Coverage/surface scope mismatch:** both use tracked Rust under `crates/**/src/**` and `tools/**/src/**` minus exact prior exclusions.
-
-## Anti-self-forgery model
-
-The candidate is not allowed to define both the rule and its own success in one change.
-
-After A0 canonicalization:
-
-- acceptance-authority code/config paths are inventoried;
-- a candidate diff touching those paths is classified before candidate policy is trusted;
-- the canonical-base verifier runs from base-controlled workflow code;
-- candidate workflow changes cannot select the base verifier or skip the comparison;
-- if old verifier cannot parse a deliberate strengthening, the change is a dedicated policy/verifier PR and cannot carry dependent product/harness work.
-
-This model is stricter than ordinary candidate-self-testing and is necessary because AF-02 verifies the verifier itself.
-
-## Source-universe consistency
-
-Surface discovery and coverage share a single production Rust universe:
-
-```text
-tracked *.rs under crates/**/src/**
-tracked *.rs under tools/**/src/**
-minus exact previously canonical non-product exclusions
-```
-
-The scanner may classify a boundary excluded from a particular fuzz target, but the source file does not disappear from coverage merely because the target uses an offline seam.
-
-Unknown/missing/duplicate paths fail instead of becoming implicit exclusions.
+Coverage policy is frozen before percentages. Coverage remains diagnostic evidence, not semantic authority.
 
 ## Mutation consistency
 
-Target source paths and exact exclusions freeze before cargo-mutants inventory generation.
+Mutation target paths, tool identity, test command, timeout/retry/diagnosis, exclusion policy and waiver policy freeze before listing.
 
-The required set is a deterministic function:
+Required membership is deterministic:
 
 ```text
-required = all listed mutants inside frozen target source paths
-           minus exactly matched pre-frozen exclusions
+all listed mutants in target scope
+minus exactly matched pre-frozen exclusions
 ```
 
-Therefore mutation results cannot influence membership. Required timeout/unviable/build-failure results remain non-green until retry/diagnosis and a closure-eligible prior waiver or executable kill result.
+There is no top-N, percentage, operator preference or post-result manual subset. A waiver resolves only through canonical waiver authority and cannot be introduced by the candidate it greens.
+
+## Required-check consistency
+
+Integration id 15368 alone is insufficient. Qualification binds each context to repository, GitHub Actions app identity, canonical-base workflow id/path/blob, workflow run/attempt, job name/id, exact head/base, pull_request event and success.
+
+## Parser and resource consistency
+
+The privileged/base-controlled verifier treats candidate files as hostile data. Size is checked before parsing. Symlinks/path escapes are rejected. JSON and YAML have explicit depth/item/string bounds. YAML aliases, merge keys and custom tags are prohibited. Aggregate file/record/byte, parser wall-time and memory limits are fixed. Parser exhaustion is failure, not neutral topology.
+
+## Tool and corpus consistency
+
+Executable tools retain immutable source and installed-binary identity. Registry packages cannot activate with unresolved checksums.
+
+Corpus entries remain synthetic/publicly redistributable non-PHI only, <=256 KiB by default and <=8 MiB aggregate. Corpus/assertion/replay membership is bijective and independently reconstructed.
 
 ## Nextest consistency
 
-Top-level and command-line flaky policy agree:
+The fixed retry-pass fixture uses retries 2 and flaky-result fail. First failure then retry pass remains failed AF-02 evidence with non-zero process exit. JUnit/stdout/stderr/exit are bound to one waited-for process and dedicated clean output mount.
 
-```text
-retries = 2
-flaky-result = fail
---retries 2
---flaky-result fail
-```
+## Temporal boundary
 
-Command-line authority prevents per-test pass overrides from weakening the result.
-
-The deterministic fixture is isolated from clocks/RNG/network/scheduler timing and uses atomic state-file creation. The JUnit file cannot be pre-seeded because the base-controlled runner starts with a clean dedicated output mount and proves the file absent before the waited-for nextest process.
-
-## Coverage consistency
-
-Coverage is diagnostic evidence, not semantic correctness authority.
-
-Before percentage observation, descriptor/source scope/exclusions/commands/inputs are frozen. Source authority comes from Git. Each tracked production source appears exactly once, including zero-hit files.
-
-A floor or exclusion cannot be lowered in the same implementation candidate. Rebaseline is a dedicated policy-only change under the prior policy and cannot modify product source, tests, or measurement command.
-
-## Resource/offline consistency
-
-Network-enabled immutable acquisition and network-denied deterministic execution are separate phases.
-
-Canonical deterministic proof uses a digest-pinned OCI image plus cgroup/read-only/tmpfs/network controls and negative probes. Missing runtime inspection is incomplete evidence rather than assumed enforcement.
-
-## Tool-provenance consistency
-
-An upstream Git commit alone is not an installed executable identity. AF-02 retains acquisition source/asset/package identity, exact install/build command, compiler/target/features, installed executable SHA-256 and version output. Registry crates retain exact Cargo checksum.
-
-## Proof consistency
-
-`schemas/af02-adversarial-proof-v1.schema.json` closes structural field/type/enum/cardinality/unknown-field semantics. `verification-protocol.md` closes canonicalization and semantic relationships that require repository-aware logic.
-
-The verifier constructs the deterministic object from raw evidence. Producer summaries are compared only after reconstruction.
-
-The schema and its SHA-256 are themselves proof contract inputs; changing the schema is an acceptance-authority change.
-
-## Temporal T005/T006 boundary
-
-Planning source cannot contain immutable proof of its own future review completion, merge result or post-merge read-back. Therefore exact-head CI/reviewer evidence lives in GitHub and post-merge authority is re-read after the guarded merge.
-
-This is not a loophole: no merge occurs until current-head CI/reviewer gates are green, and no planning-canonical claim occurs until post-merge read-back.
+T005/T006 evidence lives in GitHub because a commit cannot contain proof of its own future exact-head CI/review/merge. No planning merge occurs until the current head qualifies, and no implementation authority exists until post-merge main/tree plus live AF-01 rulesets are re-read.
 
 ## Current decision
 
 ```text
 AF-02: PLANNING_CANDIDATE
-T005: OPEN UNTIL ONE EXACT FINAL HEAD QUALIFIES
-T006: OPEN UNTIL GUARDED MERGE + POST-MERGE READ-BACK
+T005: OPEN
+T006: OPEN
 IMPLEMENTATION AUTHORITY: NOT_GRANTED
-NEXT AUTHORITY AFTER T006: STACK A0 DESIGN FREEZE ONLY
+NEXT AUTHORITY AFTER T006: STACK A0 ONLY
 ```

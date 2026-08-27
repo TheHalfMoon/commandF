@@ -1,0 +1,7 @@
+{
+  "schema": "commandf.af02-verifier-input-policy/v1",
+  "preparse": {"max_single_file_bytes":1048576,"regular_file_required":true,"symlinks_allowed":false,"containment_required":true,"byte_limit_before_parse":true},
+  "json": {"utf8_required":true,"bom_allowed":false,"max_depth":32,"max_object_properties":512,"max_array_items":20000,"max_string_bytes":262144,"max_number_digits":20},
+  "yaml": {"safe_loader_required":true,"custom_tags_allowed":false,"aliases_allowed":false,"merge_keys_allowed":false,"max_depth":24,"max_sequence_items":10000,"max_scalar_bytes":262144},
+  "aggregate": {"max_candidate_authority_bytes":16777216,"max_candidate_authority_files":128,"max_total_records":50000,"parser_wall_seconds":20,"parser_memory_mib":512}
+}

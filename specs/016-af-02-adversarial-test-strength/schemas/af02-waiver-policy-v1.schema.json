@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commandf.dev/schemas/af02-waiver-policy-v1.schema.json",
+  "title": "commandf.af02-waiver-policy/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "policy_base_sha", "waivers"],
+  "properties": {
+    "schema": {"const": "commandf.af02-waiver-policy/v1"},
+    "policy_base_sha": {"$ref": "#/$defs/gitSha"},
+    "waivers": {"type": "array", "items": {"$ref": "#/$defs/waiver"}}
+  },
+  "$defs": {
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"},
+    "waiver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["waiver_id","mutant_id","allowed_result_class","target_source_path","rationale","evidence_sha256","introduced_by_pr","introduced_policy_sha","review_url"],
+      "properties": {
+        "waiver_id": {"type": "string", "pattern": "^AF02-W[0-9]{4}$"},
+        "mutant_id": {"$ref": "#/$defs/sha256"},
+        "allowed_result_class": {"const": "WAIVED_EQUIVALENT_OR_OUT_OF_SCOPE"},
+        "target_source_path": {"$ref": "#/$defs/path"},
+        "rationale": {"type": "string", "minLength": 20, "maxLength": 4096},
+        "evidence_sha256": {"$ref": "#/$defs/sha256"},
+        "introduced_by_pr": {"type": "integer", "minimum": 1},
+        "introduced_policy_sha": {"$ref": "#/$defs/gitSha"},
+        "review_url": {"type": "string", "pattern": "^https://github\\.com/TheHalfMoon/commandF/pull/[1-9][0-9]*$"}
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "commandf.af02-required-check-policy/v1",
+  "repository": "TheHalfMoon/commandF",
+  "app": {
+    "id": 15368,
+    "slug": "github-actions",
+    "owner": "github"
+  },
+  "event": "pull_request",
+  "checks": [
+    {
+      "context": "assurance-proof",
+      "workflow_id": 343599979,
+      "workflow_path": ".github/workflows/af01-assurance-proof.yml",
+      "workflow_blob_sha": "f41045416803fac9ed22aeacf0e38c0fc2a6289f",
+      "job_name": "assurance-proof"
+    },
+    {
+      "context": "rust",
+      "workflow_id": 333259855,
+      "workflow_path": ".github/workflows/ci.yml",
+      "workflow_blob_sha": "41f33c1aa0f458363cc92bbc206df4fe203b32ef",
+      "job_name": "rust"
+    },
+    {
+      "context": "scorecard",
+      "workflow_id": 343592713,
+      "workflow_path": ".github/workflows/af01-scorecard.yml",
+      "workflow_blob_sha": "69aa7d808d7b13b3a7cac21a71a09b55c432794b",
+      "job_name": "scorecard"
+    }
+  ]
+}

@@ -8,121 +8,50 @@ sources:
     tag: 0.13.2
     license: MIT OR Apache-2.0
     mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
-    scope:
-      - libFuzzer cargo integration
-      - isolated fuzz workspace
-      - corpus minimization and replay workflow
-    exclusions:
-      - no commandF product runtime dependency
-      - no semantic authority
-      - no mutable latest, branch, or tag-only proof identity
-
   - id: sourcefrog-cargo-mutants
     repository: https://github.com/sourcefrog/cargo-mutants
     ref: 8ab1dc786a1f61a4e370416cc6c68b81a704e917
     tag: v27.1.0
     license: MIT
     mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
-    scope:
-      - targeted mutation inventory and execution
-      - JSON mutant inventory
-      - timeout and build-failure diagnosis
-    exclusions:
-      - no aggregate mutation score as correctness authority
-      - no broad critical-module skip policy
-      - timeout or build failure is never silently counted as killed
-
   - id: taiki-e-cargo-llvm-cov
     repository: https://github.com/taiki-e/cargo-llvm-cov
     ref: be59056988acd54c7f984b7c85643daea3711b29
     tag: v0.9.0
     license: Apache-2.0 OR MIT
     mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
-    scope:
-      - LLVM source-based coverage
-      - machine-readable coverage evidence
-      - measured baseline and regression floors
-    exclusions:
-      - no coverage percentage as semantic proof
-      - no guessed vanity floor
-      - no product-source exclusion merely to raise coverage
-
   - id: nextest-rs-nextest
     repository: https://github.com/nextest-rs/nextest
     ref: 60fa45f638ffc3f35e74afa65737f45fcd32db2a
     tag: cargo-nextest-0.9.143
     license: MIT OR Apache-2.0
     mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
-    scope:
-      - additive Rust test execution
-      - bounded retry diagnostics
-      - flaky-result-as-failure policy
-    exclusions:
-      - do not replace canonical cargo test
-      - retry-pass never becomes green AF-02 evidence
-      - no mutable self-update installation as proof identity
-
   - id: proptest-rs-proptest
     repository: https://github.com/proptest-rs/proptest
     ref: a6f033cf83adfd55557b86e6065e6f4df054ec70
     version: 1.11.0
     license: MIT OR Apache-2.0
     mode: [DEPEND_TEST_ONLY, STUDY, ADAPT_PATTERNS]
-    scope:
-      - generated invariant cases
-      - shrinking and minimized counterexamples
-      - structured adversarial generation
-    exclusions:
-      - implementation package identity is crates.io =1.11.0 plus Cargo registry checksum
-      - upstream commit is provenance context, not a substitute for registry identity
 
 adoption_decisions:
-  commandf_product_runtime:
+  product_runtime:
     use: none
-    rationale: AF-02 tooling is development/test assurance only.
-
-  fuzz_workspace:
-    use:
-      - cargo-fuzz 0.13.2 at 984c861c8dfea28055254c5f1d2659ab2cd63f76
-      - libfuzzer-sys =0.4.13
-      - arbitrary =1.4.2 with derive feature
-      - nightly-2026-08-25
-    rationale: isolated raw and structure-aware discovery without changing the normal Rust 1.97.1 product toolchain.
-
-  property_tests:
+    rationale: AF-02 tools remain development/test assurance only.
+  fuzz:
+    use: [cargo-fuzz 0.13.2 at 984c861c8dfea28055254c5f1d2659ab2cd63f76, libfuzzer-sys =0.4.13, arbitrary =1.4.2 features=[derive], nightly-2026-08-25]
+  property:
     use: [proptest =1.11.0]
-    rationale: generated invariant cases and shrinking remain test-only.
-
-  flaky_detection:
-    use:
-      - cargo-nextest 0.9.143 at 60fa45f638ffc3f35e74afa65737f45fcd32db2a
-      - --retries 2
-      - --flaky-result fail
-    rationale: CLI failure semantics intentionally override any weaker per-test configuration while canonical cargo test remains mandatory.
-
+  flaky:
+    use: [cargo-nextest 0.9.143 at 60fa45f638ffc3f35e74afa65737f45fcd32db2a, --retries 2, --flaky-result fail]
   coverage:
     use: [cargo-llvm-cov 0.9.0 at be59056988acd54c7f984b7c85643daea3711b29]
-    rationale: measured source-based coverage is diagnostic evidence governed by a frozen baseline descriptor.
-
   mutation:
     use: [cargo-mutants 27.1.0 at 8ab1dc786a1f61a4e370416cc6c68b81a704e917]
-    rationale: every listed mutant inside the frozen target scope is required unless an exact exclusion was canonical before listing.
 
 immutable_acquisition_contract:
   executable_mode: LOCKED_GIT_REV_SOURCE_BUILD
-  required_evidence:
-    - exact upstream repository and commit
-    - exact locked source/build command
-    - locked source dependency digest
-    - installed executable SHA-256
-    - version output SHA-256
-    - compiler, cargo, target, and features
-  prohibited:
-    - latest
-    - branch-only identity
-    - tag-only identity
-    - self-update as retained proof identity
-    - implementation-time acquisition-mode choice
+  required_evidence: [exact upstream repository and commit, locked source/build command and dependency digest, installed executable SHA-256, version output SHA-256, compiler/cargo/target/features]
+  prohibited: [latest, branch-only identity, tag-only identity, self-update as retained proof identity, implementation-time acquisition-mode choice]
 
 registry_package_contract:
   packages:
@@ -130,45 +59,40 @@ registry_package_contract:
     - proptest =1.11.0 default-features
     - libfuzzer-sys =0.4.13 default-features
     - arbitrary =1.4.2 features=[derive]
-  required_evidence:
-    - exact crates.io version
-    - exact features/default-feature mode
-    - Cargo registry checksum from the canonical design-freeze locked dependency graph before first dependent execution
+  rule: exact crates.io checksum MUST be canonical before the package activation stack executes dependent evidence.
 
 normative_contract:
   path: specs/016-af-02-adversarial-test-strength/verification-protocol.md
   policy_files:
     - specs/016-af-02-adversarial-test-strength/tool-policy.json
     - specs/016-af-02-adversarial-test-strength/exclusion-policy.json
+    - specs/016-af-02-adversarial-test-strength/waiver-policy.json
+    - specs/016-af-02-adversarial-test-strength/required-check-policy.json
+    - specs/016-af-02-adversarial-test-strength/semantic-contract.json
+    - specs/016-af-02-adversarial-test-strength/verifier-input-policy.json
   schema_files:
     - specs/016-af-02-adversarial-test-strength/schemas/af02-authority-baseline-v2.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-core-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-policy-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-lock-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-exclusion-policy-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-evidence-inventories-v1.schema.json
-  schemas:
-    - commandf.af02-tool-policy/v1
-    - commandf.af02-tool-lock/v1
-    - commandf.af02-resource-policy/v1
-    - commandf.af02-surface-policy/v1
-    - commandf.af02-corpus/v1
-    - commandf.af02-exclusion-policy/v1
-    - commandf.af02-authority-baseline/v2
-    - commandf.af02-adversarial-proof/v1
-    - commandf.af02-source-universe/v1
-    - commandf.af02-assertion-registry/v1
-    - commandf.af02-replay-results/v1
-    - commandf.af02-coverage-inventory/v1
-    - commandf.af02-mutation-inventory/v1
-    - commandf.af02-corpus-fixture-inventory/v1
-    - commandf.af02-property-counterexample-inventory/v1
-    - commandf.af02-enforcement-inventory/v1
-  prohibited_schema: commandf.af02-authority-baseline/v1
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-waiver-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-provenance-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-retained-authority-sources-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-semantic-contract-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-verifier-input-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-surface-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-resource-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-corpus-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-coverage-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-mutation-policy-v1.schema.json
 
 review_before_copy:
-  - verify exact source path and commit before copying upstream code rather than using documented CLI/config interfaces
+  - verify exact source path and commit before copying upstream code
   - preserve license notices where required
-  - prefer configuration and executable-tool adoption over vendoring source
-  - re-audit every version or acquisition change through AF-01 workflow/dependency policy
+  - prefer configuration/executable-tool adoption over vendoring
+  - re-audit every version/acquisition change through AF-01 workflow/dependency policy
   - no adopted tool becomes commandF semantic authority
