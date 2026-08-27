@@ -1,6 +1,6 @@
 # AF-01 Tasks — Trusted Development Baseline
 
-Status: CONVERGENCE_CANDIDATE
+Status: CLOSEOUT_CANDIDATE
 
 ## Task-state rules
 
@@ -10,6 +10,7 @@ Status: CONVERGENCE_CANDIDATE
 - No implementation task begins until T005 is canonical.
 - AF-01 cannot close while the live `main` ruleset/branch-policy requirement remains unproven.
 - Phase 4 entered from canonical `main=a683dfaba7feb607145400eaa75d771e5df3c608`, tree `623a5b20eba83c618d4da288677c1cd3d2826f61`, with T043 `CLOSED_CANONICAL`.
+- T054 and T055 are now evidence-complete through convergence PR #51 and its post-merge canonical verification; T056 remains open until this docs-only closeout candidate itself qualifies and merges to canonical `main`.
 
 ## Phase 0 — planning and authority
 
@@ -76,9 +77,20 @@ Depends on T043.
 - [x] **T051** Create `convergence.md` recording planning/Stack A/B/C identities, workflow run/job/artifact/digest evidence, dependency/security tool identities, reviewer dispositions, live ruleset evidence, required-check topology, limits, and deferrals.
 - [x] **T052** Confirm product-semantic diff from pre-AF-01 canonical base contains no unauthorized CF semantic change; any incidental product source mutation requires separate task/justification and full semantic qualification.
 - [x] **T053** Record remaining assurance work under AF-02/AF-03/AF-04 rather than falsely claiming fuzz/mutation/portability/release/performance completion.
-- [ ] **T054** Exact convergence head receives path-applicable CI/review truth with zero unresolved substantive findings.
-- [ ] **T055** Merge convergence PR and verify canonical post-merge main/tree plus live source-control policy and universally terminal required checks.
+- [x] **T054** Exact convergence head receives path-applicable CI/review truth with zero unresolved substantive findings.
+  - exact convergence head `ae8967a933832c4331d895f6389a9e086c23e661` passed all five path-applicable workflows;
+  - Qodo accepted the retained non-circular temporal evidence model on the unchanged head;
+  - CodeRabbit independently re-verified the exact head and reported no remaining substantive issue or false-PASS concern;
+  - unresolved substantive review threads = `0`.
+- [x] **T055** Merge convergence PR and verify canonical post-merge main/tree plus live source-control policy and universally terminal required checks.
+  - PR #51 merged from exact qualified head using an expected-head guard;
+  - canonical post-merge `main=652207aaed1d9a28f3a326ca92e8fd93229fd028`, tree `6b98c5582f40681ac9049451025486bbdd1de4fa`;
+  - post-merge `af01-assurance-proof` run `33079909197` and `af01-scorecard` run `33079909183` succeeded on that exact merge SHA;
+  - retained assurance artifact `9649667139` binds the exact merge source/tree, recomputes `AF01_ASSURANCE_SHA256=e1359325c5be4bd93cd4833d9cc51bdde6ecb1d5f440b2c30ef68b248ce833e1`, and records clean source status;
+  - live assurance ruleset `21652953` and review-governance ruleset `21652974` remain active on `refs/heads/main` with the reviewed semantics.
 - [ ] **T056** Mark `AF-01=CLOSED_CANONICAL` only after T055 evidence is complete.
+  - T055 evidence is complete and retained in `closeout.md`;
+  - this task remains open until the exact docs-only closeout candidate itself qualifies and merges to canonical `main` without content-changing substitution.
 
 ## AF-02 handoff retained, not authorized by AF-01 implementation
 
