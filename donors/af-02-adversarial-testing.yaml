@@ -85,7 +85,7 @@ adoption_decisions:
     use:
       - cargo-fuzz 0.13.2 at 984c861c8dfea28055254c5f1d2659ab2cd63f76
       - libfuzzer-sys =0.4.13
-      - arbitrary =1.4.2
+      - arbitrary =1.4.2 with derive feature
       - nightly-2026-08-25
     rationale: isolated raw and structure-aware discovery without changing the normal Rust 1.97.1 product toolchain.
 
@@ -106,43 +106,65 @@ adoption_decisions:
 
   mutation:
     use: [cargo-mutants 27.1.0 at 8ab1dc786a1f61a4e370416cc6c68b81a704e917]
-    rationale: a frozen JSON mutant inventory measures test sensitivity to plausible false-PASS defects.
+    rationale: every listed mutant inside the frozen target scope is required unless an exact exclusion was canonical before listing.
 
 immutable_acquisition_contract:
-  executable_modes:
-    - LOCKED_GIT_REV_SOURCE_BUILD
-    - IMMUTABLE_RELEASE_ASSET_WITH_SHA256
+  executable_mode: LOCKED_GIT_REV_SOURCE_BUILD
   required_evidence:
     - exact upstream repository and commit
-    - exact install or build command
-    - locked dependency or release-asset digest
+    - exact locked source/build command
+    - locked source dependency digest
     - installed executable SHA-256
-    - version output
+    - version output SHA-256
     - compiler, cargo, target, and features
   prohibited:
     - latest
     - branch-only identity
     - tag-only identity
     - self-update as retained proof identity
+    - implementation-time acquisition-mode choice
 
 registry_package_contract:
   packages:
-    - proptest =1.11.0
-    - libfuzzer-sys =0.4.13
-    - arbitrary =1.4.2
+    - syn =3.0.3 features=[full,visit] checksum=53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3
+    - proptest =1.11.0 default-features
+    - libfuzzer-sys =0.4.13 default-features
+    - arbitrary =1.4.2 features=[derive]
   required_evidence:
     - exact crates.io version
-    - Cargo registry checksum from the locked dependency graph
+    - exact features/default-feature mode
+    - Cargo registry checksum from the canonical design-freeze locked dependency graph before first dependent execution
 
 normative_contract:
-  path: specs/016-af-02-adversarial-test-strength/evidence-contracts.md
+  path: specs/016-af-02-adversarial-test-strength/verification-protocol.md
+  policy_files:
+    - specs/016-af-02-adversarial-test-strength/tool-policy.json
+    - specs/016-af-02-adversarial-test-strength/exclusion-policy.json
+  schema_files:
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-authority-baseline-v2.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-lock-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-exclusion-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-evidence-inventories-v1.schema.json
   schemas:
+    - commandf.af02-tool-policy/v1
     - commandf.af02-tool-lock/v1
     - commandf.af02-resource-policy/v1
     - commandf.af02-surface-policy/v1
     - commandf.af02-corpus/v1
-    - commandf.af02-authority-baseline/v1
+    - commandf.af02-exclusion-policy/v1
+    - commandf.af02-authority-baseline/v2
     - commandf.af02-adversarial-proof/v1
+    - commandf.af02-source-universe/v1
+    - commandf.af02-assertion-registry/v1
+    - commandf.af02-replay-results/v1
+    - commandf.af02-coverage-inventory/v1
+    - commandf.af02-mutation-inventory/v1
+    - commandf.af02-corpus-fixture-inventory/v1
+    - commandf.af02-property-counterexample-inventory/v1
+    - commandf.af02-enforcement-inventory/v1
+  prohibited_schema: commandf.af02-authority-baseline/v1
 
 review_before_copy:
   - verify exact source path and commit before copying upstream code rather than using documented CLI/config interfaces

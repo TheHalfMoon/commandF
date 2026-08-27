@@ -1,285 +1,147 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://commandf.dev/schemas/af02-adversarial-proof-v1.schema.json",
-  "title": "commandf.af02-adversarial-proof/v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schema","deterministic","stochastic_observations","af02_adversarial_sha256"],
-  "properties": {
-    "schema": {"const": "commandf.af02-adversarial-proof/v1"},
-    "deterministic": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["source","contract_files","authority","tool_lock","surface","resources","corpus","properties","nextest","coverage","mutation","canonical_cargo_test","required_checks"],
-      "properties": {
-        "source": {"$ref": "#/$defs/source"},
-        "contract_files": {"$ref": "#/$defs/contractFiles"},
-        "authority": {"$ref": "#/$defs/authority"},
-        "tool_lock": {"type":"array","items":{"$ref":"#/$defs/toolEntry"}},
-        "surface": {"$ref": "#/$defs/surface"},
-        "resources": {"$ref": "#/$defs/resources"},
-        "corpus": {"$ref": "#/$defs/corpus"},
-        "properties": {"$ref": "#/$defs/propertiesEvidence"},
-        "nextest": {"$ref": "#/$defs/nextest"},
-        "coverage": {"$ref": "#/$defs/coverage"},
-        "mutation": {"$ref": "#/$defs/mutation"},
-        "canonical_cargo_test": {"$ref": "#/$defs/cargoTest"},
-        "required_checks": {
-          "type": "array",
-          "minItems": 3,
-          "items": {"$ref": "#/$defs/checkRun"}
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://commandf.dev/schemas/af02-adversarial-proof-v1.schema.json",
+  "title":"commandf.af02-adversarial-proof/v1",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema","deterministic","stochastic_observations","af02_adversarial_sha256"],
+  "properties":{
+    "schema":{"const":"commandf.af02-adversarial-proof/v1"},
+    "deterministic":{
+      "type":"object","additionalProperties":false,
+      "required":["source","contract_files","authority","tool_lock","surface","resources","corpus","properties","nextest","coverage","mutation","canonical_cargo_test","required_checks"],
+      "properties":{
+        "source":{"$ref":"#/$defs/source"},
+        "contract_files":{"$ref":"#/$defs/contractFiles"},
+        "authority":{"$ref":"#/$defs/authority"},
+        "tool_lock":{"$ref":"#/$defs/toolLockEntries"},
+        "surface":{"$ref":"#/$defs/surface"},
+        "resources":{"$ref":"#/$defs/resources"},
+        "corpus":{"$ref":"#/$defs/corpus"},
+        "properties":{"$ref":"#/$defs/propertiesEvidence"},
+        "nextest":{"$ref":"#/$defs/nextest"},
+        "coverage":{"$ref":"#/$defs/coverage"},
+        "mutation":{"$ref":"#/$defs/mutation"},
+        "canonical_cargo_test":{"$ref":"#/$defs/cargoTest"},
+        "required_checks":{
+          "type":"array","minItems":3,"maxItems":3,
+          "prefixItems":[
+            {"$ref":"#/$defs/checkAssurance"},
+            {"$ref":"#/$defs/checkRust"},
+            {"$ref":"#/$defs/checkScorecard"}
+          ],
+          "items":false
         }
       }
     },
-    "stochastic_observations": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/stochasticObservation"}
-    },
-    "af02_adversarial_sha256": {"$ref": "#/$defs/sha256"}
+    "stochastic_observations":{"type":"array","items":{"$ref":"#/$defs/stochasticObservation"}},
+    "af02_adversarial_sha256":{"$ref":"#/$defs/sha256"}
   },
-  "$defs": {
-    "gitSha": {"type":"string","pattern":"^[0-9a-f]{40}$"},
-    "sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
-    "path": {"type":"string","minLength":1,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
-    "nonNegative": {"type":"integer","minimum":0},
-    "positive": {"type":"integer","minimum":1},
-    "source": {
+  "$defs":{
+    "gitSha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "path":{"type":"string","minLength":1,"pattern":"^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"},
+    "nonNegative":{"type":"integer","minimum":0},
+    "positive":{"type":"integer","minimum":1},
+    "source":{
       "type":"object","additionalProperties":false,
       "required":["sha","tree","canonical_base_sha","canonical_base_tree"],
-      "properties": {
-        "sha":{"$ref":"#/$defs/gitSha"},
-        "tree":{"$ref":"#/$defs/gitSha"},
-        "canonical_base_sha":{"$ref":"#/$defs/gitSha"},
-        "canonical_base_tree":{"$ref":"#/$defs/gitSha"}
-      }
+      "properties":{"sha":{"$ref":"#/$defs/gitSha"},"tree":{"$ref":"#/$defs/gitSha"},"canonical_base_sha":{"$ref":"#/$defs/gitSha"},"canonical_base_tree":{"$ref":"#/$defs/gitSha"}}
     },
-    "contractFile": {
+    "contractFile":{
       "type":"object","additionalProperties":false,
       "required":["path","blob_sha","sha256","role"],
-      "properties": {
-        "path":{"$ref":"#/$defs/path"},
-        "blob_sha":{"$ref":"#/$defs/gitSha"},
-        "sha256":{"$ref":"#/$defs/sha256"},
-        "role":{"enum":["spec","plan","tasks","consistency","evidence_contracts","verification_protocol","donor_manifest","retained_authority_sources","authority_baseline_schema","proof_schema","authority_baseline","surface_policy","resource_policy","tool_lock","corpus_manifest","assertion_registry","coverage_policy","mutation_policy","enforcement_inventory"]}
+      "properties":{
+        "path":{"$ref":"#/$defs/path"},"blob_sha":{"$ref":"#/$defs/gitSha"},"sha256":{"$ref":"#/$defs/sha256"},
+        "role":{"enum":["spec","plan","tasks","consistency","evidence_contracts","verification_protocol","donor_manifest","retained_authority_sources","authority_baseline_schema","proof_schema","tool_policy","tool_policy_schema","tool_lock_schema","exclusion_policy","exclusion_policy_schema","evidence_inventory_schema","authority_baseline","surface_policy","resource_policy","tool_lock","corpus_manifest","assertion_registry","coverage_policy","mutation_policy","enforcement_inventory"]}
       }
     },
-    "contractFiles": {
-      "type":"array","minItems":19,"items":{"$ref":"#/$defs/contractFile"}
-    },
-    "authority": {
+    "contractFiles":{"type":"array","minItems":25,"maxItems":25,"items":{"$ref":"#/$defs/contractFile"}},
+    "authority":{
       "type":"object","additionalProperties":false,
-      "required":["baseline_file_sha256","authority_schema_sha256","retained_authority_sources_sha256","af01_assurance_projection_sha256","af01_review_projection_sha256","cf06_projection_sha256","cf10_projection_sha256","live_readback_completed"],
-      "properties": {
-        "baseline_file_sha256":{"$ref":"#/$defs/sha256"},
-        "authority_schema_sha256":{"$ref":"#/$defs/sha256"},
-        "retained_authority_sources_sha256":{"$ref":"#/$defs/sha256"},
-        "af01_assurance_projection_sha256":{"$ref":"#/$defs/sha256"},
-        "af01_review_projection_sha256":{"$ref":"#/$defs/sha256"},
-        "cf06_projection_sha256":{"$ref":"#/$defs/sha256"},
-        "cf10_projection_sha256":{"$ref":"#/$defs/sha256"},
-        "live_readback_completed":{"const":true}
+      "required":["baseline_file_sha256","authority_schema_sha256","retained_authority_sources_sha256","tool_policy_sha256","tool_policy_schema_sha256","tool_lock_schema_sha256","exclusion_policy_sha256","exclusion_policy_schema_sha256","evidence_inventory_schema_sha256","af01_assurance_projection_sha256","af01_review_projection_sha256","cf06_projection_sha256","cf10_projection_sha256","live_readback_completed"],
+      "properties":{
+        "baseline_file_sha256":{"$ref":"#/$defs/sha256"},"authority_schema_sha256":{"$ref":"#/$defs/sha256"},"retained_authority_sources_sha256":{"$ref":"#/$defs/sha256"},
+        "tool_policy_sha256":{"$ref":"#/$defs/sha256"},"tool_policy_schema_sha256":{"$ref":"#/$defs/sha256"},"tool_lock_schema_sha256":{"$ref":"#/$defs/sha256"},
+        "exclusion_policy_sha256":{"$ref":"#/$defs/sha256"},"exclusion_policy_schema_sha256":{"$ref":"#/$defs/sha256"},"evidence_inventory_schema_sha256":{"$ref":"#/$defs/sha256"},
+        "af01_assurance_projection_sha256":{"$ref":"#/$defs/sha256"},"af01_review_projection_sha256":{"$ref":"#/$defs/sha256"},"cf06_projection_sha256":{"$ref":"#/$defs/sha256"},"cf10_projection_sha256":{"$ref":"#/$defs/sha256"},"live_readback_completed":{"const":true}
       }
     },
-    "toolEntry": {
-      "oneOf":[
-        {"$ref":"#/$defs/executableTool"},
-        {"$ref":"#/$defs/registryPackage"}
-      ]
+    "toolLockEntries":{
+      "type":"array","minItems":8,"maxItems":8,
+      "prefixItems":[{"$ref":"#/$defs/arbitrary"},{"$ref":"#/$defs/cargoFuzz"},{"$ref":"#/$defs/cargoLlvmCov"},{"$ref":"#/$defs/cargoMutants"},{"$ref":"#/$defs/cargoNextest"},{"$ref":"#/$defs/libfuzzerSys"},{"$ref":"#/$defs/proptest"},{"$ref":"#/$defs/synScanner"}],
+      "items":false
     },
-    "executableTool": {
+    "execTool":{
       "type":"object","additionalProperties":false,
-      "required":["kind","id","version","upstream_repository","upstream_commit","acquisition_mode","source_lock_sha256_or_release_asset_sha256","installed_executable","installed_executable_sha256","version_output_sha256","build_rustc","build_cargo","build_target","features"],
-      "properties": {
-        "kind":{"const":"executable"},
-        "id":{"type":"string","minLength":1},
-        "version":{"type":"string","minLength":1},
-        "upstream_repository":{"type":"string","minLength":1},
-        "upstream_commit":{"$ref":"#/$defs/gitSha"},
-        "acquisition_mode":{"enum":["LOCKED_GIT_REV_SOURCE_BUILD","IMMUTABLE_RELEASE_ASSET_WITH_SHA256"]},
-        "source_lock_sha256_or_release_asset_sha256":{"$ref":"#/$defs/sha256"},
-        "installed_executable":{"type":"string","minLength":1},
-        "installed_executable_sha256":{"$ref":"#/$defs/sha256"},
-        "version_output_sha256":{"$ref":"#/$defs/sha256"},
-        "build_rustc":{"type":"string","minLength":1},
-        "build_cargo":{"type":"string","minLength":1},
-        "build_target":{"type":"string","minLength":1},
-        "features":{"type":"array","items":{"type":"string"}}
-      }
+      "required":["kind","id","version","upstream_repository","upstream_commit","acquisition_mode","source_lock_sha256","installed_executable","installed_executable_sha256","version_output_sha256","build_rustc","build_cargo","build_target","features"],
+      "properties":{"kind":{"const":"executable"},"id":{"type":"string"},"version":{"type":"string"},"upstream_repository":{"type":"string"},"upstream_commit":{"$ref":"#/$defs/gitSha"},"acquisition_mode":{"const":"LOCKED_GIT_REV_SOURCE_BUILD"},"source_lock_sha256":{"$ref":"#/$defs/sha256"},"installed_executable":{"type":"string","minLength":1},"installed_executable_sha256":{"$ref":"#/$defs/sha256"},"version_output_sha256":{"$ref":"#/$defs/sha256"},"build_rustc":{"type":"string","minLength":1},"build_cargo":{"type":"string","minLength":1},"build_target":{"const":"x86_64-unknown-linux-gnu"},"features":{"type":"array","items":{"type":"string"},"uniqueItems":true}}
     },
-    "registryPackage": {
+    "registryTool":{
       "type":"object","additionalProperties":false,
-      "required":["kind","id","package","version","registry","registry_checksum_sha256","features"],
-      "properties": {
-        "kind":{"const":"registry_package"},
-        "id":{"type":"string","minLength":1},
-        "package":{"type":"string","minLength":1},
-        "version":{"type":"string","minLength":1},
-        "registry":{"const":"crates.io"},
-        "registry_checksum_sha256":{"$ref":"#/$defs/sha256"},
-        "features":{"type":"array","items":{"type":"string"}}
-      }
+      "required":["kind","id","package","version","registry","registry_checksum_sha256","default_features","features"],
+      "properties":{"kind":{"const":"registry_package"},"id":{"type":"string"},"package":{"type":"string"},"version":{"type":"string"},"registry":{"const":"crates.io"},"registry_checksum_sha256":{"$ref":"#/$defs/sha256"},"default_features":{"type":"boolean"},"features":{"type":"array","items":{"type":"string"},"uniqueItems":true}}
     },
-    "surface": {
+    "arbitrary":{"allOf":[{"$ref":"#/$defs/registryTool"},{"properties":{"id":{"const":"arbitrary"},"package":{"const":"arbitrary"},"version":{"const":"1.4.2"},"default_features":{"const":true},"features":{"const":["derive"]}}}]},
+    "cargoFuzz":{"allOf":[{"$ref":"#/$defs/execTool"},{"properties":{"id":{"const":"cargo-fuzz"},"version":{"const":"0.13.2"},"upstream_repository":{"const":"https://github.com/rust-fuzz/cargo-fuzz"},"upstream_commit":{"const":"984c861c8dfea28055254c5f1d2659ab2cd63f76"},"features":{"const":[]}}}]},
+    "cargoLlvmCov":{"allOf":[{"$ref":"#/$defs/execTool"},{"properties":{"id":{"const":"cargo-llvm-cov"},"version":{"const":"0.9.0"},"upstream_repository":{"const":"https://github.com/taiki-e/cargo-llvm-cov"},"upstream_commit":{"const":"be59056988acd54c7f984b7c85643daea3711b29"},"features":{"const":[]}}}]},
+    "cargoMutants":{"allOf":[{"$ref":"#/$defs/execTool"},{"properties":{"id":{"const":"cargo-mutants"},"version":{"const":"27.1.0"},"upstream_repository":{"const":"https://github.com/sourcefrog/cargo-mutants"},"upstream_commit":{"const":"8ab1dc786a1f61a4e370416cc6c68b81a704e917"},"features":{"const":[]}}}]},
+    "cargoNextest":{"allOf":[{"$ref":"#/$defs/execTool"},{"properties":{"id":{"const":"cargo-nextest"},"version":{"const":"0.9.143"},"upstream_repository":{"const":"https://github.com/nextest-rs/nextest"},"upstream_commit":{"const":"60fa45f638ffc3f35e74afa65737f45fcd32db2a"},"features":{"const":[]}}}]},
+    "libfuzzerSys":{"allOf":[{"$ref":"#/$defs/registryTool"},{"properties":{"id":{"const":"libfuzzer-sys"},"package":{"const":"libfuzzer-sys"},"version":{"const":"0.4.13"},"default_features":{"const":true},"features":{"const":[]}}}]},
+    "proptest":{"allOf":[{"$ref":"#/$defs/registryTool"},{"properties":{"id":{"const":"proptest"},"package":{"const":"proptest"},"version":{"const":"1.11.0"},"default_features":{"const":true},"features":{"const":[]}}}]},
+    "synScanner":{"allOf":[{"$ref":"#/$defs/registryTool"},{"properties":{"id":{"const":"syn-af02-scanner"},"package":{"const":"syn"},"version":{"const":"3.0.3"},"registry_checksum_sha256":{"const":"53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"},"default_features":{"const":true},"features":{"const":["full","visit"]}}}]},
+    "surface":{
       "type":"object","additionalProperties":false,
-      "required":["policy_sha256","scanner_source_sha256","scanner_dependency_lock_sha256","source_universe_sha256","discovery_inventory_sha256","classified_boundary_count","reviewed_exclusion_count","stale_entry_count","unclassified_boundary_count"],
-      "properties": {
-        "policy_sha256":{"$ref":"#/$defs/sha256"},
-        "scanner_source_sha256":{"$ref":"#/$defs/sha256"},
-        "scanner_dependency_lock_sha256":{"$ref":"#/$defs/sha256"},
-        "source_universe_sha256":{"$ref":"#/$defs/sha256"},
-        "discovery_inventory_sha256":{"$ref":"#/$defs/sha256"},
-        "classified_boundary_count":{"$ref":"#/$defs/nonNegative"},
-        "reviewed_exclusion_count":{"$ref":"#/$defs/nonNegative"},
-        "stale_entry_count":{"const":0},
-        "unclassified_boundary_count":{"const":0}
-      }
+      "required":["policy_sha256","exclusion_policy_sha256","scanner_source_sha256","scanner_dependency_lock_sha256","source_universe_sha256","discovery_inventory_sha256","classified_boundary_count","reviewed_exclusion_count","stale_entry_count","unclassified_boundary_count"],
+      "properties":{"policy_sha256":{"$ref":"#/$defs/sha256"},"exclusion_policy_sha256":{"$ref":"#/$defs/sha256"},"scanner_source_sha256":{"$ref":"#/$defs/sha256"},"scanner_dependency_lock_sha256":{"$ref":"#/$defs/sha256"},"source_universe_sha256":{"$ref":"#/$defs/sha256"},"discovery_inventory_sha256":{"$ref":"#/$defs/sha256"},"classified_boundary_count":{"$ref":"#/$defs/nonNegative"},"reviewed_exclusion_count":{"$ref":"#/$defs/nonNegative"},"stale_entry_count":{"const":0},"unclassified_boundary_count":{"const":0}}
     },
-    "resources": {
+    "resources":{
       "type":"object","additionalProperties":false,
       "required":["policy_sha256","runner_image_digest","runtime_identity_sha256","effective_enforcement_sha256","offline_probe_sha256","network_mode","memory_bytes","nano_cpus","pids_limit","tmpfs_bytes","source_mount_read_only","output_mount_path","output_mount_read_write"],
-      "properties": {
-        "policy_sha256":{"$ref":"#/$defs/sha256"},
-        "runner_image_digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
-        "runtime_identity_sha256":{"$ref":"#/$defs/sha256"},
-        "effective_enforcement_sha256":{"$ref":"#/$defs/sha256"},
-        "offline_probe_sha256":{"$ref":"#/$defs/sha256"},
-        "network_mode":{"const":"none"},
-        "memory_bytes":{"const":805306368},
-        "nano_cpus":{"const":2000000000},
-        "pids_limit":{"const":256},
-        "tmpfs_bytes":{"const":536870912},
-        "source_mount_read_only":{"const":true},
-        "output_mount_path":{"type":"string","pattern":"^/af02-output(?:/.*)?$"},
-        "output_mount_read_write":{"const":true}
-      }
+      "properties":{"policy_sha256":{"$ref":"#/$defs/sha256"},"runner_image_digest":{"const":"sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f"},"runtime_identity_sha256":{"$ref":"#/$defs/sha256"},"effective_enforcement_sha256":{"$ref":"#/$defs/sha256"},"offline_probe_sha256":{"$ref":"#/$defs/sha256"},"network_mode":{"const":"none"},"memory_bytes":{"const":805306368},"nano_cpus":{"const":2000000000},"pids_limit":{"const":256},"tmpfs_bytes":{"const":536870912},"source_mount_read_only":{"const":true},"output_mount_path":{"type":"string","pattern":"^/af02-output(?:/[^/]+)*$"},"output_mount_read_write":{"const":true}}
     },
-    "corpus": {
+    "corpus":{
       "type":"object","additionalProperties":false,
       "required":["manifest_sha256","assertion_registry_sha256","fixture_inventory_sha256","scenario_count","total_fixture_bytes","replay_result_sha256","orphan_manifest_count","orphan_assertion_count","provenance_violation_count"],
-      "properties": {
-        "manifest_sha256":{"$ref":"#/$defs/sha256"},
-        "assertion_registry_sha256":{"$ref":"#/$defs/sha256"},
-        "fixture_inventory_sha256":{"$ref":"#/$defs/sha256"},
-        "scenario_count":{"$ref":"#/$defs/nonNegative"},
-        "total_fixture_bytes":{"type":"integer","minimum":0,"maximum":8388608},
-        "replay_result_sha256":{"$ref":"#/$defs/sha256"},
-        "orphan_manifest_count":{"const":0},
-        "orphan_assertion_count":{"const":0},
-        "provenance_violation_count":{"const":0}
-      }
+      "properties":{"manifest_sha256":{"$ref":"#/$defs/sha256"},"assertion_registry_sha256":{"$ref":"#/$defs/sha256"},"fixture_inventory_sha256":{"$ref":"#/$defs/sha256"},"scenario_count":{"$ref":"#/$defs/nonNegative"},"total_fixture_bytes":{"type":"integer","minimum":0,"maximum":8388608},"replay_result_sha256":{"$ref":"#/$defs/sha256"},"orphan_manifest_count":{"const":0},"orphan_assertion_count":{"const":0},"provenance_violation_count":{"const":0}}
     },
-    "propertiesEvidence": {
+    "propertiesEvidence":{
       "type":"object","additionalProperties":false,
       "required":["config_sha256","model_registry_sha256","case_count","passed_count","failed_count","counterexample_inventory_sha256"],
-      "properties": {
-        "config_sha256":{"$ref":"#/$defs/sha256"},
-        "model_registry_sha256":{"$ref":"#/$defs/sha256"},
-        "case_count":{"$ref":"#/$defs/nonNegative"},
-        "passed_count":{"$ref":"#/$defs/nonNegative"},
-        "failed_count":{"const":0},
-        "counterexample_inventory_sha256":{"$ref":"#/$defs/sha256"}
-      }
+      "properties":{"config_sha256":{"$ref":"#/$defs/sha256"},"model_registry_sha256":{"$ref":"#/$defs/sha256"},"case_count":{"$ref":"#/$defs/nonNegative"},"passed_count":{"$ref":"#/$defs/nonNegative"},"failed_count":{"const":0},"counterexample_inventory_sha256":{"$ref":"#/$defs/sha256"}}
     },
-    "nextest": {
+    "nextest":{
       "type":"object","additionalProperties":false,
       "required":["config_sha256","command_argv_sha256","selected_test_name","state_protocol_sha256","output_mount_preflight_sha256","junit_sha256","junit_process_binding_sha256","stdout_sha256","stderr_sha256","process_exit_code","first_attempt_class","retry_attempt_class","normalized_class","selected_test_count","ordinary_suite_result_sha256"],
-      "properties": {
-        "config_sha256":{"$ref":"#/$defs/sha256"},
-        "command_argv_sha256":{"$ref":"#/$defs/sha256"},
-        "selected_test_name":{"const":"af02_retry_pass_is_failure"},
-        "state_protocol_sha256":{"$ref":"#/$defs/sha256"},
-        "output_mount_preflight_sha256":{"$ref":"#/$defs/sha256"},
-        "junit_sha256":{"$ref":"#/$defs/sha256"},
-        "junit_process_binding_sha256":{"$ref":"#/$defs/sha256"},
-        "stdout_sha256":{"$ref":"#/$defs/sha256"},
-        "stderr_sha256":{"$ref":"#/$defs/sha256"},
-        "process_exit_code":{"type":"integer","not":{"const":0}},
-        "first_attempt_class":{"const":"FAIL"},
-        "retry_attempt_class":{"const":"PASS"},
-        "normalized_class":{"const":"FLAKY_RETRY_PASS"},
-        "selected_test_count":{"const":1},
-        "ordinary_suite_result_sha256":{"$ref":"#/$defs/sha256"}
-      }
+      "properties":{"config_sha256":{"$ref":"#/$defs/sha256"},"command_argv_sha256":{"$ref":"#/$defs/sha256"},"selected_test_name":{"const":"af02_retry_pass_is_failure"},"state_protocol_sha256":{"$ref":"#/$defs/sha256"},"output_mount_preflight_sha256":{"$ref":"#/$defs/sha256"},"junit_sha256":{"$ref":"#/$defs/sha256"},"junit_process_binding_sha256":{"$ref":"#/$defs/sha256"},"stdout_sha256":{"$ref":"#/$defs/sha256"},"stderr_sha256":{"$ref":"#/$defs/sha256"},"process_exit_code":{"type":"integer","not":{"const":0}},"first_attempt_class":{"const":"FAIL"},"retry_attempt_class":{"const":"PASS"},"normalized_class":{"const":"FLAKY_RETRY_PASS"},"selected_test_count":{"const":1},"ordinary_suite_result_sha256":{"$ref":"#/$defs/sha256"}}
     },
-    "coverage": {
+    "coverage":{
       "type":"object","additionalProperties":false,
-      "required":["descriptor_sha256","raw_report_sha256","source_universe_sha256","file_metrics_sha256","workspace_covered_lines","workspace_total_lines","workspace_floor_percent","critical_surface_metrics_sha256","unknown_production_path_count","missing_production_path_count","duplicate_normalized_path_count"],
-      "properties": {
-        "descriptor_sha256":{"$ref":"#/$defs/sha256"},
-        "raw_report_sha256":{"$ref":"#/$defs/sha256"},
-        "source_universe_sha256":{"$ref":"#/$defs/sha256"},
-        "file_metrics_sha256":{"$ref":"#/$defs/sha256"},
-        "workspace_covered_lines":{"$ref":"#/$defs/nonNegative"},
-        "workspace_total_lines":{"$ref":"#/$defs/positive"},
-        "workspace_floor_percent":{"type":"integer","minimum":0,"maximum":100},
-        "critical_surface_metrics_sha256":{"$ref":"#/$defs/sha256"},
-        "unknown_production_path_count":{"const":0},
-        "missing_production_path_count":{"const":0},
-        "duplicate_normalized_path_count":{"const":0}
-      }
+      "required":["descriptor_sha256","exclusion_policy_sha256","raw_report_sha256","source_universe_sha256","file_metrics_sha256","workspace_covered_lines","workspace_total_lines","workspace_floor_percent","critical_surface_metrics_sha256","unknown_production_path_count","missing_production_path_count","duplicate_normalized_path_count"],
+      "properties":{"descriptor_sha256":{"$ref":"#/$defs/sha256"},"exclusion_policy_sha256":{"$ref":"#/$defs/sha256"},"raw_report_sha256":{"$ref":"#/$defs/sha256"},"source_universe_sha256":{"$ref":"#/$defs/sha256"},"file_metrics_sha256":{"$ref":"#/$defs/sha256"},"workspace_covered_lines":{"$ref":"#/$defs/nonNegative"},"workspace_total_lines":{"$ref":"#/$defs/positive"},"workspace_floor_percent":{"type":"integer","minimum":0,"maximum":100},"critical_surface_metrics_sha256":{"$ref":"#/$defs/sha256"},"unknown_production_path_count":{"const":0},"missing_production_path_count":{"const":0},"duplicate_normalized_path_count":{"const":0}}
     },
-    "mutation": {
+    "mutation":{
       "type":"object","additionalProperties":false,
-      "required":["policy_sha256","inventory_sha256","required_set_sha256","exclusion_set_sha256","result_inventory_sha256","required_count","killed_count","survived_count","timeout_count","unviable_or_build_failure_count","waived_count","unclassified_count"],
-      "properties": {
-        "policy_sha256":{"$ref":"#/$defs/sha256"},
-        "inventory_sha256":{"$ref":"#/$defs/sha256"},
-        "required_set_sha256":{"$ref":"#/$defs/sha256"},
-        "exclusion_set_sha256":{"$ref":"#/$defs/sha256"},
-        "result_inventory_sha256":{"$ref":"#/$defs/sha256"},
-        "required_count":{"$ref":"#/$defs/nonNegative"},
-        "killed_count":{"$ref":"#/$defs/nonNegative"},
-        "survived_count":{"const":0},
-        "timeout_count":{"const":0},
-        "unviable_or_build_failure_count":{"const":0},
-        "waived_count":{"$ref":"#/$defs/nonNegative"},
-        "unclassified_count":{"const":0}
-      }
+      "required":["policy_sha256","exclusion_policy_sha256","inventory_sha256","required_set_sha256","exclusion_set_sha256","result_inventory_sha256","required_count","killed_count","survived_count","timeout_count","unviable_or_build_failure_count","waived_count","unclassified_count"],
+      "properties":{"policy_sha256":{"$ref":"#/$defs/sha256"},"exclusion_policy_sha256":{"$ref":"#/$defs/sha256"},"inventory_sha256":{"$ref":"#/$defs/sha256"},"required_set_sha256":{"$ref":"#/$defs/sha256"},"exclusion_set_sha256":{"$ref":"#/$defs/sha256"},"result_inventory_sha256":{"$ref":"#/$defs/sha256"},"required_count":{"$ref":"#/$defs/nonNegative"},"killed_count":{"$ref":"#/$defs/nonNegative"},"survived_count":{"const":0},"timeout_count":{"const":0},"unviable_or_build_failure_count":{"const":0},"waived_count":{"$ref":"#/$defs/nonNegative"},"unclassified_count":{"const":0}}
     },
-    "cargoTest": {
+    "cargoTest":{
       "type":"object","additionalProperties":false,
       "required":["command_argv_sha256","source_sha","exit_code","test_count","passed_count","failed_count","ignored_count","raw_result_sha256"],
-      "properties": {
-        "command_argv_sha256":{"$ref":"#/$defs/sha256"},
-        "source_sha":{"$ref":"#/$defs/gitSha"},
-        "exit_code":{"const":0},
-        "test_count":{"$ref":"#/$defs/nonNegative"},
-        "passed_count":{"$ref":"#/$defs/nonNegative"},
-        "failed_count":{"const":0},
-        "ignored_count":{"$ref":"#/$defs/nonNegative"},
-        "raw_result_sha256":{"$ref":"#/$defs/sha256"}
-      }
+      "properties":{"command_argv_sha256":{"$ref":"#/$defs/sha256"},"source_sha":{"$ref":"#/$defs/gitSha"},"exit_code":{"const":0},"test_count":{"$ref":"#/$defs/nonNegative"},"passed_count":{"$ref":"#/$defs/nonNegative"},"failed_count":{"const":0},"ignored_count":{"$ref":"#/$defs/nonNegative"},"raw_result_sha256":{"$ref":"#/$defs/sha256"}}
     },
-    "checkRun": {
+    "checkBase":{
       "type":"object","additionalProperties":false,
       "required":["context","integration_id","check_run_id","head_sha","conclusion"],
-      "properties": {
-        "context":{"type":"string","minLength":1},
-        "integration_id":{"const":15368},
-        "check_run_id":{"$ref":"#/$defs/positive"},
-        "head_sha":{"$ref":"#/$defs/gitSha"},
-        "conclusion":{"const":"success"}
-      }
+      "properties":{"context":{"type":"string"},"integration_id":{"const":15368},"check_run_id":{"$ref":"#/$defs/positive"},"head_sha":{"$ref":"#/$defs/gitSha"},"conclusion":{"const":"success"}}
     },
-    "stochasticObservation": {
+    "checkAssurance":{"allOf":[{"$ref":"#/$defs/checkBase"},{"properties":{"context":{"const":"assurance-proof"}}}]},
+    "checkRust":{"allOf":[{"$ref":"#/$defs/checkBase"},{"properties":{"context":{"const":"rust"}}}]},
+    "checkScorecard":{"allOf":[{"$ref":"#/$defs/checkBase"},{"properties":{"context":{"const":"scorecard"}}}]},
+    "stochasticObservation":{
       "type":"object","additionalProperties":false,
       "required":["campaign_id","target_id","source_sha","tool_lock_entry_sha256","campaign_config_sha256","seed_or_null","wall_seconds","executions_or_null","corpus_start_sha256","corpus_end_sha256","outcome_class","artifact_manifest_sha256_or_null","started_at_utc","completed_at_utc"],
-      "properties": {
-        "campaign_id":{"type":"string","minLength":1},
-        "target_id":{"type":"string","minLength":1},
-        "source_sha":{"$ref":"#/$defs/gitSha"},
-        "tool_lock_entry_sha256":{"$ref":"#/$defs/sha256"},
-        "campaign_config_sha256":{"$ref":"#/$defs/sha256"},
-        "seed_or_null":{"type":["integer","null"],"minimum":0},
-        "wall_seconds":{"$ref":"#/$defs/nonNegative"},
-        "executions_or_null":{"type":["integer","null"],"minimum":0},
-        "corpus_start_sha256":{"$ref":"#/$defs/sha256"},
-        "corpus_end_sha256":{"$ref":"#/$defs/sha256"},
-        "outcome_class":{"enum":["NO_CRASH_OBSERVED_WITHIN_BOUND","DEFECT_DISCOVERED","INCOMPLETE_RESOURCE_OR_HARNESS_FAILURE","CANCELLED_OR_SUPERSEDED"]},
-        "artifact_manifest_sha256_or_null":{"oneOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},
-        "started_at_utc":{"type":"string","format":"date-time"},
-        "completed_at_utc":{"type":"string","format":"date-time"}
-      }
+      "properties":{"campaign_id":{"type":"string","minLength":1},"target_id":{"type":"string","minLength":1},"source_sha":{"$ref":"#/$defs/gitSha"},"tool_lock_entry_sha256":{"$ref":"#/$defs/sha256"},"campaign_config_sha256":{"$ref":"#/$defs/sha256"},"seed_or_null":{"oneOf":[{"type":"integer","minimum":0},{"type":"null"}]},"wall_seconds":{"$ref":"#/$defs/nonNegative"},"executions_or_null":{"oneOf":[{"type":"integer","minimum":0},{"type":"null"}]},"corpus_start_sha256":{"$ref":"#/$defs/sha256"},"corpus_end_sha256":{"$ref":"#/$defs/sha256"},"outcome_class":{"enum":["NO_CRASH_OBSERVED_WITHIN_BOUND","DEFECT_DISCOVERED","INCOMPLETE_RESOURCE_OR_HARNESS_FAILURE","CANCELLED_OR_SUPERSEDED"]},"artifact_manifest_sha256_or_null":{"oneOf":[{"$ref":"#/$defs/sha256"},{"type":"null"}]},"started_at_utc":{"type":"string","format":"date-time"},"completed_at_utc":{"type":"string","format":"date-time"}}
     }
   }
 }

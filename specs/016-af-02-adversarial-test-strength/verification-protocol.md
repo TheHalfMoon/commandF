@@ -2,7 +2,7 @@
 
 Status: PLANNING_CANDIDATE
 
-This file is normative and has higher AF-02 precedence than `evidence-contracts.md`, `spec.md`, `plan.md`, `tasks.md`, `consistency.md`, and donor/provenance prose. Structural schemas under `schemas/` are co-authoritative for machine structure. A disagreement between this protocol and a machine schema fails qualification until reconciled; implementation may not choose the weaker interpretation.
+This file is normative and has higher AF-02 precedence than `evidence-contracts.md`, `spec.md`, `plan.md`, `tasks.md`, `consistency.md`, and donor/provenance prose. Machine-readable schemas under `schemas/` are co-authoritative for structure, and the policy instances `tool-policy.json` and `exclusion-policy.json` are canonical AF-02 inputs. Any disagreement between this protocol, a machine schema, or a policy instance fails qualification; implementation may not choose the weaker interpretation.
 
 Canonical planning base:
 
@@ -16,45 +16,34 @@ AF-01: CLOSED_CANONICAL
 
 T005/T006 exact-head review, merge, and post-merge evidence cannot be embedded into the commit whose future qualification they prove.
 
-Therefore planning closure is a temporal GitHub gate:
+Planning closure therefore requires, in order:
 
 1. one exact final planning head passes every path-applicable workflow;
-2. required check contexts are unique, exact-head, successful, and GitHub-Actions-app bound;
+2. every live required check context is unique, exact-head, successful, and bound to the expected GitHub App;
 3. fresh Qodo and CodeRabbit review that exact head when available;
 4. every substantive finding is fixed or explicitly dispositioned without inventing PASS;
 5. zero substantive review threads remain unresolved;
 6. merge uses an expected-head guard;
-7. post-merge canonical `main`/tree and both AF-01 live rulesets are re-read.
+7. canonical post-merge `main`/tree and both AF-01 live rulesets are re-read.
 
-Only step 7 may close T006 and authorize Stack A0. No prior-head evidence carries forward after a head mutation.
+Only step 7 may close T006 and authorize Stack A0. Any head mutation makes earlier-head CI/review evidence stale.
 
 ## 2. Canonical JSON
 
-All deterministic semantic projections and proof objects use:
+Deterministic semantic projections and proof objects use UTF-8, no BOM, no floats, recursively UTF-8-byte-sorted object keys, schema-defined array ordering, compact separators, lowercase JSON literals, and no trailing newline. SHA-256 is lowercase hex over exact canonical bytes.
 
-- UTF-8;
-- no BOM;
-- no floats;
-- recursively lexicographically sorted object keys by UTF-8 byte sequence;
-- schema-defined array order, never generic array sorting unless named below;
-- JSON separators `,` and `:` without extra whitespace;
-- lowercase JSON literals;
-- no trailing newline in hashed canonical bytes.
+Unknown fields, missing fields, duplicate set members, wrong cardinality/order, invalid type/range/pattern, or source disagreement fail before hashing.
 
-SHA-256 is lowercase hexadecimal over the exact canonical bytes.
+## 3. AF-01 live authority
 
-Unknown semantic fields, missing required fields, duplicate set members, wrong cardinality, invalid type/range/pattern, or source disagreement fail before hashing.
-
-## 3. AF-01 live authority projection
-
-Authoritative sources:
+Authoritative live sources are exactly:
 
 ```text
 GET /repos/TheHalfMoon/commandF/rulesets/21652953
 GET /repos/TheHalfMoon/commandF/rulesets/21652974
 ```
 
-Observation-only API fields such as timestamps, URLs, node IDs and `current_user_can_bypass` are excluded. Every semantic ruleset field is either projected or explicitly rejected as unknown drift.
+Observation-only fields such as timestamps, URLs, node IDs, and `current_user_can_bypass` are excluded; no semantic rule field is silently ignored.
 
 ### 3.1 Assurance projection
 
@@ -70,7 +59,7 @@ Expected SHA-256:
 6177b1b8777665506797d5e0cb3f48da81cc748e31bb2c9b53b4b1da777df00a
 ```
 
-Validation requires exactly the rules `deletion`, `non_fast_forward`, and `required_status_checks`; no bypass actors; exactly the three checks above sorted by context.
+Exactly three rules are permitted: deletion, non-fast-forward, required-status-checks. No bypass actor is permitted. The check set is exactly `assurance-proof`, `rust`, `scorecard`, each integration id 15368.
 
 ### 3.2 Review-governance projection
 
@@ -86,13 +75,13 @@ Expected SHA-256:
 9a54cd03bbf04449e1a00ff86701dfce98a700d392485f849774a63234347d0d
 ```
 
-Validation requires exactly one pull-request rule and exactly one PR-only RepositoryRole actor-id 5 bypass. `allowed_merge_methods` is exactly `merge`.
+Exactly one pull-request rule and one PR-only RepositoryRole actor-id 5 bypass are permitted. Allowed merge methods are exactly `merge`.
 
-The older AF-01 semantic hashes in historical AF-02 planning prose are superseded by these closed projections. Live rules are unchanged by that projection correction.
+Historical looser AF-01 semantic hashes in earlier AF-02 prose are superseded; live rules themselves are not changed by this projection correction.
 
-## 4. CF-06 production-oracle projection
+## 4. CF-06 production-oracle authority
 
-Authority comes from canonical-base repository files, not candidate AF-02 text:
+Authority is derived from canonical-base repository files, never candidate AF-02 prose:
 
 ```text
 crates/commandf-pkg/src/oracle_model.rs
@@ -100,13 +89,7 @@ donors/hl7-fhir-validator-6.10.2.yaml
 .github/workflows/cf06-oracle.yml
 ```
 
-Derivation:
-
-1. parse exact Rust constants `HL7_ORACLE_PROJECT`, `HL7_ORACLE_RELEASE`, `HL7_ORACLE_SOURCE_COMMIT`, `HL7_VALIDATOR_JAR_SHA256`;
-2. require donor record `hl7-fhir-core-validator` to agree on repository/ref/tag/release artifact digest;
-3. inspect every workflow token matching `hl7.fhir.r4.core@<version>` and require the non-empty observed set to equal `{4.0.1}`;
-4. retain raw SHA-256 and Git blob SHA for all three source files;
-5. construct exactly:
+The verifier parses exact Rust constants, cross-checks donor repository/ref/tag/release digest, requires all workflow occurrences of `hl7.fhir.r4.core@<version>` to yield exactly `{4.0.1}`, records Git blob/raw SHA-256 for all three sources, and constructs exactly:
 
 ```json
 {"project":"hapifhir/org.hl7.fhir.core","r4_core_context":"hl7.fhir.r4.core@4.0.1","release":"6.10.2","source_commit":"d06577dbc5c62c74a2a8823fbc4830a3024d5b0b","validator_cli_jar_sha256":"a3addadfa18dfa23146a0a243b6ede68eaad92157a5407738c468bb3d7e4ccd6"}
@@ -118,25 +101,21 @@ Expected SHA-256:
 236d71b6816978a4f7c9ea587d70301801b91a1d8a038f93ac7940203dc62787
 ```
 
-Candidate edits to these authority files are evaluated from canonical base first and cannot self-authorize AF-02.
+Candidate changes to CF-06 authority files cannot self-authorize AF-02.
 
 ## 5. CF-10 retained authority
 
-Current `main` is not required to contain the CF-10 retained files. Exact retained locators are machine-readable in:
+Current `main` is not required to contain retained CF-10 files. Exact source locators are machine-readable in `retained-authority-sources.json`.
 
-```text
-retained-authority-sources.json
-```
-
-Required retained identity:
+Required identity:
 
 ```text
 PR: 11
 head: 5fe10d9859407272acf6649fc3e868d3eb2fbd12
 base: 5cb1a4c3445c0ebd86654cfb467a5e008e801c3e
-manifest path: corpus/real-ig/v1/corpus.json
+manifest: corpus/real-ig/v1/corpus.json
 manifest Git blob: 655949a8a30d67502dffd624a175d2e8e02b1d1f
-donor path: donors/cf-10-real-ig-delta-corpus.yaml
+donor: donors/cf-10-real-ig-delta-corpus.yaml
 donor Git blob: 566b46f4e6f467a1ccae3ac810b31956309173b6
 run: 31916124080
 run conclusion: failure
@@ -145,9 +124,7 @@ artifact name: cf10-real-corpus-evidence
 artifact SHA-256: 9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612
 ```
 
-The projector fetches both retained blobs from the retained head/blob APIs, verifies Git blob identity, computes raw SHA-256 itself, and only then parses them. Missing/expired downloadable artifact bytes do not erase GitHub-recorded artifact identity; however artifact metadata read-back must still agree with retained id/name/digest when available from GitHub API.
-
-The manifest must contain exactly three ordered case IDs `C001`, `C002`, `C003`, each with `before` and `after`, producing exactly these six ordered states:
+The verifier fetches the retained blobs, verifies Git blob identities, computes raw SHA-256 itself, parses them only after identity validation, and proves exactly three ordered deltas and six ordered states:
 
 ```text
 C001-after  hl7.fhir.us.core  9.0.0  d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059  2749959
@@ -158,37 +135,101 @@ C003-after  hl7.fhir.us.mcode 4.0.0  e603283bafa508a3705ad022bce95bba1fbd0b8b3b8
 C003-before hl7.fhir.us.mcode 3.0.0  c94c91971747efeae760aa037d168e4df992cefb6dacece08217c464b9d39214  1014084
 ```
 
-The donor must independently agree on package/version/digest/byte-size provenance and six-state selection. The retained workflow conclusion stays `failure`; AF-02 never converts it to a production-oracle PASS.
+The retained workflow conclusion remains `failure`; AF-02 never relabels it as production-oracle success. Artifact expiry does not alter immutable recorded id/name/digest, but available GitHub metadata must agree.
 
-## 6. Authority baseline v2
+## 6. Closed machine authority set
 
-The obsolete `commandf.af02-authority-baseline/v1` planning example MUST NOT be implemented.
+The obsolete illustrative `commandf.af02-authority-baseline/v1` MUST NOT be implemented.
 
-The only accepted baseline schema is:
+The sole authority baseline is:
 
 ```text
 commandf.af02-authority-baseline/v2
 schemas/af02-authority-baseline-v2.schema.json
 ```
 
-The schema requires exact 3-delta/6-state cardinality and the full retained identity. Repository semantic validation additionally requires sorted uniqueness, source-file digest agreement, projection recomputation, and candidate/base anti-self-authorization.
-
-## 7. Proof schema and semantic invariants
-
-The only proof schema is:
+The following files are also canonical AF-02 machine authority:
 
 ```text
-commandf.af02-adversarial-proof/v1
+tool-policy.json
+exclusion-policy.json
+schemas/af02-tool-policy-v1.schema.json
+schemas/af02-tool-lock-v1.schema.json
+schemas/af02-exclusion-policy-v1.schema.json
+schemas/af02-evidence-inventories-v1.schema.json
 schemas/af02-adversarial-proof-v1.schema.json
 ```
 
-The schema file itself and its SHA-256 are mandatory `contract_files[]` evidence.
+`af02-evidence-inventories-v1.schema.json` contains closed, distinguishable schemas for:
 
-The proof verifier enforces these semantic invariants in addition to JSON Schema:
+```text
+commandf.af02-source-universe/v1
+commandf.af02-assertion-registry/v1
+commandf.af02-replay-results/v1
+commandf.af02-coverage-inventory/v1
+commandf.af02-mutation-inventory/v1
+commandf.af02-corpus-fixture-inventory/v1
+commandf.af02-property-counterexample-inventory/v1
+commandf.af02-enforcement-inventory/v1
+```
 
-### 7.1 Contract files
+No proof-critical inventory may invent a later ad-hoc shape. Any incompatible schema strengthening is an acceptance-authority change under the base-controlled policy-change process.
 
-`contract_files[]` is sorted by `path`; path and role are unique. Required roles are exactly one each for:
+## 7. Tool policy and tool-lock completeness
+
+`tool-policy.json` is the expected-set authority. It validates against `schemas/af02-tool-policy-v1.schema.json`.
+
+The final AF-02 tool-lock member set is exactly, in UTF-8 id order:
+
+```text
+arbitrary             registry arbitrary 1.4.2, default features + derive, activates A1
+cargo-fuzz            executable 0.13.2, rust-fuzz/cargo-fuzz@984c861c8dfea28055254c5f1d2659ab2cd63f76, activates A1
+cargo-llvm-cov        executable 0.9.0, taiki-e/cargo-llvm-cov@be59056988acd54c7f984b7c85643daea3711b29, activates B0
+cargo-mutants         executable 27.1.0, sourcefrog/cargo-mutants@8ab1dc786a1f61a4e370416cc6c68b81a704e917, activates C0
+cargo-nextest         executable 0.9.143, nextest-rs/nextest@60fa45f638ffc3f35e74afa65737f45fcd32db2a, activates B0
+libfuzzer-sys         registry 0.4.13 default features, activates A1
+proptest              registry 1.11.0 default features, activates A1
+syn-af02-scanner      registry syn 3.0.3 features=[full,visit], activates A0
+```
+
+Canonical-base `Cargo.lock` proves the current scanner checksum:
+
+```text
+syn 3.0.3 = 53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3
+```
+
+Registry packages whose checksum is null in the planning policy are **not yet active**. Their exact crates.io checksum must be frozen by a dedicated design-freeze policy change that is canonical before the activation stack executes dependent evidence. A null checksum is prohibited once its activation stack begins.
+
+Executable acquisition mode is frozen to `LOCKED_GIT_REV_SOURCE_BUILD`. The actual lock records source-lock digest, executable path/SHA-256, version-output SHA-256, compiler, cargo, target, and features. Upstream commit alone is insufficient.
+
+`commandf.af02-tool-lock/v1` validates against `schemas/af02-tool-lock-v1.schema.json`. At each stack, the base verifier derives the mandatory active subset from canonical-base `tool-policy.json`, never candidate proof data. It rejects missing, unexpected, duplicate, substituted-id/version/repository/commit/acquisition-mode/feature/checksum/target/executable-digest entries. Final C1 proof requires all eight entries and no others.
+
+Negative tests include empty lock, omitted active member, unexpected member, substituted id, wrong version/upstream commit/features/checksum, and valid-looking wrong executable digest.
+
+## 8. Exclusion authority
+
+`exclusion-policy.json` is the sole source/mutation exclusion inventory and validates against `schemas/af02-exclusion-policy-v1.schema.json`.
+
+The planning policy starts with:
+
+```text
+production_source_exclusions = []
+mutation_exclusions = []
+```
+
+The same `production_source_exclusions` array governs both surface discovery and coverage. A source may not be excluded from one while remaining in the other.
+
+A future exclusion requires a dedicated policy change that is canonical **before** dependent discovery/measurement/listing/execution. A candidate may not add an exclusion after seeing its own surface, coverage, or mutation result, and a same-candidate exclusion cannot make dependent evidence green.
+
+Each future source exclusion requires exact id/path/reason/owner/introducing-policy-SHA/review reference/removal condition. Each mutation exclusion requires exact id/matcher digest/reason/owner/introducing-policy-SHA/review reference/removal condition. Unlisted or multiply matched exclusions fail.
+
+The verifier independently hashes the canonical-base exclusion policy and requires the same digest in surface, coverage, and mutation proof sections.
+
+## 9. Proof schema and contract-file closure
+
+The sole proof schema is `schemas/af02-adversarial-proof-v1.schema.json`.
+
+`contract_files[]` is sorted by path; both path and role are unique. It contains exactly one each of these 25 roles:
 
 ```text
 spec
@@ -201,6 +242,12 @@ donor_manifest
 retained_authority_sources
 authority_baseline_schema
 proof_schema
+tool_policy
+tool_policy_schema
+tool_lock_schema
+exclusion_policy
+exclusion_policy_schema
+evidence_inventory_schema
 authority_baseline
 surface_policy
 resource_policy
@@ -212,51 +259,67 @@ mutation_policy
 enforcement_inventory
 ```
 
-Every entry's Git blob and raw SHA-256 are recomputed from source SHA.
+Each contract entry's Git blob and raw SHA-256 are recomputed from the exact source head. The proof authority object binds SHA-256 for tool/exclusion/schema policy inputs as well as AF-01/CF-06/CF-10 projections.
 
-### 7.2 Tool lock
+The proof schema requires final `tool_lock` cardinality exactly eight and exact member identities. It also requires exact current required-check ordering/membership (`assurance-proof`, `rust`, `scorecard`), resource constants, zero non-green terminal counts, and exclusion-policy digests in surface/coverage/mutation.
 
-Entries are sorted by `id`, IDs unique, feature arrays sorted/unique. Executable and registry-package shapes cannot mix fields. Executable SHA/version output are recomputed from acquired tool. Registry checksum comes from exact locked Cargo metadata.
+### 9.1 Semantic relations
 
-### 7.3 Counter relations
-
-Required equalities:
+The base verifier additionally enforces checked-integer relations:
 
 ```text
 properties.case_count = properties.passed_count + properties.failed_count
 canonical_cargo_test.test_count = passed_count + failed_count + ignored_count
 mutation.required_count = killed_count + survived_count + timeout_count + unviable_or_build_failure_count + waived_count
 coverage.workspace_covered_lines <= coverage.workspace_total_lines
-coverage.workspace_floor_percent = (covered * 100) // total
+coverage.workspace_floor_percent = (workspace_covered_lines * 100) // workspace_total_lines
 ```
 
-All arithmetic is checked integer arithmetic. Overflow, zero coverage total, negative count, or mismatch fails.
+Zero coverage denominator, overflow, mismatch, duplicate/order violation, wrong digest relationship, or path containment failure is non-green.
 
-### 7.4 Required checks
+If a future canonical live ruleset adds an AF-02 base-verifier required context, that live authority change requires a proof-schema/policy update before a later proof can qualify; candidate proof data cannot silently add or remove contexts.
 
-At planning and until live policy changes, contexts are exactly:
+## 10. Closed evidence inventories
 
-```text
-assurance-proof
-rust
-scorecard
-```
+Every digest-only proof-critical object is parsed through `schemas/af02-evidence-inventories-v1.schema.json` before its digest is accepted.
 
-Each must appear exactly once, have candidate `head_sha`, `integration_id=15368`, and `conclusion=success`. A foreign-app same-name check fails uniqueness/provenance.
+### Source universe
 
-If a later canonical AF-02 base-verifier context is added to the live assurance ruleset, exact live read-back determines the additional required context; the candidate cannot add/remove it through proof data.
+`commandf.af02-source-universe/v1` binds source SHA/tree, exclusion-policy digest, exact roots, and `{path,blob_sha}` records. Paths are sorted/unique by semantic validator.
 
-### 7.5 Inventory objects referenced by digests
+### Assertion registry
 
-`file_metrics_sha256`, `critical_surface_metrics_sha256`, mutation inventories, source universe, corpus fixture inventory, property counterexample inventory, and replay result digests refer to separate closed repository-owned JSON schemas frozen no later than their design stack. Unknown fields and malformed identities fail. Their schema/digests join `contract_files[]` through the relevant policy role before they can affect qualification.
+`commandf.af02-assertion-registry/v1` closes scalar/nullability/runner/argv/environment/source/config fields. `CARGO_TEST` requires non-null target/test; `AF02_REPLAY_BINARY` requires both null. Shell command strings are not authority. Assertion/scenario IDs are unique and bijective with the corpus.
 
-### 7.6 Path rules
+### Replay results
 
-Repository paths use slash-separated, relative UTF-8 paths; no empty component, `.`/`..`, absolute prefix, drive/UNC prefix, NUL, or symlink escape. Output-mount paths must remain below the dedicated AF-02 output root. Canonicalization is containment verification, not a way to accept an originally non-portable path.
+`commandf.af02-replay-results/v1` binds each assertion/scenario to runner kind, process exit, independently normalized outcome, stdout/stderr and structured-result digests. Producer-supplied normalized outcomes are ignored as authority.
 
-## 8. Enforcement inventory and base-controlled verifier
+### Coverage inventory
 
-AF-02 maintains `commandf.af02-enforcement-inventory/v1` with exact repository paths/entry symbols for every acceptance-authority role:
+`commandf.af02-coverage-inventory/v1` binds source/exclusion/descriptor identities, every file's covered/total integers, and each critical surface's exact source paths and independently derived floor. Missing/unknown/duplicate paths and covered>total fail semantically.
+
+### Mutation inventory
+
+`commandf.af02-mutation-inventory/v1` binds source/tool/policy/exclusion identities, frozen target paths, every mutant record/disposition, and every result. REQUIRED implies null exclusion id; EXCLUDED requires an exact `MUT-X####` entry present in canonical-base exclusion policy. Result inventory and mutant inventory must have exact required membership.
+
+### Corpus fixture inventory
+
+`commandf.af02-corpus-fixture-inventory/v1` binds scenario/path/SHA-256/byte length/provenance/assertion id; each default fixture <=256 KiB, aggregate <=8 MiB.
+
+### Property counterexamples
+
+`commandf.af02-property-counterexample-inventory/v1` binds property id, counterexample id, raw/minimized digests and status. `PROMOTED_REGRESSION` requires a real scenario id; `OPEN_DEFECT` remains non-green for stack closure.
+
+### Enforcement inventory
+
+`commandf.af02-enforcement-inventory/v1` binds every acceptance-authority role to base blob, entry symbol/job, format, and owned tests.
+
+Semantic validation adds array sort/uniqueness, bijections, cross-file existence, digest equality, path containment, counter equations, exact target/test inventory membership, and policy membership. Schema validation alone is never treated as sufficient.
+
+## 11. Base-controlled anti-forgery gate
+
+AF-02 enforcement inventory covers:
 
 ```text
 AUTHORITY_PROJECTOR
@@ -283,140 +346,50 @@ AF02_ACTION_OR_SCRIPT
 AF02_SCHEMA
 ```
 
-Each entry records role, path, canonical-base blob SHA, language/format, entry symbol/job, and owned tests.
+### 11.1 Bootstrap
 
-### 8.1 Bootstrap exception
+Stack A0 is the only bootstrap unit allowed to introduce the first executable AF-02 verifier/base gate. A0 may contain policy/schema/verifier/gate infrastructure and tests only; no dependent fuzz/property/coverage/mutation outcome may be used to prove A0 itself.
 
-Stack A0 is the one bootstrap unit allowed to introduce the first executable AF-02 verifier/base gate because no earlier executable AF-02 verifier exists. A0 may contain only policy/schema/verifier/gate infrastructure and tests; it cannot carry dependent fuzz/property/coverage/mutation outcomes used for closure.
+### 11.2 Post-A0 canonical base gate
 
-A0 itself is qualified by these canonical planning contracts, existing AF-01 gates, static/unit security tests, external review, guarded merge, then post-merge live read-back.
+After A0 merges, a canonical-default-branch `pull_request_target` workflow with read-only permissions executes only canonical-base workflow/script/verifier/schema blobs. Base and candidate trees are separate; persisted credentials are disabled. Candidate files are data only and MUST NOT be sourced, imported, executed, built, hooked, or evaluated as code.
 
-### 8.2 Canonical base gate after A0
+The base workflow derives base/head from GitHub event/API data, runs for every PR, classifies changed paths itself, selects its own base verifier command, and records base/head SHA/tree plus base workflow/verifier/schema/enforcement-inventory blob identities, fixed argv digest, candidate evidence digests, and result digest.
 
-After A0 merge, the base-controlled gate is a `pull_request_target` workflow that exists on canonical default branch. It executes only canonical-base workflow/script/verifier blobs with read-only permissions.
+No candidate path filter or workflow edit can disable the base gate. No authority change yields explicit `NOT_APPLICABLE_NO_AUTHORITY_CHANGE`; missing/incompatible base verifier, candidate execution attempt, unknown authority path, parse ambiguity, or base/candidate identity mismatch fails.
 
-It obtains base and candidate trees into separate directories, with persisted GitHub credentials disabled. Candidate files are data only; the gate MUST NOT source, import, execute, build, run hooks from, or evaluate code from the candidate checkout.
+Incompatible verifier/schema strengthening must be a dedicated policy/verifier PR with no dependent harness/product change, canonicalized before later dependent work.
 
-The workflow itself—not candidate configuration—derives PR base/head SHAs from GitHub event/API data, validates changed paths, selects the canonical-base verifier command, and records:
+## 12. Deterministic surface discovery
 
-```text
-base SHA/tree
-candidate SHA/tree
-base workflow blob SHA
-base verifier blob SHA
-base schemas blob SHAs
-base enforcement-inventory blob SHA
-candidate evidence digests
-fixed verifier argv digest
-result digest
-```
-
-The base workflow runs for every PR and performs its own changed-path classification; candidate path filters cannot disable it. If no acceptance-authority path changed it emits an explicit terminal `NOT_APPLICABLE_NO_AUTHORITY_CHANGE` result. If an authority path changed, missing base verifier, parse incompatibility, candidate execution attempt, unknown authority path, or comparison ambiguity is failure.
-
-A deliberate incompatible strengthening of verifier/schema authority must be a dedicated policy/verifier PR with no dependent harness/product change. Once canonical, later work may depend on it.
-
-## 9. Deterministic surface discovery
-
-Source universe is generated from Git tree:
+Source universe is Git-derived tracked UTF-8 Rust under:
 
 ```text
-tracked regular UTF-8 *.rs under crates/**/src/**
-tracked regular UTF-8 *.rs under tools/**/src/**
-minus exact previously canonical reviewed non-product exclusions
+crates/**/src/**/*.rs
+tools/**/src/**/*.rs
 ```
 
-Sort by repository path and hash records `{path,blob_sha}`.
+minus only entries in canonical-base `exclusion-policy.json.production_source_exclusions`.
 
-Canonical parser:
+Canonical parser is `syn=3.0.3`, features `[full,visit]`, exact checksum `53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3`.
 
-```text
-syn =3.0.3
-features = [full, visit]
-registry source = crates.io canonical index
-exact checksum = derived and retained from canonical-base Cargo.lock before implementation
-```
+Scanner parses every source file, ignores comments/string literals as executable findings, visits tracked cfg/dead syntax, resolves module aliases/imports, treats relevant glob imports as candidates, conservatively inspects macros, and converts syntactically uncertain boundary matches into candidates rather than omissions.
 
-Scanner rules:
+Every finding records path/span/category/matcher/enclosing symbol and has exactly one disposition: critical surface or exact source exclusion. Stale, multiply classified, unclassified, or policy-unlisted exclusion fails.
 
-- parse every source file or fail;
-- comments/string literals do not create executable findings;
-- visit cfg-disabled/dead tracked syntax;
-- build module-local import/alias tables;
-- glob imports for boundary crates/modules become candidate findings;
-- macro definitions/invocations are conservatively inspected for frozen boundary tokens;
-- unresolved receiver types use frozen constructor/import plus method-name matcher pairs;
-- uncertain match becomes a candidate finding rather than omission.
+Surface and coverage consume the same source-universe object/digest and the same exclusion-policy digest.
 
-Every finding records file, byte span, category, normalized matcher/callee, enclosing symbol when available. Every finding gets exactly one critical-surface or reviewed-exclusion disposition. Zero/multiple disposition, stale source/span/symbol, or unclassified finding fails.
+## 13. Mutation required-set derivation
 
-Surface and coverage use the same production Rust source universe.
+Before listing, C0 freezes exact target paths, cargo-mutants tool/config/argv/test/timeout identity, and canonical-base exclusion policy.
 
-## 10. Mutation required-set derivation
+Every listed mutant in target scope is REQUIRED unless it matches exactly one canonical-base `mutation_exclusions` entry. No top-N, percentage, operator preference, security-interest subset, or post-result manual selection exists.
 
-Before listing mutants, Stack C0 freezes:
+Stable mutant id hashes source path/blob/span/enclosing function/null, mutation description, mutant diff SHA-256, cargo-mutants tool-lock entry digest, and mutation-policy digest.
 
-```text
-targeted_source_paths[]
-exact reviewed mutation exclusions[]
-exact cargo-mutants tool/config/argv/test/timeout identity
-```
+Every inventory record has exactly one disposition. Required TIMEOUT or UNVIABLE/BUILD_FAILURE is retried and diagnosed; at qualification every required mutant is KILLED or covered by a waiver already canonical before the implementation candidate. Survivor/timeout/unviable/unclassified counts are zero.
 
-Then pinned cargo-mutants JSON inventory is normalized. Every listed mutant whose source path is in target scope is REQUIRED unless it matches exactly one pre-frozen exact exclusion.
-
-There is no top-N, percentage, operator preference, security-priority subset, or post-result selection.
-
-Stable mutant ID hashes canonical fields:
-
-```text
-source_path
-source_blob_sha
-start_line/start_column/end_line/end_column
-enclosing_function_or_null
-mutation_description
-mutant_diff_sha256
-cargo_mutants_tool_lock_entry_sha256
-mutation_policy_sha256
-```
-
-Inventory sorted by mutant ID; duplicate ID or missing disposition fails.
-
-Required TIMEOUT or UNVIABLE/BUILD_FAILURE is retried under the frozen policy and diagnosed. At qualification, every required mutant must be KILLED or have a waiver that was already canonical before the implementation candidate. Survivor/timeout/unviable/unclassified counts are zero.
-
-## 11. Assertion/replay registry
-
-Schema id:
-
-```text
-commandf.af02-assertion-registry/v1
-```
-
-Top level contains only `schema` and `entries`.
-
-Each entry contains exactly:
-
-```text
-assertion_id
-scenario_id
-surface_id
-runner_kind
-manifest_path
-package_or_binary
-cargo_target_or_null
-test_name_or_null
-argv[]
-cwd_repo_relative
-environment_allowlist{}
-expected_outcome
-result_parser_id
-source_paths[]
-config_sha256s[]
-```
-
-Runner kinds only `CARGO_TEST` or `AF02_REPLAY_BINARY`. Shell strings are prohibited. Scenario/assertion relation is bijective. Every referenced surface/path/config/target/test exists at source SHA.
-
-Before replay, the runner inventories the selected test/target independently. Each assertion result records process exit, independently normalized outcome, stdout/stderr digests and structured result digest if any. Producer-supplied normalized outcome is not authority.
-
-## 12. Canonical resource/offline enforcement
+## 14. Resource/offline enforcement
 
 Canonical deterministic proof uses:
 
@@ -430,42 +403,25 @@ stable Rust baseline: 1.97.1
 --pids-limit 256
 --read-only
 --tmpfs /tmp:rw,noexec,nosuid,size=512m
-source checkout: read-only mount
+source: read-only mount
 output: dedicated read-write /af02-output mount
 ```
 
-No Docker socket, host network, privileged mode, device mount, or arbitrary host writable mount.
+No Docker socket, host network, privileged mode, device mount, or arbitrary host writable mount is permitted.
 
-Preflight verifies runtime/image identity, network mode, `memory=805306368`, effective two-CPU quota (`NanoCPUs=2000000000` or semantically equivalent cgroup quota recorded canonically), PidsLimit 256, read-only root, tmpfs size/flags, source RO, output RW.
+Preflight verifies runtime/image identity, network, memory=805306368, effective two CPU quota, PidsLimit=256, read-only root, tmpfs size/flags, source RO/output RW, then proves negative network/source-write/outside-root-write probes and positive output-write probe. Missing/ambiguous evidence fails.
 
-Negative probes inside the same container must prove public network unavailable, source write denied, output write succeeds, and write outside allowed roots denied. Missing probe or ambiguous runtime inspection fails.
+Per-input timeout/input/decompressed/generated/temp-file/subprocess/artifact/corpus limits come from checked-in resource policy. Unclassified host/runner termination is incomplete, never clean rejection.
 
-Per-input timeout/input/decompressed/generated/temp-file/subprocess/artifact/corpus bounds come from checked-in resource policy. A host/runner kill not attributable to a defined surface limit is incomplete, never a clean rejection.
+## 15. Coverage accounting
 
-## 13. Coverage source accounting
+Coverage uses the same source universe and exact canonical-base `production_source_exclusions` as surface discovery. Every production path appears exactly once in the raw merged llvm-cov data, including zero-hit files. Unknown, missing, duplicate-normalized, non-integer, or covered>total records fail.
 
-Coverage source universe equals surface source universe:
+Workspace totals are integer sums; critical surfaces are independently summed from exact frozen source scopes. Macro attribution is to physical tracked production source. Floor is `(covered*100)//total`; zero-total critical scope fails.
 
-```text
-tracked Rust under crates/**/src/** and tools/**/src/**
-minus exact previously canonical exclusions
-```
+Descriptor/floor/scope/exclusion/command/test-selection change is acceptance-authority change and cannot self-green.
 
-Normalize repository-relative slash paths and reject traversal, absolute/drive/UNC forms, symlink ambiguity and duplicate normalization.
-
-The frozen llvm-cov JSON parser requires one merged dataset and uses physical production file line summaries. Every authoritative production file appears exactly once, including zero-covered files. An unknown production-root report path, missing source path, duplicate path, non-integer count, or `covered > total` fails.
-
-Workspace totals are integer sums. Critical-surface totals are independently summed from their exact frozen source scopes. Macro expansion uses physical tracked source attribution; untracked build output is excluded only by frozen rule.
-
-Floor:
-
-```text
-(covered * 100) // total
-```
-
-Zero-total critical scope fails. Descriptor/floor/scope/exclusion/command/test-selection changes are base-controlled authority changes and cannot self-green.
-
-## 14. Nextest retry-pass provenance
+## 16. Nextest retry-pass provenance
 
 Frozen fixture:
 
@@ -478,31 +434,19 @@ workspace membership: prohibited
 network: denied
 ```
 
-Invocation argv:
+Invocation is exactly:
 
 ```text
-cargo nextest run
---manifest-path tests/assurance/af02-nextest-flake-fixture/Cargo.toml
---profile ci
---retries 2
---flaky-result fail
--E test(af02_retry_pass_is_failure)
+cargo nextest run --manifest-path tests/assurance/af02-nextest-flake-fixture/Cargo.toml --profile ci --retries 2 --flaky-result fail -E test(af02_retry_pass_is_failure)
 ```
 
-The dedicated output mount is created empty by the base-controlled runner with mode 0700 and expected unprivileged UID/GID. Before invocation the runner proves:
+The base-controlled runner creates an empty 0700 output mount, proves JUnit target/state file absent with no symlink components, and sets only the frozen environment allowlist plus `AF02_NEXTEST_STATE_FILE`.
 
-- mount empty except runner-owned directories;
-- configured JUnit target does not exist;
-- no component is symlink;
-- state file does not exist and has no symlink component.
+First attempt atomically `create_new(true)` writes fixed state bytes then fails; retry verifies the same regular non-symlink file/bytes then passes. No clock/RNG/sleep/PID/scheduler/network/previous-run state controls behavior.
 
-Fixture uses only `AF02_NEXTEST_STATE_FILE`. First attempt atomically `create_new(true)` a regular fixed-byte file and intentionally fails. Retry verifies the same regular non-symlink file and bytes, then passes. No clock, RNG, sleep, PID ordering, network, scheduler timing or previous-run state controls the transition.
+After the waited-for process returns, the same runner opens the configured JUnit path with no-follow semantics, verifies regular file/owner/link-count/containment/fresh creation evidence where trustworthy, and binds JUnit/stdout/stderr/process exit into one envelope. Alternate/pre-existing wrapper output is rejected.
 
-After the waited-for nextest process returns, the same runner opens the configured JUnit path directly using no-follow semantics, verifies regular file, expected owner, link count one, containment on dedicated mount, and creation/change timestamp not predating the preflight marker where the platform exposes trustworthy monotonic metadata. It hashes JUnit/stdout/stderr and process envelope together. A wrapper-supplied alternate path is rejected.
-
-Parser requires exactly one selected testcase and valid nextest retry-history representation (`flakyFailure`/`flakyError` according to the pinned 0.9.143 fixture schema), first failure then retry pass, while process exit remains non-zero because `--flaky-result fail` is forced.
-
-Required normalized values:
+Exactly one testcase must show first failure then retry pass via pinned nextest retry-history representation, while process exit is non-zero due to forced flaky failure:
 
 ```text
 first_attempt_class=FAIL
@@ -512,34 +456,34 @@ selected_test_count=1
 process_exit_code != 0
 ```
 
-Missing/malformed/pre-existing JUnit, zero exit, wrong test count/history, state mismatch, path/owner/link failure, or process-binding mismatch fails.
+## 17. Proof reconstruction order
 
-## 15. Proof reconstruction order
+The independent verifier executes:
 
-Independent verifier executes:
-
-1. derive candidate source SHA/tree and canonical base SHA/tree from GitHub/Git;
-2. load canonical-base enforcement inventory/schemas for anti-forgery classification;
-3. classify candidate authority changes before trusting candidate policy;
+1. derive candidate and canonical-base SHA/tree;
+2. load canonical-base enforcement inventory, tool policy, exclusion policy, and all schemas;
+3. classify candidate acceptance-authority changes before trusting candidate policy;
 4. validate candidate contract/schema files under base rules;
-5. reconstruct AF-01 live projections;
-6. reconstruct CF-06 from canonical-base source files;
-7. fetch and reconstruct CF-10 from retained source locators;
-8. verify exact tool acquisition/package identities;
-9. derive source universe and boundary inventory;
-10. verify resource/offline runtime evidence;
-11. validate corpus/assertion inventory and raw replays;
-12. parse raw property/nextest/coverage/mutation/cargo-test evidence;
-13. verify exact-head required-check uniqueness/provenance;
-14. validate the proof JSON Schema and semantic invariants;
-15. construct deterministic object itself from raw evidence;
-16. canonicalize deterministic object and compute `AF02_ADVERSARIAL_SHA256`;
-17. compare producer artifact only after reconstruction; any mismatch or extra/missing deterministic field fails.
+5. reconstruct AF-01, CF-06, and CF-10 authority;
+6. derive expected active tool set from canonical-base tool policy and verify tool-lock membership/provenance;
+7. derive source universe using canonical-base exclusion policy and run boundary discovery;
+8. verify resource/offline runtime evidence;
+9. parse corpus/assertion/fixture/replay objects using closed inventory schemas and verify bijection/outcomes;
+10. parse property counterexample inventory;
+11. parse nextest raw evidence;
+12. parse coverage inventory/raw report using same source/exclusion authority;
+13. parse mutation inventory/results using canonical-base mutation exclusions;
+14. parse canonical cargo-test evidence;
+15. verify exact-head required-check uniqueness/provenance;
+16. validate proof JSON schema and all semantic invariants/cross-digest relationships;
+17. independently construct deterministic object from raw evidence;
+18. canonicalize and compute `AF02_ADVERSARIAL_SHA256`;
+19. compare producer artifact only after reconstruction; mismatch or extra/missing deterministic field fails.
 
-Stochastic observations are validated structurally but excluded from deterministic digest.
+Stochastic observations are structurally validated but excluded from deterministic digest.
 
-Negative tests must cover at least unknown field, malformed type, malformed identity/digest, invalid range, wrong enum, wrong array cardinality/order/uniqueness, mixed conditional tool shape, counter mismatch, path escape, changed raw digest, forged normalized result, forged producer summary, candidate verifier substituted for base verifier, changed base ref, skipped base gate, and stochastic field affecting deterministic digest.
+Negative tests cover at least empty/omitted/substituted tool lock members, wrong tool digest/checksum/features, unlisted/same-candidate exclusion, malformed inventory/assertion types/nullability/order/uniqueness, orphan assertion/scenario/result, malformed identity/digest/range/enum/cardinality, mixed conditional shape, counter mismatch, path escape/symlink ambiguity, changed raw digest, forged normalized result/producer summary, candidate verifier substituted for base, base-ref swap, skipped base gate, and stochastic field affecting deterministic digest.
 
-## 16. Planning-review closure target
+## 18. Planning-review closure target
 
-This planning PR does not claim implementation PASS. It is ready to merge only if a fresh exact-head review confirms no remaining normative hidden choice or false-PASS path, all path-applicable workflows are green, required contexts are unique/provenant, and the guarded merge/post-merge read-back sequence in section 1 completes.
+This planning PR does not claim implementation PASS. It is ready to merge only when a fresh exact-head review finds no remaining substantive hidden choice or false-PASS path, every path-applicable workflow is green, required contexts are unique/provenant, zero substantive threads remain unresolved, and the guarded merge/post-merge live read-back sequence in section 1 completes.
