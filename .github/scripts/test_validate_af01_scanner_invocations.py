@@ -46,7 +46,14 @@ jobs:
       - name: audit
         run: |
           set -euo pipefail
+          set +e
           {VALIDATE.CARGO_AUDIT_RUN}
+          audit_status=$?
+          set -e
+          python3 - "$audit_status" <<'PY'
+          print("fixture")
+          PY
+          test "$audit_status" -eq 0
       - name: zizmor
         uses: {VALIDATE.ZIZMOR_USES}
         with:
@@ -146,6 +153,80 @@ class ScannerInvocationContractTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             VALIDATE.ScannerContractError, "cargo-audit execution exact command"
+        ):
+            self.validate(changed)
+
+    def test_required_scanner_step_condition_is_rejected(self) -> None:
+        cases = {
+            "cargo-deny": (
+                "      - name: cargo deny\n",
+                "      - name: cargo deny\n        if: false\n",
+            ),
+            "cargo-audit-install": (
+                "      - name: install audit\n",
+                "      - name: install audit\n        if: false\n",
+            ),
+            "cargo-audit-execution": (
+                "      - name: audit\n",
+                "      - name: audit\n        if: false\n",
+            ),
+            "zizmor": (
+                "      - name: zizmor\n",
+                "      - name: zizmor\n        if: false\n",
+            ),
+        }
+        for label, (old, new) in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(
+                    VALIDATE.ScannerContractError, "step shape mismatch"
+                ):
+                    self.validate(workflow_text().replace(old, new, 1))
+
+    def test_required_scanner_continue_on_error_is_rejected(self) -> None:
+        cases = {
+            "cargo-deny": (
+                "      - name: cargo deny\n",
+                "      - name: cargo deny\n        continue-on-error: true\n",
+            ),
+            "cargo-audit-install": (
+                "      - name: install audit\n",
+                "      - name: install audit\n        continue-on-error: true\n",
+            ),
+            "cargo-audit-execution": (
+                "      - name: audit\n",
+                "      - name: audit\n        continue-on-error: true\n",
+            ),
+            "zizmor": (
+                "      - name: zizmor\n",
+                "      - name: zizmor\n        continue-on-error: true\n",
+            ),
+        }
+        for label, (old, new) in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(
+                    VALIDATE.ScannerContractError, "step shape mismatch"
+                ):
+                    self.validate(workflow_text().replace(old, new, 1))
+
+    def test_cargo_audit_shell_control_drift_is_rejected(self) -> None:
+        changed = workflow_text().replace(
+            "          set +e\n",
+            "          set +e\n          if false; then\n",
+            1,
+        )
+        with self.assertRaisesRegex(
+            VALIDATE.ScannerContractError, "exact fail-closed audit sequence"
+        ):
+            self.validate(changed)
+
+    def test_quoted_required_scanner_step_key_is_rejected(self) -> None:
+        changed = workflow_text().replace(
+            "        uses: " + VALIDATE.CARGO_DENY_USES,
+            '        "uses": ' + VALIDATE.CARGO_DENY_USES,
+            1,
+        )
+        with self.assertRaisesRegex(
+            VALIDATE.ScannerContractError, "expected exactly one"
         ):
             self.validate(changed)
 
