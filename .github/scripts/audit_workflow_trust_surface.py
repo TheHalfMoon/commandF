@@ -32,6 +32,7 @@ VARIABLE_COMMAND_RE = re.compile(
 ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
 PATH_ASSIGNMENT_RE = re.compile(r"^PATH(?:\+)?=")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
+VARIABLE_WRITE_BUILTINS = frozenset({"getopts", "mapfile", "read", "readarray"})
 ACTION_SOURCE_BUILTINS = frozenset({".", "source"})
 EXECUTION_WRAPPERS = frozenset(
     {"command", "env", "exec", "nice", "nohup", "stdbuf", "sudo", "timeout"}
@@ -385,6 +386,31 @@ def _direct_path_executable_is_unsupported(command: str) -> bool:
     return "/" in command
 
 
+def _nameref_builtin_is_unsupported(command: str, args: list[str]) -> bool:
+    """Reject shell namerefs because they can create an indirect writer for PATH."""
+    if command not in ASSIGNMENT_BUILTINS:
+        return False
+    for arg in args:
+        if arg == "--nameref":
+            return True
+        if arg.startswith("-") and not arg.startswith("--") and "n" in arg[1:]:
+            return True
+    return False
+
+
+def _builtin_writes_path(command: str, args: list[str]) -> bool:
+    """Detect builtins that can write a caller-selected variable and therefore mutate PATH."""
+    if command in VARIABLE_WRITE_BUILTINS:
+        return any(arg == "PATH" for arg in args)
+    if command == "printf":
+        for index, arg in enumerate(args):
+            if arg == "-v" and index + 1 < len(args) and args[index + 1] == "PATH":
+                return True
+            if arg == "-vPATH":
+                return True
+    return False
+
+
 def _path_search_mutation_is_unsupported(tokens: list[str]) -> bool:
     """Reject PATH mutation because bare executable resolution becomes non-local Action authority."""
     index = 0
@@ -404,6 +430,10 @@ def _path_search_mutation_is_unsupported(tokens: list[str]) -> bool:
         return False
     command = _basename(tokens[raw_index])
     args = tokens[raw_index + 1 :]
+    if _nameref_builtin_is_unsupported(command, args):
+        return True
+    if _builtin_writes_path(command, args):
+        return True
     if command in ASSIGNMENT_BUILTINS or command == "env":
         return any(PATH_ASSIGNMENT_RE.match(arg) for arg in args)
     if command == "unset":
