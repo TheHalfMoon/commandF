@@ -100,6 +100,22 @@ class CargoMetadataSummaryTests(unittest.TestCase):
         )
         self.assertEqual(result["duplicates"], {"getrandom": ["0.2.17", "0.4.3"]})
 
+    def test_valid_metadata_reports_clean_status_and_graph_digest(self) -> None:
+        first = SUMMARY.summarize(valid_metadata())
+        second = SUMMARY.summarize(valid_metadata())
+        self.assertTrue(first["ok"])
+        self.assertEqual(first["unknown_license"], [])
+        self.assertEqual(first["non_crates_io"], [])
+        self.assertEqual(first["graph_sha256"], SUMMARY.graph_sha256(first["packages"]))
+        self.assertEqual(first["graph_sha256"], second["graph_sha256"])
+
+    def test_missing_license_on_external_package_fails_closed(self) -> None:
+        metadata = valid_metadata()
+        metadata["packages"][1]["license"] = None
+        result = SUMMARY.summarize(metadata)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["unknown_license"], ["getrandom@0.2.17"])
+
     def test_manifest_dependencies_must_be_an_array(self) -> None:
         metadata = valid_metadata()
         metadata["packages"][0]["dependencies"] = {"name": "hidden"}
