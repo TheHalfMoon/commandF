@@ -30,6 +30,8 @@ jobs:
         run: python3 .github/scripts/audit_workflow_trust.py
       - name: AF-01 executable authority surface audit
         run: python3 .github/scripts/audit_workflow_trust_surface.py
+      - name: AF-01 cross-step environment-channel audit
+        run: python3 .github/scripts/audit_workflow_trust_environment_channels.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
