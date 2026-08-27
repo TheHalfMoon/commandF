@@ -31,6 +31,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
           python3 .github/scripts/test_build_af01_assurance_summary.py
           python3 .github/scripts/test_verify_crate_checksums.py
+          python3 .github/scripts/test_build_af01_assurance_summary_verified.py
           mkdir -p "$AF01_EVIDENCE_DIR"
       - name: Generate exact workflow-trust evidence
         run: |
@@ -58,8 +59,6 @@ jobs:
           cargo fetch --locked
           python3 .github/scripts/verify_crate_checksums.py \
             --inventory "$first_inventory" \
-            --cargo-lock Cargo.lock \
-            --cargo-home "$CARGO_HOME" \
             > "$checksum_evidence"
 
           python3 - <<'PY'
@@ -204,13 +203,13 @@ jobs:
           second=/tmp/assurance-summary-repeat.json
           first_log=/tmp/assurance-summary-first.log
           second_log=/tmp/assurance-summary-second.log
-          python3 .github/scripts/build_af01_assurance_summary.py \
+          python3 .github/scripts/build_af01_assurance_summary_verified.py \
             --evidence-dir "$AF01_EVIDENCE_DIR" \
             --source-sha "$AF01_SOURCE_SHA" \
             --tree-sha "$tree_sha" \
             --output "$first" | tee "$first_log"
           first_line="$(cat "$first_log")"
-          python3 .github/scripts/build_af01_assurance_summary.py \
+          python3 .github/scripts/build_af01_assurance_summary_verified.py \
             --evidence-dir "$AF01_EVIDENCE_DIR" \
             --source-sha "$AF01_SOURCE_SHA" \
             --tree-sha "$tree_sha" \
