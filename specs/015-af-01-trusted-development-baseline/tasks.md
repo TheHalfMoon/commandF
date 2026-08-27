@@ -1,6 +1,6 @@
 # AF-01 Tasks — Trusted Development Baseline
 
-Status: CLOSEOUT_CANDIDATE
+Status: CLOSED_CANONICAL
 
 ## Task-state rules
 
@@ -10,7 +10,7 @@ Status: CLOSEOUT_CANDIDATE
 - No implementation task begins until T005 is canonical.
 - AF-01 cannot close while the live `main` ruleset/branch-policy requirement remains unproven.
 - Phase 4 entered from canonical `main=a683dfaba7feb607145400eaa75d771e5df3c608`, tree `623a5b20eba83c618d4da288677c1cd3d2826f61`, with T043 `CLOSED_CANONICAL`.
-- T054 and T055 are now evidence-complete through convergence PR #51 and its post-merge canonical verification; T056 remains open until this docs-only closeout candidate itself qualifies and merges to canonical `main`.
+- T054, T055, and T056 are evidence-complete. Closeout PR #52 qualified on exact head `65d44c9050e92236ae49c0e8537adc79e178d14e`, merged with an expected-head guard, and canonical post-merge `main=b494cc2f76a3acf1b30770b6c986fefa1f314e35` was re-verified with successful assurance/Scorecard push proof and unchanged live rulesets.
 
 ## Phase 0 — planning and authority
 
@@ -88,9 +88,14 @@ Depends on T043.
   - post-merge `af01-assurance-proof` run `33079909197` and `af01-scorecard` run `33079909183` succeeded on that exact merge SHA;
   - retained assurance artifact `9649667139` binds the exact merge source/tree, recomputes `AF01_ASSURANCE_SHA256=e1359325c5be4bd93cd4833d9cc51bdde6ecb1d5f440b2c30ef68b248ce833e1`, and records clean source status;
   - live assurance ruleset `21652953` and review-governance ruleset `21652974` remain active on `refs/heads/main` with the reviewed semantics.
-- [ ] **T056** Mark `AF-01=CLOSED_CANONICAL` only after T055 evidence is complete.
-  - T055 evidence is complete and retained in `closeout.md`;
-  - this task remains open until the exact docs-only closeout candidate itself qualifies and merges to canonical `main` without content-changing substitution.
+- [x] **T056** Mark `AF-01=CLOSED_CANONICAL` only after T055 evidence is complete.
+  - closeout PR #52 qualified unchanged on exact head `65d44c9050e92236ae49c0e8537adc79e178d14e` with all five path-applicable workflows successful, fresh Qodo/CodeRabbit review truth clean, and zero unresolved substantive review threads;
+  - PR #52 merged with `merge` from the exact qualified head using an expected-head guard;
+  - canonical post-merge `main=b494cc2f76a3acf1b30770b6c986fefa1f314e35`, tree `a7cac5a52d7a6b2b4d89b17018d084c835de312c`;
+  - post-merge `af01-scorecard` run `33084634090` and `af01-assurance-proof` run `33084634098` completed successfully on that exact merge SHA;
+  - retained assurance artifact `9651712618` binds the exact merge source/tree, recomputes `AF01_ASSURANCE_SHA256=755851fa5557a698c2c504c235e9d0b5947a92a15b680fb2bd5a053e675df0be`, and records clean source status;
+  - final owner-authorized live read-back confirms assurance ruleset `21652953` and review-governance ruleset `21652974` remain active on `refs/heads/main` with the reviewed semantics;
+  - T056 post-merge evidence is retained in PR #52 comment `5440980681`.
 
 ## AF-02 handoff retained, not authorized by AF-01 implementation
 
