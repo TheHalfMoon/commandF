@@ -190,7 +190,7 @@ runs:
             "    steps:\n      - uses:", "    steps: [{uses: owner/action@v1}]\n    ignored:\n      - uses:"
         )
         result = self.run_repo(workflow)
-        self.assertIn("unsupported_uses_syntax", self.codes(result))
+        self.assertIn("unsupported_trust_syntax", self.codes(result))
 
     def test_flow_style_action_metadata_uses_fails_closed(self) -> None:
         action = """name: nested
@@ -200,7 +200,7 @@ runs:
   steps: [{uses: owner/action@v1}]
 """
         result = self.run_repo(valid_workflow(), action)
-        self.assertIn("unsupported_uses_syntax", self.codes(result))
+        self.assertIn("unsupported_trust_syntax", self.codes(result))
 
     def test_checkout_credentials_must_be_disabled(self) -> None:
         workflow = valid_workflow().replace(
