@@ -21,9 +21,9 @@ jobs:
       - name: Generate exact locked dependency inventory
         run: |
           set -euo pipefail
-          cargo metadata --locked --format-version 1 > /tmp/commandf-cargo-metadata.json
+          cargo metadata --locked --format-version 1 > /tmp/commandf-dependency-metadata.json
           python3 .github/scripts/summarize_cargo_metadata.py \
-            < /tmp/commandf-cargo-metadata.json \
+            < /tmp/commandf-dependency-metadata.json \
             | tee af01-t020-dependency-inventory.json
       - name: Upload exact dependency inventory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
