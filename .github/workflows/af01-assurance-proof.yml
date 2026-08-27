@@ -77,7 +77,7 @@ jobs:
 
           proof = {
               "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
-              "command": ["cargo", "metadata", "--locked", "--format-version", 1],
+              "command": ["cargo", "metadata", "--locked", "--format-version", "1"],
               "crate_checksum_package_count": checksum_evidence["package_count"],
               "crate_checksums_sha256": hashlib.sha256(checksum_path.read_bytes()).hexdigest(),
               "fetch_command": ["cargo", "fetch", "--locked"],
