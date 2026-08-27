@@ -37,9 +37,9 @@ jobs:
       - name: Generate exact locked dependency evidence
         run: |
           set -euo pipefail
-          cargo metadata --locked --format-version 1 > /tmp/af01-cargo-metadata.json
+          cargo metadata --locked --format-version 1 > /tmp/af01-dependency-metadata.json
           python3 .github/scripts/summarize_cargo_metadata.py \
-            < /tmp/af01-cargo-metadata.json \
+            < /tmp/af01-dependency-metadata.json \
             > "$AF01_EVIDENCE_DIR/dependency-inventory.json"
       - name: Record cargo-deny proof identity
         run: |
