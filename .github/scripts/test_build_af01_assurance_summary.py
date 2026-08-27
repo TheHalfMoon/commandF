@@ -226,7 +226,7 @@ class AssuranceSummaryTests(unittest.TestCase):
         inventory = json.loads(
             (self.evidence / "dependency-inventory.json").read_text(encoding="utf-8")
         )
-        inventory["packages"][1]["version"] = "9.9.9"
+        inventory["packages"][1]["license"] = "Apache-2.0"
         write_json(self.evidence / "dependency-inventory.json", inventory)
         with self.assertRaisesRegex(SUMMARY.AssuranceError, "graph digest does not match"):
             self.build()
@@ -243,6 +243,7 @@ class AssuranceSummaryTests(unittest.TestCase):
     def test_dependency_inventory_must_match_cargo_lock_identities(self) -> None:
         packages = self._inventory_packages()
         packages[1]["version"] = "2.0.0"
+        packages[0]["dependencies"][0]["version"] = "2.0.0"
         self._write_inventory(packages)
         with self.assertRaisesRegex(SUMMARY.AssuranceError, "does not match Cargo.lock"):
             self.build()
