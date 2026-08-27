@@ -1,0 +1,180 @@
+name: af01-assurance-proof
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AF01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  AF01_EVIDENCE_DIR: /tmp/af01-assurance-evidence
+
+jobs:
+  assurance-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: ${{ env.AF01_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Assert exact source and run assurance counterexamples
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AF01_SOURCE_SHA"
+          python3 .github/scripts/test_build_af01_assurance_summary.py
+          mkdir -p "$AF01_EVIDENCE_DIR"
+      - name: Generate exact workflow-trust evidence
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/audit_workflow_trust.py > "$AF01_EVIDENCE_DIR/workflow-trust.json"
+      - name: Generate exact locked dependency evidence
+        run: |
+          set -euo pipefail
+          cargo metadata --locked --format-version 1 > /tmp/af01-cargo-metadata.json
+          python3 .github/scripts/summarize_cargo_metadata.py \
+            < /tmp/af01-cargo-metadata.json \
+            > "$AF01_EVIDENCE_DIR/dependency-inventory.json"
+      - name: Record cargo-deny proof identity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          def sha256(path: str) -> str:
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          proof = {
+              "action_commit": "3c6349835b2b7b196a839186cb8b78e02f7b5f25",
+              "cargo_deny_version": "0.20.2",
+              "cargo_lock_sha256": sha256("Cargo.lock"),
+              "checks": ["advisories", "bans", "licenses", "sources"],
+              "deny_toml_sha256": sha256("deny.toml"),
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
+              "schema": 1,
+          }
+          Path(os.environ["AF01_EVIDENCE_DIR"], "cargo-deny-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+      - name: Enforce cargo-deny dependency policy
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1 / cargo-deny 0.20.2
+        with:
+          command: check
+          arguments: --all-features
+          command-arguments: advisories bans licenses sources
+          log-level: warn
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit exact Cargo.lock and record RustSec identity
+        run: |
+          set -euo pipefail
+          set +e
+          cargo audit --file Cargo.lock --json > "$AF01_EVIDENCE_DIR/cargo-audit.json"
+          audit_status=$?
+          set -e
+          python3 - "$audit_status" <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          status = int(sys.argv[1])
+          db = Path.home() / ".cargo" / "advisory-db"
+          if not (db / ".git").is_dir():
+              raise SystemExit("RustSec advisory database identity is missing")
+          proof = {
+              "advisory_db_commit": subprocess.check_output(
+                  ["git", "-C", str(db), "rev-parse", "HEAD"], text=True
+              ).strip(),
+              "advisory_db_origin": subprocess.check_output(
+                  ["git", "-C", str(db), "remote", "get-url", "origin"], text=True
+              ).strip(),
+              "cargo_audit_version": "0.22.2",
+              "cargo_lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest(),
+              "exit_code": status,
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
+              "schema": 1,
+          }
+          Path(os.environ["AF01_EVIDENCE_DIR"], "cargo-audit-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+          test "$audit_status" -eq 0
+      - name: Record zizmor proof identity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          proof = {
+              "action_commit": "3dc1ecc9bcb9e94e9b2c709687979e1298497054",
+              "advanced_security": False,
+              "head_sha": os.environ["AF01_SOURCE_SHA"],
+              "min_severity": "medium",
+              "online_audits": False,
+              "schema": 1,
+              "zizmor_version": "1.29.0",
+          }
+          Path(os.environ["AF01_EVIDENCE_DIR"], "zizmor-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+      - name: Enforce workflow audit with zizmor
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2 / zizmor 1.29.0
+        with:
+          inputs: .
+          collect: all
+          online-audits: false
+          persona: regular
+          min-severity: medium
+          version: 1.29.0
+          advanced-security: false
+          color: false
+          annotations: false
+          fail-on-no-inputs: true
+      - name: Build deterministic exact-head assurance summary
+        run: |
+          set -euo pipefail
+          tree_sha="$(git rev-parse 'HEAD^{tree}')"
+          first=/tmp/assurance-summary.json
+          second=/tmp/assurance-summary-repeat.json
+          first_line="$(python3 .github/scripts/build_af01_assurance_summary.py \
+            --evidence-dir "$AF01_EVIDENCE_DIR" \
+            --source-sha "$AF01_SOURCE_SHA" \
+            --tree-sha "$tree_sha" \
+            --output "$first")"
+          second_line="$(python3 .github/scripts/build_af01_assurance_summary.py \
+            --evidence-dir "$AF01_EVIDENCE_DIR" \
+            --source-sha "$AF01_SOURCE_SHA" \
+            --tree-sha "$tree_sha" \
+            --output "$second")"
+          test "$first_line" = "$second_line"
+          cmp --silent "$first" "$second"
+          printf '%s\n' "$first_line" | tee /tmp/AF01_ASSURANCE_SHA256.txt
+          git status --porcelain=v1 --untracked-files=all | tee /tmp/af01-source-status.txt
+          test ! -s /tmp/af01-source-status.txt
+      - name: Retain AF-01 assurance proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-assurance-proof
+          path: |
+            /tmp/assurance-summary.json
+            /tmp/AF01_ASSURANCE_SHA256.txt
+            /tmp/af01-source-status.txt
+            /tmp/af01-assurance-evidence/*.json
+          if-no-files-found: error
+          retention-days: 7
