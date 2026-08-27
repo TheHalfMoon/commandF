@@ -34,10 +34,10 @@ registries = []
 # without turning the current lockfile into an opaque skip-list contract.
 multiple-versions = "warn"
 wildcards = "deny"
-# Private workspace path dependencies are repository-owned source, not external
-# version authority. Keep external wildcard requirements denied while allowing
-# the unpublished commandf -> commandf-pkg path edge recorded by T020.
-allow-wildcard-paths = true
+# Keep the wildcard rule effective for every dependency, including private path
+# dependencies. The repository-owned commandf -> commandf-pkg edge carries an
+# exact =0.0.0 requirement in the manifest instead of relying on a global bypass.
+allow-wildcard-paths = false
 highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
