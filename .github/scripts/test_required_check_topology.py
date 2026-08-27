@@ -2,11 +2,19 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "required-checks.json"
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def pull_request_children(lines: list[str]) -> list[str]:
@@ -52,13 +60,13 @@ def assert_universal_required_job(path: Path, job: str) -> None:
     children = pull_request_children(lines)
     if children:
         raise AssertionError(
-            f"{path.relative_to(ROOT)} pull_request trigger is filtered or narrowed: {children!r}"
+            f"{display_path(path)} pull_request trigger is filtered or narrowed: {children!r}"
         )
     start, end = job_range(lines, job)
     for line in lines[start + 1 : end]:
         if line.startswith("    if:"):
             raise AssertionError(
-                f"{path.relative_to(ROOT)} job {job!r} has a job-level conditional and is not universally terminal"
+                f"{display_path(path)} job {job!r} has a job-level conditional and is not universally terminal"
             )
 
 
@@ -96,27 +104,26 @@ class RequiredCheckTopologyTests(unittest.TestCase):
                 assert_universal_required_job(path, job)
 
     def test_counterexample_path_filtered_workflow_is_rejected(self) -> None:
-        with self.subTest("paths"):
-            lines = [
-                "name: example",
-                "on:",
-                "  pull_request:",
-                "    paths:",
-                "      - src/**",
-                "jobs:",
-                "  gate:",
-                "    runs-on: ubuntu-24.04",
-            ]
-            self.assertEqual(pull_request_children(lines), ["paths:", "- src/**"])
+        lines = [
+            "name: example",
+            "on:",
+            "  pull_request:",
+            "    paths:",
+            "      - src/**",
+            "jobs:",
+            "  gate:",
+            "    runs-on: ubuntu-24.04",
+        ]
+        self.assertEqual(pull_request_children(lines), ["paths:", "- src/**"])
 
     def test_counterexample_job_level_if_is_rejected(self) -> None:
-        with self.assertRaisesRegex(AssertionError, "job-level conditional"):
-            with __import__("tempfile").TemporaryDirectory() as directory:
-                path = Path(directory) / "workflow.yml"
-                path.write_text(
-                    "name: example\non:\n  pull_request:\njobs:\n  gate:\n    if: github.actor != 'x'\n    runs-on: ubuntu-24.04\n",
-                    encoding="utf-8",
-                )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.yml"
+            path.write_text(
+                "name: example\non:\n  pull_request:\njobs:\n  gate:\n    if: github.actor != 'x'\n    runs-on: ubuntu-24.04\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(AssertionError, "job-level conditional"):
                 assert_universal_required_job(path, "gate")
 
 
