@@ -161,3 +161,58 @@ jobs:
               raise SystemExit("cargo-audit exit evidence is missing")
           sys.exit(int(path.read_text(encoding="utf-8").strip()))
           PY
+
+  zizmor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+      - name: Record zizmor policy identity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          proof = {
+              "action_commit": "3dc1ecc9bcb9e94e9b2c709687979e1298497054",
+              "action_release": "v0.6.2",
+              "advanced_security": False,
+              "collect": "all",
+              "head_sha": os.environ["GITHUB_SHA"],
+              "min_severity": "medium",
+              "online_audits": False,
+              "schema": 1,
+              "zizmor_version": "1.29.0",
+          }
+          Path("af01-zizmor-proof.json").write_text(
+              json.dumps(proof, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(proof, indent=2, sort_keys=True))
+          PY
+      - name: Audit workflows and Actions with zizmor
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2 / zizmor 1.29.0
+        with:
+          inputs: .
+          collect: all
+          online-audits: false
+          persona: regular
+          min-severity: medium
+          version: 1.29.0
+          token: ""
+          advanced-security: false
+          color: false
+          annotations: false
+          fail-on-no-inputs: true
+      - name: Upload zizmor policy identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-zizmor-proof
+          path: af01-zizmor-proof.json
+          if-no-files-found: error
+          retention-days: 7
