@@ -17,8 +17,8 @@ from typing import Iterable
 
 import audit_workflow_trust as core
 
-SHELL_HEREDOC_RE = re.compile(
-    r"(?:^|\s)(?:bash|dash|ksh|sh|zsh)\b[^\n;]*(?:<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?)"
+HEREDOC_OPERATOR_RE = re.compile(
+    r"<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?"
 )
 DOUBLE_BRACKET_RE = re.compile(r"\[\[(?:(?!\]\]).)*\]\]", re.DOTALL)
 ACTION_LOCAL_SCRIPT_RE = re.compile(
@@ -30,6 +30,10 @@ VARIABLE_COMMAND_RE = re.compile(
 )
 ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
 ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
+ACTION_SOURCE_BUILTINS = frozenset({".", "source"})
+SHELL_HEREDOC_WRAPPERS = frozenset(
+    {"command", "env", "exec", "nice", "nohup", "stdbuf", "sudo", "timeout"}
+)
 
 
 def _finding(code: str, path: str, scope: str, detail: str) -> core.Finding:
@@ -40,13 +44,66 @@ def _scripts(lines: list[str]) -> list[str]:
     return core._run_scripts(lines, -1, len(lines))
 
 
+def _basename(token: str) -> str:
+    return token.rsplit("/", 1)[-1]
+
+
+def _raw_executable_index(tokens: list[str]) -> int | None:
+    index = 0
+    while index < len(tokens) and core.SHELL_ASSIGNMENT_RE.fullmatch(tokens[index]):
+        index += 1
+    while index < len(tokens) and tokens[index] in core.SHELL_CONTROL_WORDS:
+        index += 1
+    return index if index < len(tokens) else None
+
+
+def _heredoc_prefix_executes_shell(prefix: str) -> bool:
+    """Recognize fixed, absolute-path, and wrapped shell interpreters before a heredoc."""
+    try:
+        tokens = shlex.split(prefix, comments=True, posix=True)
+    except ValueError:
+        # A shell-looking executable prefix that cannot be parsed is executable authority and must
+        # not silently become heredoc data.
+        return bool(
+            re.search(
+                r"(?:^|\s|/)(?:bash|dash|ksh|sh|zsh)(?:\s|$)",
+                prefix,
+            )
+        )
+    if not tokens:
+        return False
+
+    command_index = core._command_token_index(tokens)
+    if command_index is not None and command_index < len(tokens):
+        command = tokens[command_index]
+        if _basename(command) in core.SHELL_INTERPRETERS:
+            return True
+        # Unknown executable indirection can select a shell and the heredoc body would otherwise be
+        # removed by the core Cargo scanner.
+        if "$" in command or "`" in command:
+            return True
+
+    raw_index = _raw_executable_index(tokens)
+    if raw_index is None:
+        return False
+    if _basename(tokens[raw_index]) not in SHELL_HEREDOC_WRAPPERS:
+        return False
+    # Fail closed on wrapper forms the core constrained normalizer does not fully understand (for
+    # example `env -u NAME bash` or an absolute `/usr/bin/env` wrapper).
+    return any(_basename(token) in core.SHELL_INTERPRETERS for token in tokens[raw_index + 1 :])
+
+
 def _shell_heredoc_findings(path: str, scope: str, script: str) -> list[core.Finding]:
     findings: list[core.Finding] = []
     for line in script.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        if SHELL_HEREDOC_RE.search(stripped):
+        matched = HEREDOC_OPERATOR_RE.search(stripped)
+        if matched is None:
+            continue
+        prefix = stripped[: matched.start()]
+        if _heredoc_prefix_executes_shell(prefix):
             findings.append(
                 _finding(
                     "unsupported_shell_heredoc",
@@ -148,6 +205,15 @@ def _direct_cargo_findings(
 
         command_index = core._command_token_index(tokens)
         if command_index is None or command_index >= len(tokens):
+            if any(core.CARGO_WORD_RE.search(token) for token in tokens):
+                findings.append(
+                    _finding(
+                        "unsupported_cargo_indirect",
+                        path,
+                        scope,
+                        f"Cargo appears without a statically executable command: {segment}",
+                    )
+                )
             continue
         command = tokens[command_index]
 
@@ -177,7 +243,19 @@ def _direct_cargo_findings(
             )
             continue
 
-        if command in core.DYNAMIC_COMMAND_BUILTINS:
+        if "$" in command or "`" in command:
+            findings.append(
+                _finding(
+                    "unsupported_cargo_indirect",
+                    path,
+                    scope,
+                    f"dynamic executable path can resolve to Cargo: {segment}",
+                )
+            )
+            continue
+
+        command_basename = _basename(command)
+        if command_basename in core.DYNAMIC_COMMAND_BUILTINS:
             findings.append(
                 _finding(
                     "unsupported_cargo_indirect",
@@ -187,7 +265,7 @@ def _direct_cargo_findings(
                 )
             )
             continue
-        if command in core.SHELL_INTERPRETERS and "-c" in tokens[command_index + 1 :]:
+        if command_basename in core.SHELL_INTERPRETERS and "-c" in tokens[command_index + 1 :]:
             findings.append(
                 _finding(
                     "unsupported_cargo_indirect",
@@ -198,7 +276,17 @@ def _direct_cargo_findings(
             )
             continue
 
-        if not (command == "cargo" or command.rsplit("/", 1)[-1] == "cargo"):
+        is_direct_cargo = command == "cargo" or command_basename == "cargo"
+        if not is_direct_cargo:
+            if any(core.CARGO_WORD_RE.search(token) for token in tokens):
+                findings.append(
+                    _finding(
+                        "unsupported_cargo_indirect",
+                        path,
+                        scope,
+                        f"Cargo appears outside the statically executable command position: {segment}",
+                    )
+                )
             continue
 
         subcommand_index = command_index + 1
@@ -218,6 +306,14 @@ def _direct_cargo_findings(
         if subcommand in core.CARGO_INFO_FLAGS and subcommand_index == len(tokens) - 1:
             continue
         if subcommand.startswith("-"):
+            findings.append(
+                _finding(
+                    "unsupported_cargo_syntax",
+                    path,
+                    scope,
+                    f"Cargo global-option syntax requires explicit auditor support: {segment}",
+                )
+            )
             continue
         if subcommand in locked_subcommands and "--locked" not in tokens[command_index:]:
             findings.append(
@@ -229,6 +325,16 @@ def _direct_cargo_findings(
                 )
             )
     return findings
+
+
+def _exact_action_local_target(token: str) -> str | None:
+    matched = ACTION_LOCAL_SCRIPT_RE.fullmatch(token)
+    if matched is None:
+        return None
+    relative = matched.group("path")
+    if relative.startswith("/") or ".." in Path(relative).parts:
+        return None
+    return relative
 
 
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
@@ -243,29 +349,59 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         command_index = core._command_token_index(tokens)
         if command_index is None or command_index >= len(tokens):
             continue
-        if tokens[command_index] not in core.SHELL_INTERPRETERS:
-            continue
+
+        command = tokens[command_index]
+        command_basename = _basename(command)
         args = tokens[command_index + 1 :]
+
+        direct_target = _exact_action_local_target(command)
+        if direct_target is not None:
+            # Arguments can change delegated script behavior; keep the supported delegation shape
+            # intentionally narrow and deterministic.
+            if args:
+                unsupported.append(segment)
+            else:
+                targets.append(direct_target)
+            continue
+        if "GITHUB_ACTION_PATH" in command:
+            unsupported.append(segment)
+            continue
+
+        if command in ACTION_SOURCE_BUILTINS:
+            if len(args) != 1:
+                unsupported.append(segment)
+                continue
+            source_target = _exact_action_local_target(args[0])
+            if source_target is None:
+                unsupported.append(segment)
+            else:
+                targets.append(source_target)
+            continue
+
+        if command_basename not in core.SHELL_INTERPRETERS:
+            continue
         if "-c" in args:
             unsupported.append(segment)
             continue
-        if "<<" in segment:
+        if HEREDOC_OPERATOR_RE.search(segment):
+            # Heredoc authority is rejected separately by _shell_heredoc_findings.
             continue
-        script_arg = next((arg for arg in args if not arg.startswith("-")), None)
-        if script_arg is None:
+        script_positions = [index for index, arg in enumerate(args) if not arg.startswith("-")]
+        if not script_positions:
             unsupported.append(segment)
             continue
-        matched = ACTION_LOCAL_SCRIPT_RE.fullmatch(script_arg)
-        if matched:
-            relative = matched.group("path")
-            if relative.startswith("/") or ".." in Path(relative).parts:
-                unsupported.append(segment)
-            else:
-                targets.append(relative)
+        script_position = script_positions[0]
+        script_arg = args[script_position]
+        target = _exact_action_local_target(script_arg)
+        if target is None:
+            unsupported.append(segment)
             continue
-        # Composite Action shell source must be repository-owned and rooted at GITHUB_ACTION_PATH.
-        # Prefix/suffix expansion, relative/absolute paths, and command substitution fail closed.
-        unsupported.append(segment)
+        # Any remaining positional arguments can influence the delegated script and are not part of
+        # the supported static delegation subset.
+        if any(not arg.startswith("-") for arg in args[script_position + 1 :]):
+            unsupported.append(segment)
+            continue
+        targets.append(target)
     return sorted(set(targets)), sorted(set(unsupported))
 
 
