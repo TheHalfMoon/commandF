@@ -8,7 +8,11 @@ commandF is currently developed from the canonical `main` branch. Until a stable
 
 Please do not publish exploit details, credentials, private data, or a working proof of concept in a public issue.
 
-Prefer GitHub's private vulnerability-reporting flow for this repository when the **Report a vulnerability** option is available under the repository Security tab. Include:
+Prefer GitHub's private vulnerability-reporting flow for this repository when available:
+
+https://github.com/TheHalfMoon/commandF/security/advisories/new
+
+Include:
 
 - the affected commandF component and exact commit or release identity;
 - the security property that can be violated;
@@ -17,7 +21,7 @@ Prefer GitHub's private vulnerability-reporting flow for this repository when th
 - any known workaround or containment;
 - whether the report contains embargo-sensitive details.
 
-If the private reporting control is not available, open a public issue containing only a request for a private security contact and non-sensitive routing information. Do not include exploit steps or sensitive evidence in that issue.
+If GitHub does not offer the private reporting control for this repository, open a public issue containing only a request for a private security contact and non-sensitive routing information. Do not include exploit steps or sensitive evidence in that issue.
 
 ## Scope
 
