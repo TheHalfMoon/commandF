@@ -83,3 +83,12 @@ jobs:
           path: af01-cargo-deny-proof.json
           if-no-files-found: error
           retention-days: 7
+
+  cargo-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # placeholder-invalid
