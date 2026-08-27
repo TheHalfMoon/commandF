@@ -1,0 +1,93 @@
+name: af01-scorecard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 3 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install digest-verified OpenSSF Scorecard 5.5.0
+        run: |
+          set -euo pipefail
+          archive=/tmp/scorecard_5.5.0_linux_amd64.tar.gz
+          install_dir=/tmp/af01-scorecard-cli
+          curl --fail --location --silent --show-error \
+            https://github.com/ossf/scorecard/releases/download/v5.5.0/scorecard_5.5.0_linux_amd64.tar.gz \
+            --output "$archive"
+          printf '%s  %s\n' \
+            '83b90a05c1540ef1390db1cd5711e5fd04be9c1d8537fb84d39d02092d6a8dff' \
+            "$archive" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir"
+          "$install_dir/scorecard" version
+      - name: Run Scorecard against exact checked-out source
+        run: |
+          set -euo pipefail
+          /tmp/af01-scorecard-cli/scorecard \
+            --local=. \
+            --format=json \
+            --show-details \
+            > af01-scorecard-local.json
+      - name: Run repository-aware Scorecard posture scan
+        env:
+          GITHUB_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          /tmp/af01-scorecard-cli/scorecard \
+            --repo="github.com/${GITHUB_REPOSITORY}" \
+            --checks=Branch-Protection,Dangerous-Workflow,Dependency-Update-Tool,Pinned-Dependencies,Security-Policy,Token-Permissions,Vulnerabilities \
+            --format=json \
+            --show-details \
+            > af01-scorecard-repository.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          local = json.loads(Path("af01-scorecard-local.json").read_text(encoding="utf-8"))
+          remote = json.loads(Path("af01-scorecard-repository.json").read_text(encoding="utf-8"))
+          local_required = {
+              "Dangerous-Workflow",
+              "Dependency-Update-Tool",
+              "Pinned-Dependencies",
+              "Security-Policy",
+              "Token-Permissions",
+              "Vulnerabilities",
+          }
+          remote_expected = local_required | {"Branch-Protection"}
+          local_checks = local.get("checks")
+          remote_checks = remote.get("checks")
+          if not isinstance(local_checks, list) or not isinstance(remote_checks, list):
+              raise SystemExit("Scorecard output has no checks array")
+          local_names = {item.get("name") for item in local_checks if isinstance(item, dict)}
+          remote_names = {item.get("name") for item in remote_checks if isinstance(item, dict)}
+          if not local_required.issubset(local_names):
+              raise SystemExit(f"local Scorecard checks missing: {sorted(local_required - local_names)!r}")
+          if remote_names != remote_expected:
+              raise SystemExit(f"repository Scorecard checks mismatch: {sorted(remote_names)!r}")
+          if remote.get("repo", {}).get("name") != "github.com/TheHalfMoon/commandF":
+              raise SystemExit(f"unexpected repository identity: {remote.get('repo')!r}")
+          PY
+      - name: Retain per-check Scorecard evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af01-scorecard
+          path: |
+            af01-scorecard-local.json
+            af01-scorecard-repository.json
+          if-no-files-found: error
+          retention-days: 7

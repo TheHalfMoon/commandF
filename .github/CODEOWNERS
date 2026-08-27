@@ -1,0 +1,4 @@
+# AF-01 trusted workflow/governance ownership boundary.
+# GitHub evaluates CODEOWNERS from the pull request base branch, so a PR cannot
+# weaken these ownership requirements by editing this file in the same change.
+/.github/ @TheHalfMoon
