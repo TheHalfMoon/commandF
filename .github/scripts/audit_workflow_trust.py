@@ -27,11 +27,18 @@ QUOTED_PERMISSION_KEY_RE = re.compile(r"^(?: {4})?[\"']permissions[\"']\s*:")
 FLOW_SERVICES_RE = re.compile(r"^\s{4}services\s*:\s*[\[{]")
 BLOCK_SCALAR_RE = re.compile(r":\s*[|>][+-]?\s*(?:#.*)?$")
 SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
+SHELL_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
+BARE_DYNAMIC_COMMAND_RE = re.compile(r"^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$")
+CARGO_WORD_RE = re.compile(r"(?<![A-Za-z0-9_])cargo(?![A-Za-z0-9_])")
 
 LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
     {"bench", "build", "check", "clippy", "doc", "metadata", "run", "test"}
 )
 CARGO_INFO_FLAGS = frozenset({"--version", "-V"})
+DYNAMIC_COMMAND_BUILTINS = frozenset({"eval", "alias"})
+SHELL_COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup"})
+SHELL_INTERPRETERS = frozenset({"bash", "dash", "ksh", "sh", "zsh"})
+SHELL_CONTROL_WORDS = frozenset({"!", "do", "if", "then", "until", "while"})
 BOOLEAN_RULES = frozenset(
     {
         "require_container_digest",
@@ -416,6 +423,84 @@ def _logical_shell_segments(script: str) -> list[str]:
     return [segment.strip() for segment in SHELL_SEPARATOR_RE.split(joined) if segment.strip()]
 
 
+def _command_token_index(tokens: list[str]) -> int | None:
+    """Locate a statically visible executable token in the supported shell subset."""
+    index = 0
+    while index < len(tokens) and SHELL_ASSIGNMENT_RE.fullmatch(tokens[index]):
+        index += 1
+    while index < len(tokens) and tokens[index] in SHELL_CONTROL_WORDS:
+        index += 1
+    if index >= len(tokens):
+        return None
+
+    if tokens[index] == "env":
+        index += 1
+        while index < len(tokens) and (
+            tokens[index].startswith("-") or SHELL_ASSIGNMENT_RE.fullmatch(tokens[index])
+        ):
+            index += 1
+        if index >= len(tokens):
+            return None
+
+    if tokens[index] in SHELL_COMMAND_WRAPPERS:
+        index += 1
+        while index < len(tokens) and tokens[index].startswith("-"):
+            index += 1
+        if index >= len(tokens):
+            return None
+    return index
+
+
+def _indirect_cargo_finding(path: str, job: str, segment: str, tokens: list[str]) -> Finding | None:
+    """Fail closed when shell indirection could hide Cargo from static command analysis."""
+    command_index = _command_token_index(tokens)
+    if command_index is not None:
+        command = tokens[command_index]
+        if (
+            BARE_DYNAMIC_COMMAND_RE.fullmatch(command)
+            or command.startswith("$(")
+            or command.startswith("`")
+        ):
+            return Finding(
+                "unsupported_cargo_indirect",
+                path,
+                job,
+                f"dynamic executable token could resolve to Cargo: {segment}",
+            )
+        if command in DYNAMIC_COMMAND_BUILTINS:
+            return Finding(
+                "unsupported_cargo_indirect",
+                path,
+                job,
+                f"dynamic shell execution is not statically auditable for Cargo: {segment}",
+            )
+        if command in SHELL_INTERPRETERS and "-c" in tokens[command_index + 1 :]:
+            return Finding(
+                "unsupported_cargo_indirect",
+                path,
+                job,
+                f"nested shell execution is not statically auditable for Cargo: {segment}",
+            )
+
+    for token in tokens:
+        if token == "cargo":
+            continue
+        if CARGO_WORD_RE.search(token) and (
+            "=" in token
+            or " " in token
+            or "$(" in token
+            or "`" in token
+            or token.endswith(")")
+        ):
+            return Finding(
+                "unsupported_cargo_indirect",
+                path,
+                job,
+                f"Cargo appears inside an indirect shell token: {segment}",
+            )
+    return None
+
+
 def _cargo_findings(
     path: str,
     job: str,
@@ -427,7 +512,8 @@ def _cargo_findings(
     findings: list[Finding] = []
     for script in _run_scripts(lines, start, end):
         for segment in _logical_shell_segments(script):
-            if "cargo" not in segment:
+            interesting = "cargo" in segment or "$" in segment or "`" in segment
+            if not interesting:
                 continue
             try:
                 tokens = shlex.split(segment, comments=True, posix=True)
@@ -437,9 +523,14 @@ def _cargo_findings(
                         "unsupported_shell_syntax",
                         path,
                         job,
-                        f"cannot safely parse Cargo-containing shell segment: {error}: {segment}",
+                        f"cannot safely parse potentially Cargo-related shell segment: {error}: {segment}",
                     )
                 )
+                continue
+
+            indirect = _indirect_cargo_finding(path, job, segment, tokens)
+            if indirect is not None:
+                findings.append(indirect)
                 continue
 
             for index, token in enumerate(tokens):
