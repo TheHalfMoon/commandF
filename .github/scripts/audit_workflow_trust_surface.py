@@ -21,12 +21,14 @@ SHELL_HEREDOC_RE = re.compile(
     r"(?:^|\s)(?:bash|dash|ksh|sh|zsh)\b[^\n;]*(?:<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*[\"']?)"
 )
 ACTION_LOCAL_SCRIPT_RE = re.compile(
-    r"\$\{?GITHUB_ACTION_PATH\}?/(?P<path>[A-Za-z0-9_./-]+)"
+    r"^\$(?:GITHUB_ACTION_PATH|\{GITHUB_ACTION_PATH\})/"
+    r"(?P<path>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)$"
 )
 VARIABLE_COMMAND_RE = re.compile(
     r"^[\"']?\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})[\"']?$"
 )
 ASSIGNMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<value>.*)$")
+ASSIGNMENT_BUILTINS = frozenset({"declare", "export", "local", "readonly", "typeset"})
 
 
 def _finding(code: str, path: str, scope: str, detail: str) -> core.Finding:
@@ -55,12 +57,50 @@ def _shell_heredoc_findings(path: str, scope: str, script: str) -> list[core.Fin
     return findings
 
 
+def _assignment_class(value: str) -> str:
+    """Classify an executable assignment as Cargo, statically non-Cargo, or unknown."""
+    candidate = value.strip().strip("\"'")
+    if not candidate:
+        return "unknown"
+    basename = candidate.rsplit("/", 1)[-1]
+    if basename == "cargo":
+        return "cargo"
+    if "$(" in candidate or "`" in candidate:
+        return "unknown"
+    # A fixed final path component cannot turn into Cargo even when its parent path is expanded.
+    if basename and "$" not in basename:
+        return "non_cargo"
+    return "unknown"
+
+
+def _record_assignment_tokens(tokens: list[str], states: dict[str, str]) -> None:
+    """Record simple shell assignments, including export/readonly/local/declare/typeset forms."""
+    if not tokens:
+        return
+    candidates: list[str] = []
+    if tokens[0] in ASSIGNMENT_BUILTINS:
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                continue
+            candidates.append(token)
+    else:
+        for token in tokens:
+            if ASSIGNMENT_RE.fullmatch(token):
+                candidates.append(token)
+            else:
+                break
+    for token in candidates:
+        matched = ASSIGNMENT_RE.fullmatch(token)
+        if matched:
+            states[matched.group("name")] = _assignment_class(matched.group("value"))
+
+
 def _direct_cargo_findings(
     path: str, scope: str, script: str, locked_subcommands: set[str]
 ) -> list[core.Finding]:
-    """Audit direct and obviously indirect Cargo in shell source."""
+    """Audit direct Cargo and fail closed on executable indirection that may resolve to Cargo."""
     findings = _shell_heredoc_findings(path, scope, script)
-    cargo_variables: set[str] = set()
+    variable_states: dict[str, str] = {}
 
     for segment in core._logical_shell_segments(script):
         try:
@@ -79,13 +119,7 @@ def _direct_cargo_findings(
         if not tokens:
             continue
 
-        if len(tokens) == 1:
-            assignment = ASSIGNMENT_RE.fullmatch(tokens[0])
-            if assignment:
-                value = assignment.group("value").strip("\"'")
-                if value == "cargo" or value.rsplit("/", 1)[-1] == "cargo":
-                    cargo_variables.add(assignment.group("name"))
-                continue
+        _record_assignment_tokens(tokens, variable_states)
 
         command_index = core._command_token_index(tokens)
         if command_index is None or command_index >= len(tokens):
@@ -95,50 +129,48 @@ def _direct_cargo_findings(
         variable = VARIABLE_COMMAND_RE.fullmatch(command)
         if variable:
             name = variable.group(1) or variable.group(2)
-            if name in cargo_variables:
+            state = variable_states.get(name, "unknown")
+            if state != "non_cargo":
                 findings.append(
                     _finding(
                         "unsupported_cargo_indirect",
                         path,
                         scope,
-                        f"variable-expanded executable resolves to Cargo: {segment}",
+                        f"variable-expanded executable is not proven non-Cargo ({name}={state}): {segment}",
                     )
                 )
             continue
 
         if command.startswith("$(") or command.startswith("`"):
-            if "cargo" in segment:
-                findings.append(
-                    _finding(
-                        "unsupported_cargo_indirect",
-                        path,
-                        scope,
-                        f"command-substituted executable can resolve to Cargo: {segment}",
-                    )
+            findings.append(
+                _finding(
+                    "unsupported_cargo_indirect",
+                    path,
+                    scope,
+                    f"command-substituted executable can resolve to Cargo: {segment}",
                 )
+            )
             continue
 
         if command in core.DYNAMIC_COMMAND_BUILTINS:
-            if "cargo" in segment:
-                findings.append(
-                    _finding(
-                        "unsupported_cargo_indirect",
-                        path,
-                        scope,
-                        f"dynamic shell execution can hide Cargo: {segment}",
-                    )
+            findings.append(
+                _finding(
+                    "unsupported_cargo_indirect",
+                    path,
+                    scope,
+                    f"dynamic shell execution can hide Cargo: {segment}",
                 )
+            )
             continue
         if command in core.SHELL_INTERPRETERS and "-c" in tokens[command_index + 1 :]:
-            if "cargo" in segment:
-                findings.append(
-                    _finding(
-                        "unsupported_cargo_indirect",
-                        path,
-                        scope,
-                        f"nested shell execution can hide Cargo: {segment}",
-                    )
+            findings.append(
+                _finding(
+                    "unsupported_cargo_indirect",
+                    path,
+                    scope,
+                    f"nested shell execution can hide Cargo: {segment}",
                 )
+            )
             continue
 
         if not (command == "cargo" or command.rsplit("/", 1)[-1] == "cargo"):
@@ -175,7 +207,7 @@ def _direct_cargo_findings(
 
 
 def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
-    """Return static GITHUB_ACTION_PATH shell targets and unsupported Action shell delegation."""
+    """Return exact static GITHUB_ACTION_PATH shell targets and unsupported delegation."""
     targets: list[str] = []
     unsupported: list[str] = []
     for segment in core._logical_shell_segments(script):
@@ -198,7 +230,7 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
         if script_arg is None:
             unsupported.append(segment)
             continue
-        matched = ACTION_LOCAL_SCRIPT_RE.search(script_arg)
+        matched = ACTION_LOCAL_SCRIPT_RE.fullmatch(script_arg)
         if matched:
             relative = matched.group("path")
             if relative.startswith("/") or ".." in Path(relative).parts:
@@ -207,8 +239,7 @@ def _action_local_targets(script: str) -> tuple[list[str], list[str]]:
                 targets.append(relative)
             continue
         # Composite Action shell source must be repository-owned and rooted at GITHUB_ACTION_PATH.
-        # Relative, absolute, variable, and command-substituted script paths can resolve to caller
-        # workspace or runtime-controlled authority and therefore fail closed.
+        # Prefix/suffix expansion, relative/absolute paths, and command substitution fail closed.
         unsupported.append(segment)
     return sorted(set(targets)), sorted(set(unsupported))
 
