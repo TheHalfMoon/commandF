@@ -30,11 +30,12 @@ SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
 SHELL_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
 BARE_DYNAMIC_COMMAND_RE = re.compile(r"^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$")
 CARGO_WORD_RE = re.compile(r"(?<![A-Za-z0-9_])cargo(?![A-Za-z0-9_])")
+HEREDOC_RE = re.compile(r"<<(?P<tabs>-)?\s*(?P<quote>['\"]?)(?P<delimiter>[A-Za-z_][A-Za-z0-9_]*)\2")
 DYNAMIC_EXECUTABLE_RE = re.compile(
     r"""^\s*
     (?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)\s+)*
     (?:(?:!|do|if|then|until|while)\s+)*
-    (?:(?:env|command|exec|nohup)(?:\s+-[^\s]+|\s+[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)*\s+)*
+    (?:(?:env|command|exec|nohup|retry)(?:\s+-[^\s]+|\s+[A-Za-z_][A-Za-z0-9_]*=[^\s;|&]+)*\s+)*
     [\"']?
     (?:
         \$(?:[A-Za-z_][A-Za-z0-9_]*(?=[\"']?(?:\s|$))|\{[A-Za-z_][A-Za-z0-9_]*\}(?=[\"']?(?:\s|$)))
@@ -53,7 +54,7 @@ LOCKFILE_CARGO_SUBCOMMANDS = frozenset(
 )
 CARGO_INFO_FLAGS = frozenset({"--version", "-V"})
 DYNAMIC_COMMAND_BUILTINS = frozenset({"eval", "alias"})
-SHELL_COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup"})
+SHELL_COMMAND_WRAPPERS = frozenset({"command", "exec", "nohup", "retry"})
 SHELL_INTERPRETERS = frozenset({"bash", "dash", "ksh", "sh", "zsh"})
 SHELL_CONTROL_WORDS = frozenset({"!", "do", "if", "then", "until", "while"})
 BOOLEAN_RULES = frozenset(
@@ -434,9 +435,28 @@ def _run_scripts(lines: list[str], start: int, end: int) -> list[str]:
     return scripts
 
 
+def _without_heredoc_bodies(script: str) -> str:
+    """Remove heredoc bodies because their contents are data, not shell commands."""
+    kept: list[str] = []
+    pending: list[tuple[str, bool]] = []
+    for line in script.splitlines():
+        if pending:
+            delimiter, strip_tabs = pending[0]
+            candidate = line.lstrip("\t") if strip_tabs else line
+            if candidate == delimiter:
+                pending.pop(0)
+            continue
+
+        kept.append(line)
+        for matched in HEREDOC_RE.finditer(line):
+            pending.append((matched.group("delimiter"), matched.group("tabs") is not None))
+    return "\n".join(kept)
+
+
 def _logical_shell_segments(script: str) -> list[str]:
-    """Join backslash continuations, then split at shell command boundaries."""
-    joined = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", script)
+    """Join backslash continuations, strip heredoc data, then split shell boundaries."""
+    command_text = _without_heredoc_bodies(script)
+    joined = re.sub(r"\\[ \t]*\r?\n[ \t]*", " ", command_text)
     return [segment.strip() for segment in SHELL_SEPARATOR_RE.split(joined) if segment.strip()]
 
 
