@@ -146,6 +146,34 @@ runs:
         findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
         self.assertNotIn("unsupported_trust_syntax", self.codes(findings))
 
+    def test_cargo_version_is_non_lockfile_introspection(self) -> None:
+        text = workflow(
+            "      - name: Version\n"
+            "        run: cargo --version"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        codes = self.codes(findings)
+        self.assertNotIn("unsupported_cargo_syntax", codes)
+        self.assertNotIn("cargo_unlocked", codes)
+
+    def test_toolchain_selected_cargo_version_is_non_lockfile_introspection(self) -> None:
+        text = workflow(
+            "      - name: Version\n"
+            "        run: cargo +1.97.1 --version"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        codes = self.codes(findings)
+        self.assertNotIn("unsupported_cargo_syntax", codes)
+        self.assertNotIn("cargo_unlocked", codes)
+
+    def test_cargo_version_with_extra_tokens_fails_closed(self) -> None:
+        text = workflow(
+            "      - name: Invalid\n"
+            "        run: cargo --version test"
+        )
+        findings = AUDIT.audit_workflow(PATH, text, EXPECTED, POLICY)
+        self.assertIn("unsupported_cargo_syntax", self.codes(findings))
+
 
 if __name__ == "__main__":
     unittest.main()
