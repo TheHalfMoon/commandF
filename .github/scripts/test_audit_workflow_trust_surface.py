@@ -73,6 +73,27 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
         )
         self.assertNotIn("cargo_unlocked", codes(findings))
 
+    def test_exported_cargo_variable_executable_fails_closed(self) -> None:
+        script = 'export tool=cargo\n"$tool" test --workspace'
+        findings = SURFACE._direct_cargo_findings("action.yml", "composite-action", script, LOCKED)
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
+    def test_readonly_cargo_variable_executable_fails_closed(self) -> None:
+        script = 'readonly tool=/usr/bin/cargo\n"$tool" build --workspace'
+        findings = SURFACE._direct_cargo_findings("action.yml", "composite-action", script, LOCKED)
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
+    def test_unknown_variable_executable_fails_closed(self) -> None:
+        findings = SURFACE._direct_cargo_findings(
+            "action.yml", "composite-action", '"$tool" test --workspace', LOCKED
+        )
+        self.assertIn("unsupported_cargo_indirect", codes(findings))
+
+    def test_fixed_non_cargo_variable_executable_is_proven_safe(self) -> None:
+        script = 'binary="$CARGO_TARGET_DIR/debug/commandf"\n"$binary" check fixture'
+        findings = SURFACE._direct_cargo_findings("script.sh", "action-script", script, LOCKED)
+        self.assertNotIn("unsupported_cargo_indirect", codes(findings))
+
     def test_action_dynamic_shell_source_fails_closed(self) -> None:
         findings = SURFACE.audit_action_text(
             "action.yml", action('bash "$SCRIPT"'), LOCKED
@@ -88,6 +109,22 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
     def test_action_relative_shell_source_fails_closed(self) -> None:
         findings = SURFACE.audit_action_text(
             "action.yml", action("bash scripts/build.sh"), LOCKED
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_action_root_script_suffix_expansion_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action('bash "$GITHUB_ACTION_PATH/scripts/build.sh$SUFFIX"'),
+            LOCKED,
+        )
+        self.assertIn("unsupported_action_script", codes(findings))
+
+    def test_action_root_script_prefix_expansion_fails_closed(self) -> None:
+        findings = SURFACE.audit_action_text(
+            "action.yml",
+            action('bash "$PREFIX$GITHUB_ACTION_PATH/scripts/build.sh"'),
+            LOCKED,
         )
         self.assertIn("unsupported_action_script", codes(findings))
 
