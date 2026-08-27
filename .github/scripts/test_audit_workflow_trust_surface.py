@@ -190,6 +190,14 @@ class ShellAuthoritySurfaceTests(unittest.TestCase):
             )
             self.assertTrue(result["ok"], result["findings"])
 
+    def test_live_repository_surface_is_clean(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        policy = json.loads(
+            (root / ".github" / "workflow-trust-policy.json").read_text(encoding="utf-8")
+        )
+        result = SURFACE.audit_repository_surface(root, policy)
+        self.assertTrue(result["ok"], result["findings"])
+
 
 if __name__ == "__main__":
     unittest.main()
