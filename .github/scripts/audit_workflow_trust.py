@@ -20,6 +20,10 @@ USES_RE = re.compile(r"^(\s*)(?:-\s*)?uses:\s*(.+?)\s*$")
 STEP_LIST_RE = re.compile(r"^(\s*)-\s+\S")
 PERMISSION_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(read|write|none)\s*$")
 FLOW_USES_RE = re.compile(r"[\[{,]\s*[\"']?uses[\"']?\s*:")
+QUOTED_USES_RE = re.compile(r"^\s*(?:-\s*)?[\"']uses[\"']\s*:")
+QUOTED_JOB_CONTAINER_RE = re.compile(r"^\s{4}[\"'](?:container|services)[\"']\s*:")
+QUOTED_IMAGE_RE = re.compile(r"^\s*(?:[\"']image[\"'])\s*:")
+FLOW_SERVICES_RE = re.compile(r"^\s{4}services\s*:\s*[\[{]")
 BLOCK_SCALAR_RE = re.compile(r":\s*[|>][+-]?\s*(?:#.*)?$")
 SHELL_SEPARATOR_RE = re.compile(r"(?:\r?\n|&&|\|\||;|(?<!\|)\|(?!\|))")
 
@@ -244,20 +248,45 @@ def _block_scalar_line_indexes(lines: list[str]) -> set[int]:
     return indexes
 
 
-def _unsupported_flow_uses(lines: list[str]) -> list[str]:
-    """Reject flow-style uses keys instead of silently under-parsing them."""
+def _unsupported_trust_syntax(lines: list[str]) -> list[str]:
+    """Reject valid YAML forms that the constrained trust parser cannot safely normalize."""
     block_lines = _block_scalar_line_indexes(lines)
     unsupported: list[str] = []
+    in_job_container = False
+    in_services = False
+
     for index, line in enumerate(lines):
         if index in block_lines:
             continue
         stripped = line.lstrip()
+        indent = _indent(line)
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("run:") or re.match(r"^-\s+run:\s*", stripped):
             continue
-        if FLOW_USES_RE.search(line):
+
+        if QUOTED_USES_RE.search(line) or FLOW_USES_RE.search(line):
             unsupported.append(line.strip())
+            continue
+
+        if indent == 4:
+            in_job_container = False
+            in_services = False
+            if QUOTED_JOB_CONTAINER_RE.search(line) or FLOW_SERVICES_RE.search(line):
+                unsupported.append(line.strip())
+                continue
+            if stripped == "container:":
+                in_job_container = True
+            elif stripped == "services:":
+                in_services = True
+            continue
+
+        if in_job_container and indent == 6 and QUOTED_IMAGE_RE.search(line):
+            unsupported.append(line.strip())
+            continue
+        if in_services and indent == 8 and QUOTED_IMAGE_RE.search(line):
+            unsupported.append(line.strip())
+
     return unsupported
 
 
@@ -500,13 +529,13 @@ def _uses_findings(path: str, lines: list[str], policy: dict) -> list[Finding]:
     if not isinstance(rules, dict):
         return findings
 
-    for syntax in _unsupported_flow_uses(lines):
+    for syntax in _unsupported_trust_syntax(lines):
         findings.append(
             Finding(
-                "unsupported_uses_syntax",
+                "unsupported_trust_syntax",
                 path,
                 "",
-                f"flow-style uses syntax is not supported by the trust parser: {syntax}",
+                f"trust-sensitive YAML syntax is not supported by the constrained parser: {syntax}",
             )
         )
 
