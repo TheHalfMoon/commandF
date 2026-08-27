@@ -44,6 +44,13 @@
           },
           "runner": "ubuntu-24.04",
           "timeout_minutes": 10
+        },
+        "zizmor": {
+          "permissions": {
+            "contents": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
         }
       }
     },
