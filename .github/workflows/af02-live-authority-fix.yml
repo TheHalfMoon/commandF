@@ -1,0 +1,101 @@
+name: af02-live-authority-fix
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-authority-reconstruction
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.repository == 'TheHalfMoon/commandF'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          components: rustfmt
+      - name: Bind authority reconstruction to live GitHub inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/commandf-pkg/tests/af02_authority_reconstruction.rs')
+          text = path.read_text()
+
+          marker = '''fn build_baseline() -> authority::AuthorityBaseline {\n'''
+          helper = r'''fn github_api_bytes(url: &str) -> Vec<u8> {
+              const CANONICAL_API_PREFIX: &str = "https://api.github.com/repos/TheHalfMoon/commandF/";
+              assert!(
+                  url.starts_with(CANONICAL_API_PREFIX),
+                  "refusing non-canonical GitHub authority URL {url}"
+              );
+
+              let response = Command::new("curl")
+                  .args([
+                      "--fail",
+                      "--silent",
+                      "--show-error",
+                      "--proto",
+                      "=https",
+                      "--tlsv1.2",
+                      "--connect-timeout",
+                      "10",
+                      "--max-time",
+                      "30",
+                      "--header",
+                      "Accept: application/vnd.github+json",
+                      "--header",
+                      "X-GitHub-Api-Version: 2022-11-28",
+                      "--header",
+                      "User-Agent: commandF-af02-authority-reconstruction",
+                      url,
+                  ])
+                  .output()
+                  .expect("fetch live GitHub authority response with curl");
+              assert!(
+                  response.status.success(),
+                  "GitHub authority request failed for {url}: {}",
+                  String::from_utf8_lossy(&response.stderr)
+              );
+              response.stdout
+          }
+
+          fn build_baseline() -> authority::AuthorityBaseline {
+          '''
+          if marker not in text:
+              raise SystemExit('build_baseline marker missing')
+          text = text.replace(marker, helper, 1)
+
+          old_retained = '''    let run = parse_json_no_duplicates(RETAINED_RUN).unwrap();\n    verify_workflow_run(&retained, &run).unwrap();\n    let artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();\n    verify_artifacts(&retained, &artifacts).unwrap();\n'''
+          new_retained = '''    let plan = locator_plan(&retained).unwrap();\n    assert_eq!(\n        plan.workflow_run,\n        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080"\n    );\n    assert_eq!(\n        plan.workflow_run_artifacts,\n        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080/artifacts"\n    );\n    let run_bytes = github_api_bytes(&plan.workflow_run);\n    let run = parse_json_no_duplicates(&run_bytes).unwrap();\n    verify_workflow_run(&retained, &run).unwrap();\n    let artifact_bytes = github_api_bytes(&plan.workflow_run_artifacts);\n    let artifacts = parse_json_no_duplicates(&artifact_bytes).unwrap();\n    verify_artifacts(&retained, &artifacts).unwrap();\n'''
+          if old_retained not in text:
+              raise SystemExit('retained fixture baseline block missing')
+          text = text.replace(old_retained, new_retained, 1)
+
+          old_rulesets = '''    let assurance = parse_json_no_duplicates(ASSURANCE_RULESET).unwrap();\n    let review = parse_json_no_duplicates(REVIEW_RULESET).unwrap();\n'''
+          new_rulesets = '''    assert_eq!(authority::ASSURANCE_RULESET_ID, 21652953);\n    assert_eq!(authority::REVIEW_RULESET_ID, 21652974);\n    let assurance_bytes = github_api_bytes(\n        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953",\n    );\n    let review_bytes = github_api_bytes(\n        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974",\n    );\n    let assurance = parse_json_no_duplicates(&assurance_bytes).unwrap();\n    let review = parse_json_no_duplicates(&review_bytes).unwrap();\n'''
+          if old_rulesets not in text:
+              raise SystemExit('ruleset fixture baseline block missing')
+          text = text.replace(old_rulesets, new_rulesets, 1)
+
+          path.write_text(text)
+          PY
+          cargo fmt --all
+          rm .github/workflows/af02-live-authority-fix.yml
+          git add -A
+          git diff --cached --check
+          git diff --cached -- crates/commandf-pkg/tests/af02_authority_reconstruction.rs
+          test "$(git diff --cached --name-only | sort)" = "crates/commandf-pkg/tests/af02_authority_reconstruction.rs"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test(af02): bind baseline to live authority APIs'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
