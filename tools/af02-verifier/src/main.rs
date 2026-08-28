@@ -6,6 +6,9 @@ use commandf_af02_verifier::canonical::{canonical_json_bytes, parse_json_no_dupl
 use commandf_af02_verifier::retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
 };
+use commandf_af02_verifier::surface::{
+    discover_tracked_rust_sources, parse_surface_policy, scan_surface,
+};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -118,6 +121,33 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 retained_projection,
             )?;
             let value = serde_json::to_value(baseline)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "parse-surface-policy" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing surface policy path")?);
+            if args.next().is_some() {
+                return Err("parse-surface-policy accepts exactly one path".into());
+            }
+            let policy = parse_surface_policy(&fs::read(policy_path)?)?;
+            let value = serde_json::to_value(policy)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "scan-surface" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing surface policy path")?);
+            let repo_root = PathBuf::from(args.next().ok_or("missing repository root")?);
+            if args.next().is_some() {
+                return Err("scan-surface accepts exactly a policy path and repository root".into());
+            }
+            let policy = parse_surface_policy(&fs::read(policy_path)?)?;
+            let sources = discover_tracked_rust_sources(&repo_root)?;
+            let findings = scan_surface(&policy, &sources)?;
+            let value = serde_json::to_value(findings)?;
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
