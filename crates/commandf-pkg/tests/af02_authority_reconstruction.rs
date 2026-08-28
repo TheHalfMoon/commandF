@@ -10,7 +10,9 @@ use std::path::PathBuf;
 
 use authority::{project_assurance_ruleset, project_authority, project_cf06, Cf06Source};
 use canonical::canonical_json_bytes;
-use retained::{project_retained, validate_and_parse, verify_artifacts, verify_workflow_run};
+use retained::{
+    locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
+};
 use serde_json::Value;
 
 const MAIN_SHA: &str = "54b9772a3b86464da6f395f8ba8371f364c9bb38";
@@ -86,6 +88,49 @@ fn retained_schema_rejects_candidate_url_authority() {
     let bytes = serde_json::to_vec(&value).unwrap();
     let error = validate_and_parse(&bytes, RETAINED_SCHEMA).unwrap_err();
     assert!(error.to_string().contains("unknown field"));
+}
+
+#[test]
+fn retained_locator_plan_reconstructs_frozen_github_urls() {
+    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let plan = locator_plan(&retained).unwrap();
+
+    assert_eq!(
+        plan.pull_request,
+        "https://api.github.com/repos/TheHalfMoon/commandF/pulls/11"
+    );
+    assert_eq!(
+        plan.retained_head_commit,
+        "https://api.github.com/repos/TheHalfMoon/commandF/commits/5fe10d9859407272acf6649fc3e868d3eb2fbd12"
+    );
+    assert_eq!(
+        plan.retained_base_commit,
+        "https://api.github.com/repos/TheHalfMoon/commandF/commits/5cb1a4c3445c0ebd86654cfb467a5e008e801c3e"
+    );
+    assert_eq!(
+        plan.manifest_contents,
+        "https://api.github.com/repos/TheHalfMoon/commandF/contents/corpus/real-ig/v1/corpus.json?ref=5fe10d9859407272acf6649fc3e868d3eb2fbd12"
+    );
+    assert_eq!(
+        plan.manifest_blob,
+        "https://api.github.com/repos/TheHalfMoon/commandF/git/blobs/655949a8a30d67502dffd624a175d2e8e02b1d1f"
+    );
+    assert_eq!(
+        plan.donor_contents,
+        "https://api.github.com/repos/TheHalfMoon/commandF/contents/donors/cf-10-real-ig-delta-corpus.yaml?ref=5fe10d9859407272acf6649fc3e868d3eb2fbd12"
+    );
+    assert_eq!(
+        plan.donor_blob,
+        "https://api.github.com/repos/TheHalfMoon/commandF/git/blobs/566b46f4e6f467a1ccae3ac810b31956309173b6"
+    );
+    assert_eq!(
+        plan.workflow_run,
+        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080"
+    );
+    assert_eq!(
+        plan.workflow_run_artifacts,
+        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080/artifacts"
+    );
 }
 
 #[test]
