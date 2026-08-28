@@ -184,6 +184,27 @@ The base verifier validates each instance before accepting its digest. Same-cand
 
 Surface and coverage consume the same Git-derived tracked Rust universe under `crates/**/src/**/*.rs` and `tools/**/src/**/*.rs` minus canonical-base source exclusions only.
 
+### 8.1 Deterministic surface matcher resolution
+
+`commandf.af02-surface-policy/v1` matcher fields have one closed meaning. Implementations MUST NOT choose wildcard, substring, heuristic type inference, compiler-semantic resolution, or best-effort fallback behavior that is not defined here.
+
+The scanner parses every Git-tracked source-universe file with the pinned `syn=3.0.3` parser and traverses executable syntax in deterministic source order. `cfg`-disabled and dead-code syntax is still scanned. Comments and the contents of string/byte/character literals never create matches.
+
+For every module, the scanner builds a lexical import table from explicit `use` items before classifying calls. Nested use groups and `as` aliases are expanded deterministically. `crate`, `self`, and `super` are normalized relative to the lexical module path. An explicit alias is therefore semantically identical to spelling its canonical path directly. A glob import is never treated as proof that a name is safe or unrelated: when a candidate identifier could originate from a glob whose canonical root intersects a matcher's `import_roots`, the scanner emits an **uncertain finding** for that matcher. Uncertain findings require the same exact critical-surface or reviewed-exclusion disposition as definite findings; uncertainty can never suppress a finding.
+
+`import_roots` contains exact canonical owner paths. Matching is exact after the resolution rules above; roots, callable names, and method names use no wildcard, prefix, suffix, regex, case folding, or substring semantics.
+
+Matcher kinds are frozen as follows:
+
+- `PATH_CALL`: `callee_or_method` is one exact final callable identifier. A call expression matches when its alias-expanded canonical callee path is exactly `<import_root>::<callee_or_method>` for one listed `import_root`.
+- `TYPE_CONSTRUCTOR`: `callee_or_method` is one exact final type identifier. A struct expression or tuple-struct constructor matches when its alias-expanded canonical type path is exactly `<import_root>::<callee_or_method>` for one listed `import_root`. Associated constructor functions such as `Type::new(...)` are `PATH_CALL`, not `TYPE_CONSTRUCTOR`.
+- `METHOD_CALL`: `callee_or_method` is the exact method identifier. If `receiver_constructor_or_null` is null, every syntactic method call with that identifier is a finding; `import_roots` may provide classification context but cannot suppress it. If `receiver_constructor_or_null` is non-null, it is one exact constructor-function identifier. The scanner may prove receiver ownership only from (a) a direct receiver constructor call whose canonical path is `<import_root>::<receiver_constructor_or_null>`, or (b) an immutable `let` binding in the same lexical block initialized by that exact constructor and not reassigned before the method call. If the method name matches but ownership cannot be proved under those two syntactic cases—including parameters, `self`/field receivers, returned values, mutable/reassigned bindings, macro-produced receivers, or cross-function dataflow—the scanner emits an uncertain finding rather than ignoring the call. If ownership is provably a different canonical root, the matcher does not match.
+- `MACRO_TOKEN`: `callee_or_method` is the exact macro identifier. A macro invocation matches when its alias-expanded macro path is exactly `<import_root>::<callee_or_method>` for one listed `import_root`. Literal token contents are not scanned as Rust source. Opaque or nested macro tokens cannot be used to prove absence of a boundary; if a policy-relevant callable identity is syntactically ambiguous because of macro expansion, the scanner emits an uncertain finding.
+
+A finding identity is deterministic on one source tree and is keyed by normalized repository path, pre-order executable-syntax ordinal within that file, and `matcher_id`. Definite and uncertain findings occupy the same identity domain. Duplicate identities, a single syntax node classified by multiple incompatible dispositions, unresolved uncertainty, or a stale policy entry fail closed.
+
+A source-policy witness proves only that a policy matcher is grounded in a live canonical-base blob; it does not whitelist other calls in that file. Every current or future scanner finding produced by these semantics still requires an explicit disposition. `SURFACE_UNMATCHED_KNOWN_BOUNDARY` includes alias spelling, glob-import ambiguity, unresolved method receivers, and macro ambiguity as negative cases; none may disappear from scanner output because resolution is incomplete.
+
 Mutation selection is exactly every cargo-mutants-listed mutant inside frozen target paths minus exact pre-frozen exclusions. No top-N, percentage, operator preference or post-result selection exists.
 
 Coverage descriptor/floors, mutation target/timeout/waiver bindings, corpus limits/provenance and resource units/ranges are schema-bound before observations. Enforcement role membership and activation-stack closure are schema/semantic-contract bound before a role becomes qualification authority.
