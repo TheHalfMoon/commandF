@@ -1,0 +1,14 @@
+{
+  "schema": "commandf.af02-exclusion-policy/v1",
+  "policy_base_sha": "2b4033e237a5c74f3c45c12fbc7e7bfdc88067b1",
+  "policy_base_tree": "804ce63c15edb501574bd4aba9a9aadc5bfb07f3",
+  "production_source_exclusions": [],
+  "mutation_exclusions": [],
+  "rules": {
+    "surface_and_coverage_share_production_source_exclusions": true,
+    "new_exclusion_requires_prior_canonical_policy_change": true,
+    "same_candidate_exclusion_cannot_make_dependent_evidence_green": true,
+    "post_result_exclusion_creation_prohibited": true,
+    "unlisted_exclusion_prohibited": true
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "schema": "commandf.af02-tool-policy/v1",
+  "policy_base_sha": "2b4033e237a5c74f3c45c12fbc7e7bfdc88067b1",
+  "policy_base_tree": "804ce63c15edb501574bd4aba9a9aadc5bfb07f3",
+  "required_final_entry_ids": [
+    "arbitrary",
+    "cargo-fuzz",
+    "cargo-llvm-cov",
+    "cargo-mutants",
+    "cargo-nextest",
+    "libfuzzer-sys",
+    "proptest",
+    "syn-af02-scanner"
+  ],
+  "entries": [
+    {
+      "id": "arbitrary",
+      "kind": "registry_package",
+      "activation_stack": "A1",
+      "package": "arbitrary",
+      "version": "1.4.2",
+      "registry": "crates.io",
+      "default_features": true,
+      "features": ["derive"],
+      "registry_checksum_sha256_or_null": null,
+      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+    },
+    {
+      "id": "cargo-fuzz",
+      "kind": "executable",
+      "activation_stack": "A1",
+      "version": "0.13.2",
+      "upstream_repository": "https://github.com/rust-fuzz/cargo-fuzz",
+      "upstream_commit": "984c861c8dfea28055254c5f1d2659ab2cd63f76",
+      "acquisition_mode": "LOCKED_GIT_REV_SOURCE_BUILD",
+      "build_target": "x86_64-unknown-linux-gnu",
+      "features": []
+    },
+    {
+      "id": "cargo-llvm-cov",
+      "kind": "executable",
+      "activation_stack": "B0",
+      "version": "0.9.0",
+      "upstream_repository": "https://github.com/taiki-e/cargo-llvm-cov",
+      "upstream_commit": "be59056988acd54c7f984b7c85643daea3711b29",
+      "acquisition_mode": "LOCKED_GIT_REV_SOURCE_BUILD",
+      "build_target": "x86_64-unknown-linux-gnu",
+      "features": []
+    },
+    {
+      "id": "cargo-mutants",
+      "kind": "executable",
+      "activation_stack": "C0",
+      "version": "27.1.0",
+      "upstream_repository": "https://github.com/sourcefrog/cargo-mutants",
+      "upstream_commit": "8ab1dc786a1f61a4e370416cc6c68b81a704e917",
+      "acquisition_mode": "LOCKED_GIT_REV_SOURCE_BUILD",
+      "build_target": "x86_64-unknown-linux-gnu",
+      "features": []
+    },
+    {
+      "id": "cargo-nextest",
+      "kind": "executable",
+      "activation_stack": "B0",
+      "version": "0.9.143",
+      "upstream_repository": "https://github.com/nextest-rs/nextest",
+      "upstream_commit": "60fa45f638ffc3f35e74afa65737f45fcd32db2a",
+      "acquisition_mode": "LOCKED_GIT_REV_SOURCE_BUILD",
+      "build_target": "x86_64-unknown-linux-gnu",
+      "features": []
+    },
+    {
+      "id": "libfuzzer-sys",
+      "kind": "registry_package",
+      "activation_stack": "A1",
+      "package": "libfuzzer-sys",
+      "version": "0.4.13",
+      "registry": "crates.io",
+      "default_features": true,
+      "features": [],
+      "registry_checksum_sha256_or_null": null,
+      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+    },
+    {
+      "id": "proptest",
+      "kind": "registry_package",
+      "activation_stack": "A1",
+      "package": "proptest",
+      "version": "1.11.0",
+      "registry": "crates.io",
+      "default_features": true,
+      "features": [],
+      "registry_checksum_sha256_or_null": null,
+      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+    },
+    {
+      "id": "syn-af02-scanner",
+      "kind": "registry_package",
+      "activation_stack": "A0",
+      "package": "syn",
+      "version": "3.0.3",
+      "registry": "crates.io",
+      "default_features": true,
+      "features": ["full", "visit"],
+      "registry_checksum_sha256_or_null": "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3",
+      "checksum_freeze_rule": "FROZEN_FROM_CANONICAL_BASE_CARGO_LOCK"
+    }
+  ],
+  "toolchains": {
+    "product_stable": "1.97.1",
+    "fuzz_only_nightly": "nightly-2026-08-25",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "activation_rule": "An entry becomes mandatory in every qualifying tool lock at and after its activation stack. Before first use, every null registry checksum must be replaced by the exact registry checksum in a dedicated design-freeze policy change that is canonical before dependent execution.",
+  "final_rule": "C1/final AF-02 proof MUST contain exactly all eight required_final_entry_ids and no others."
+}

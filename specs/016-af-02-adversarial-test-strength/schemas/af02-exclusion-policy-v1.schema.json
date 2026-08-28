@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commandf.dev/schemas/af02-exclusion-policy-v1.schema.json",
+  "title": "commandf.af02-exclusion-policy/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","policy_base_sha","policy_base_tree","production_source_exclusions","mutation_exclusions","rules"],
+  "properties": {
+    "schema":{"const":"commandf.af02-exclusion-policy/v1"},
+    "policy_base_sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "policy_base_tree":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "production_source_exclusions":{"type":"array","items":{"$ref":"#/$defs/sourceExclusion"}},
+    "mutation_exclusions":{"type":"array","items":{"$ref":"#/$defs/mutationExclusion"}},
+    "rules": {
+      "type":"object","additionalProperties":false,
+      "required":["surface_and_coverage_share_production_source_exclusions","new_exclusion_requires_prior_canonical_policy_change","same_candidate_exclusion_cannot_make_dependent_evidence_green","post_result_exclusion_creation_prohibited","unlisted_exclusion_prohibited"],
+      "properties": {
+        "surface_and_coverage_share_production_source_exclusions":{"const":true},
+        "new_exclusion_requires_prior_canonical_policy_change":{"const":true},
+        "same_candidate_exclusion_cannot_make_dependent_evidence_green":{"const":true},
+        "post_result_exclusion_creation_prohibited":{"const":true},
+        "unlisted_exclusion_prohibited":{"const":true}
+      }
+    }
+  },
+  "$defs": {
+    "gitSha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "path":{"type":"string","minLength":1,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+    "sourceExclusion": {
+      "type":"object","additionalProperties":false,
+      "required":["exclusion_id","path","reason","owner","introduced_policy_sha","review_reference","removal_condition"],
+      "properties": {
+        "exclusion_id":{"type":"string","pattern":"^SRC-X[0-9]{4}$"},
+        "path":{"$ref":"#/$defs/path"},
+        "reason":{"type":"string","minLength":10},
+        "owner":{"type":"string","minLength":1},
+        "introduced_policy_sha":{"$ref":"#/$defs/gitSha"},
+        "review_reference":{"type":"string","minLength":1},
+        "removal_condition":{"type":"string","minLength":1}
+      }
+    },
+    "mutationExclusion": {
+      "type":"object","additionalProperties":false,
+      "required":["exclusion_id","matcher_sha256","reason","owner","introduced_policy_sha","review_reference","removal_condition"],
+      "properties": {
+        "exclusion_id":{"type":"string","pattern":"^MUT-X[0-9]{4}$"},
+        "matcher_sha256":{"$ref":"#/$defs/sha256"},
+        "reason":{"type":"string","minLength":10},
+        "owner":{"type":"string","minLength":1},
+        "introduced_policy_sha":{"$ref":"#/$defs/gitSha"},
+        "review_reference":{"type":"string","minLength":1},
+        "removal_condition":{"type":"string","minLength":1}
+      }
+    }
+  }
+}

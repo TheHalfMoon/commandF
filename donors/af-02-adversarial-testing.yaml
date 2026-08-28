@@ -1,0 +1,105 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-08-27
+
+sources:
+  - id: rust-fuzz-cargo-fuzz
+    repository: https://github.com/rust-fuzz/cargo-fuzz
+    ref: 984c861c8dfea28055254c5f1d2659ab2cd63f76
+    tag: 0.13.2
+    license: MIT OR Apache-2.0
+    mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
+  - id: sourcefrog-cargo-mutants
+    repository: https://github.com/sourcefrog/cargo-mutants
+    ref: 8ab1dc786a1f61a4e370416cc6c68b81a704e917
+    tag: v27.1.0
+    license: MIT
+    mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
+  - id: taiki-e-cargo-llvm-cov
+    repository: https://github.com/taiki-e/cargo-llvm-cov
+    ref: be59056988acd54c7f984b7c85643daea3711b29
+    tag: v0.9.0
+    license: Apache-2.0 OR MIT
+    mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
+  - id: nextest-rs-nextest
+    repository: https://github.com/nextest-rs/nextest
+    ref: 60fa45f638ffc3f35e74afa65737f45fcd32db2a
+    tag: cargo-nextest-0.9.143
+    license: MIT OR Apache-2.0
+    mode: [DEPEND_DEV_TOOL, STUDY, ADAPT_CONFIG]
+  - id: proptest-rs-proptest
+    repository: https://github.com/proptest-rs/proptest
+    ref: a6f033cf83adfd55557b86e6065e6f4df054ec70
+    version: 1.11.0
+    license: MIT OR Apache-2.0
+    mode: [DEPEND_TEST_ONLY, STUDY, ADAPT_PATTERNS]
+
+adoption_decisions:
+  product_runtime:
+    use: none
+    rationale: AF-02 tools remain development/test assurance only.
+  fuzz:
+    use:
+      - "cargo-fuzz 0.13.2 at 984c861c8dfea28055254c5f1d2659ab2cd63f76"
+      - "libfuzzer-sys =0.4.13"
+      - "arbitrary =1.4.2 features=[derive]"
+      - "nightly-2026-08-25"
+  property:
+    use: [proptest =1.11.0]
+  flaky:
+    use: [cargo-nextest 0.9.143 at 60fa45f638ffc3f35e74afa65737f45fcd32db2a, --retries 2, --flaky-result fail]
+  coverage:
+    use: [cargo-llvm-cov 0.9.0 at be59056988acd54c7f984b7c85643daea3711b29]
+  mutation:
+    use: [cargo-mutants 27.1.0 at 8ab1dc786a1f61a4e370416cc6c68b81a704e917]
+
+immutable_acquisition_contract:
+  executable_mode: LOCKED_GIT_REV_SOURCE_BUILD
+  required_evidence: [exact upstream repository and commit, locked source/build command and dependency digest, installed executable SHA-256, version output SHA-256, compiler/cargo/target/features]
+  prohibited: [latest, branch-only identity, tag-only identity, self-update as retained proof identity, implementation-time acquisition-mode choice]
+
+registry_package_contract:
+  packages:
+    - syn =3.0.3 features=[full,visit] checksum=53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3
+    - proptest =1.11.0 default-features
+    - libfuzzer-sys =0.4.13 default-features
+    - arbitrary =1.4.2 features=[derive]
+  rule: exact crates.io checksum MUST be canonical before the package activation stack executes dependent evidence.
+
+normative_contract:
+  path: specs/016-af-02-adversarial-test-strength/verification-protocol.md
+  policy_files:
+    - specs/016-af-02-adversarial-test-strength/tool-policy.json
+    - specs/016-af-02-adversarial-test-strength/exclusion-policy.json
+    - specs/016-af-02-adversarial-test-strength/waiver-policy.json
+    - specs/016-af-02-adversarial-test-strength/required-check-policy.json
+    - specs/016-af-02-adversarial-test-strength/semantic-contract.json
+    - specs/016-af-02-adversarial-test-strength/verifier-input-policy.json
+  inventory_files:
+    - specs/016-af-02-adversarial-test-strength/enforcement-inventory.json
+  schema_files:
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-authority-baseline-v2.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-core-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-tool-lock-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-exclusion-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-evidence-inventories-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-waiver-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-provenance-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-retained-authority-sources-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-semantic-contract-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-verifier-input-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-surface-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-resource-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-corpus-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-coverage-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-mutation-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-enforcement-inventory-v1.schema.json
+
+review_before_copy:
+  - verify exact source path and commit before copying upstream code
+  - preserve license notices where required
+  - prefer configuration/executable-tool adoption over vendoring
+  - re-audit every version/acquisition change through AF-01 workflow/dependency policy
+  - no adopted tool becomes commandF semantic authority

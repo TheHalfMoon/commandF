@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commandf.dev/schemas/af02-tool-policy-v1.schema.json",
+  "title": "commandf.af02-tool-policy/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","policy_base_sha","policy_base_tree","required_final_entry_ids","entries","toolchains","activation_rule","final_rule"],
+  "properties": {
+    "schema": {"const": "commandf.af02-tool-policy/v1"},
+    "policy_base_sha": {"$ref": "#/$defs/gitSha"},
+    "policy_base_tree": {"$ref": "#/$defs/gitSha"},
+    "required_final_entry_ids": {
+      "const": ["arbitrary","cargo-fuzz","cargo-llvm-cov","cargo-mutants","cargo-nextest","libfuzzer-sys","proptest","syn-af02-scanner"]
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"$ref":"#/$defs/arbitrary"},
+        {"$ref":"#/$defs/cargoFuzz"},
+        {"$ref":"#/$defs/cargoLlvmCov"},
+        {"$ref":"#/$defs/cargoMutants"},
+        {"$ref":"#/$defs/cargoNextest"},
+        {"$ref":"#/$defs/libfuzzerSys"},
+        {"$ref":"#/$defs/proptest"},
+        {"$ref":"#/$defs/synScanner"}
+      ],
+      "items": false
+    },
+    "toolchains": {
+      "type":"object","additionalProperties":false,
+      "required":["product_stable","fuzz_only_nightly","target"],
+      "properties": {
+        "product_stable":{"const":"1.97.1"},
+        "fuzz_only_nightly":{"const":"nightly-2026-08-25"},
+        "target":{"const":"x86_64-unknown-linux-gnu"}
+      }
+    },
+    "activation_rule":{"type":"string","minLength":1},
+    "final_rule":{"type":"string","minLength":1}
+  },
+  "$defs": {
+    "gitSha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+    "sha256OrNull":{"oneOf":[{"type":"string","pattern":"^[0-9a-f]{64}$"},{"type":"null"}]},
+    "registryBase": {
+      "type":"object","additionalProperties":false,
+      "required":["id","kind","activation_stack","package","version","registry","default_features","features","registry_checksum_sha256_or_null","checksum_freeze_rule"],
+      "properties": {
+        "id":{"type":"string"},"kind":{"const":"registry_package"},"activation_stack":{"enum":["A0","A1","B0","C0"]},
+        "package":{"type":"string"},"version":{"type":"string"},"registry":{"const":"crates.io"},"default_features":{"type":"boolean"},
+        "features":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+        "registry_checksum_sha256_or_null":{"$ref":"#/$defs/sha256OrNull"},"checksum_freeze_rule":{"type":"string","minLength":1}
+      }
+    },
+    "execBase": {
+      "type":"object","additionalProperties":false,
+      "required":["id","kind","activation_stack","version","upstream_repository","upstream_commit","acquisition_mode","build_target","features"],
+      "properties": {
+        "id":{"type":"string"},"kind":{"const":"executable"},"activation_stack":{"enum":["A1","B0","C0"]},"version":{"type":"string"},
+        "upstream_repository":{"type":"string","pattern":"^https://github\\.com/[^/]+/[^/]+$"},"upstream_commit":{"$ref":"#/$defs/gitSha"},
+        "acquisition_mode":{"const":"LOCKED_GIT_REV_SOURCE_BUILD"},"build_target":{"const":"x86_64-unknown-linux-gnu"},
+        "features":{"type":"array","items":{"type":"string"},"uniqueItems":true}
+      }
+    },
+    "arbitrary":{"allOf":[{"$ref":"#/$defs/registryBase"},{"properties":{"id":{"const":"arbitrary"},"activation_stack":{"const":"A1"},"package":{"const":"arbitrary"},"version":{"const":"1.4.2"},"default_features":{"const":true},"features":{"const":["derive"]}}}]},
+    "libfuzzerSys":{"allOf":[{"$ref":"#/$defs/registryBase"},{"properties":{"id":{"const":"libfuzzer-sys"},"activation_stack":{"const":"A1"},"package":{"const":"libfuzzer-sys"},"version":{"const":"0.4.13"},"default_features":{"const":true},"features":{"const":[]}}}]},
+    "proptest":{"allOf":[{"$ref":"#/$defs/registryBase"},{"properties":{"id":{"const":"proptest"},"activation_stack":{"const":"A1"},"package":{"const":"proptest"},"version":{"const":"1.11.0"},"default_features":{"const":true},"features":{"const":[]}}}]},
+    "synScanner":{"allOf":[{"$ref":"#/$defs/registryBase"},{"properties":{"id":{"const":"syn-af02-scanner"},"activation_stack":{"const":"A0"},"package":{"const":"syn"},"version":{"const":"3.0.3"},"default_features":{"const":true},"features":{"const":["full","visit"]},"registry_checksum_sha256_or_null":{"const":"53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"}}}]},
+    "cargoFuzz":{"allOf":[{"$ref":"#/$defs/execBase"},{"properties":{"id":{"const":"cargo-fuzz"},"activation_stack":{"const":"A1"},"version":{"const":"0.13.2"},"upstream_repository":{"const":"https://github.com/rust-fuzz/cargo-fuzz"},"upstream_commit":{"const":"984c861c8dfea28055254c5f1d2659ab2cd63f76"},"features":{"const":[]}}}]},
+    "cargoLlvmCov":{"allOf":[{"$ref":"#/$defs/execBase"},{"properties":{"id":{"const":"cargo-llvm-cov"},"activation_stack":{"const":"B0"},"version":{"const":"0.9.0"},"upstream_repository":{"const":"https://github.com/taiki-e/cargo-llvm-cov"},"upstream_commit":{"const":"be59056988acd54c7f984b7c85643daea3711b29"},"features":{"const":[]}}}]},
+    "cargoMutants":{"allOf":[{"$ref":"#/$defs/execBase"},{"properties":{"id":{"const":"cargo-mutants"},"activation_stack":{"const":"C0"},"version":{"const":"27.1.0"},"upstream_repository":{"const":"https://github.com/sourcefrog/cargo-mutants"},"upstream_commit":{"const":"8ab1dc786a1f61a4e370416cc6c68b81a704e917"},"features":{"const":[]}}}]},
+    "cargoNextest":{"allOf":[{"$ref":"#/$defs/execBase"},{"properties":{"id":{"const":"cargo-nextest"},"activation_stack":{"const":"B0"},"version":{"const":"0.9.143"},"upstream_repository":{"const":"https://github.com/nextest-rs/nextest"},"upstream_commit":{"const":"60fa45f638ffc3f35e74afa65737f45fcd32db2a"},"features":{"const":[]}}}]}
+  }
+}
