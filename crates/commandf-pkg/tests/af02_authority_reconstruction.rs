@@ -134,6 +134,69 @@ fn ensure_pinned_commit_available(root: &Path, revision: &str) {
     );
 }
 
+fn github_content_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {
+    assert!(
+        revision.len() == 40
+            && revision
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+        "refusing non-immutable GitHub revision {revision}"
+    );
+    assert!(
+        expected_blob.len() == 40
+            && expected_blob
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+        "invalid expected Git blob identity {expected_blob}"
+    );
+    assert!(
+        !path.starts_with('/')
+            && !path
+                .split('/')
+                .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            && path.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+            }),
+        "refusing unsafe GitHub authority path {path}"
+    );
+
+    let url =
+        format!("https://api.github.com/repos/TheHalfMoon/commandF/contents/{path}?ref={revision}");
+    let response = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--proto",
+            "=https",
+            "--tlsv1.2",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "30",
+            "--header",
+            "Accept: application/vnd.github.raw+json",
+            "--header",
+            "X-GitHub-Api-Version: 2022-11-28",
+            "--header",
+            "User-Agent: commandF-af02-authority-reconstruction",
+            &url,
+        ])
+        .output()
+        .expect("fetch immutable GitHub authority object with curl");
+    assert!(
+        response.status.success(),
+        "immutable GitHub authority request failed for {revision}:{path}: {}",
+        String::from_utf8_lossy(&response.stderr)
+    );
+    assert_eq!(
+        git_blob_sha1_hex(&response.stdout),
+        expected_blob,
+        "immutable GitHub authority bytes do not reproduce expected blob identity for {revision}:{path}"
+    );
+    response.stdout
+}
+
 fn git_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {
     let root = repository_root();
     ensure_pinned_commit_available(&root, revision);
@@ -144,11 +207,9 @@ fn git_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> 
         .args(["rev-parse", &spec])
         .output()
         .expect("run git rev-parse");
-    assert!(
-        resolved.status.success(),
-        "git rev-parse failed for {spec}: {}",
-        String::from_utf8_lossy(&resolved.stderr)
-    );
+    if !resolved.status.success() {
+        return github_content_object_bytes(revision, path, expected_blob);
+    }
     let observed_blob = String::from_utf8(resolved.stdout)
         .expect("git rev-parse UTF-8")
         .trim()
