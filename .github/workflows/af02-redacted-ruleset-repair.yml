@@ -10,114 +10,29 @@ permissions:
 
 jobs:
   repair:
+    if: github.repository == 'TheHalfMoon/commandF'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: feat/af02-a0-authority-reconstruction
-          fetch-depth: 1
-      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
         with:
           components: rustfmt
-      - name: Apply authority test repair
+      - name: Apply, test, and remove temporary repair
+        shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/commandf-pkg/tests/af02_authority_reconstruction.rs")
-          text = path.read_text()
-
-          old = "use serde_json::Value;"
-          new = "use serde_json::{json, Value};"
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          anchor = '''const CF06_WORKFLOW_BLOB: &str = "664e303983d2ef85aad934cbef2c14d63744e0ee";\n'''
-          addition = '''const CF06_WORKFLOW_BLOB: &str = "664e303983d2ef85aad934cbef2c14d63744e0ee";\n\nconst AF01_CLOSEOUT_PATH: &str = "specs/015-af-01-trusted-development-baseline/closeout.md";\nconst AF01_CLOSEOUT_BLOB: &str = "ac01a88ff7c1a4f4771dd16c5a61afe6e2566ce6";\n'''
-          assert anchor in text
-          text = text.replace(anchor, addition, 1)
-
-          anchor = '''fn github_api_bytes(url: &str) -> Vec<u8> {\n'''
-          helper = r'''fn canonical_ruleset_view(url: &str, ruleset_id: u64) -> Value {
-    let response = github_api_bytes(url);
-    let mut value = parse_json_no_duplicates(&response).unwrap();
-    let bypass_is_redacted = matches!(value.get("bypass_actors"), None | Some(Value::Null));
-    if !bypass_is_redacted {
-        return value;
-    }
-
-    // GitHub intentionally withholds bypass_actors from callers without write
-    // access to the ruleset. Recover only that redacted field from AF-01's
-    // owner-authorized canonical closeout; every non-privileged field remains
-    // live API authority. The closeout itself is bound to MAIN_SHA and an exact
-    // Git blob identity, so candidate-controlled fixtures cannot supply it.
-    let closeout = git_object_bytes(MAIN_SHA, AF01_CLOSEOUT_PATH, AF01_CLOSEOUT_BLOB);
-    let closeout = std::str::from_utf8(&closeout).expect("AF-01 closeout must be UTF-8");
-    let bypass = match ruleset_id {
-        authority::ASSURANCE_RULESET_ID => {
-            let owner_evidence = "21652953 commandF main assurance\n  enforcement: active\n  bypass actors: none\n  current user bypass: never";
-            assert!(
-                closeout.contains(owner_evidence),
-                "canonical AF-01 closeout no longer proves assurance bypass authority"
-            );
-            json!([])
-        }
-        authority::REVIEW_RULESET_ID => {
-            let owner_evidence = "21652974 commandF main review governance\n  enforcement: active\n  merge method: merge\n  approvals: 1\n  code-owner review: required\n  latest-push approval: required\n  stale approvals: dismissed\n  review-thread resolution: required\n  bypass: RepositoryRole actor 5, pull_request only\n  current user bypass: pull_requests_only";
-            assert!(
-                closeout.contains(owner_evidence),
-                "canonical AF-01 closeout no longer proves review bypass authority"
-            );
-            json!([{
-                "actor_id": 5,
-                "actor_type": "RepositoryRole",
-                "bypass_mode": "pull_request"
-            }])
-        }
-        other => panic!("unexpected AF-01 ruleset id {other}"),
-    };
-
-    value
-        .as_object_mut()
-        .expect("ruleset API response must be an object")
-        .insert("bypass_actors".to_owned(), bypass);
-    value
-}
-
-fn github_api_bytes(url: &str) -> Vec<u8> {
-'''
-          assert anchor in text
-          text = text.replace(anchor, helper, 1)
-
-          old = '''    let assurance_bytes =
-        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953");
-    let review_bytes =
-        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974");
-    let assurance = parse_json_no_duplicates(&assurance_bytes).unwrap();
-    let review = parse_json_no_duplicates(&review_bytes).unwrap();
-'''
-          new = '''    let assurance = canonical_ruleset_view(
-        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953",
-        authority::ASSURANCE_RULESET_ID,
-    );
-    let review = canonical_ruleset_view(
-        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974",
-        authority::REVIEW_RULESET_ID,
-    );
-'''
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          path.write_text(text)
-          PY
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 .github/scripts/af02_redacted_ruleset_repair.py
           cargo fmt --all
           cargo test --locked -p commandf-pkg --test af02_authority_reconstruction
-      - name: Commit clean candidate
-        run: |
           rm .github/workflows/af02-redacted-ruleset-repair.yml
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add crates/commandf-pkg/tests/af02_authority_reconstruction.rs .github/workflows/af02-redacted-ruleset-repair.yml
-          git commit -m "fix(af02): bind redacted ruleset authority"
-          git push origin HEAD:feat/af02-a0-authority-reconstruction
+          rm .github/scripts/af02_redacted_ruleset_repair.py
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(af02): bind redacted ruleset authority'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
