@@ -192,14 +192,62 @@ fn canonical_cf06_sources() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     )
 }
 
+fn github_api_bytes(url: &str) -> Vec<u8> {
+    const CANONICAL_API_PREFIX: &str = "https://api.github.com/repos/TheHalfMoon/commandF/";
+    assert!(
+        url.starts_with(CANONICAL_API_PREFIX),
+        "refusing non-canonical GitHub authority URL {url}"
+    );
+
+    let response = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--proto",
+            "=https",
+            "--tlsv1.2",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "30",
+            "--header",
+            "Accept: application/vnd.github+json",
+            "--header",
+            "X-GitHub-Api-Version: 2022-11-28",
+            "--header",
+            "User-Agent: commandF-af02-authority-reconstruction",
+            url,
+        ])
+        .output()
+        .expect("fetch live GitHub authority response with curl");
+    assert!(
+        response.status.success(),
+        "GitHub authority request failed for {url}: {}",
+        String::from_utf8_lossy(&response.stderr)
+    );
+    response.stdout
+}
+
 fn build_baseline() -> authority::AuthorityBaseline {
     let (retained_sources, retained_schema) = canonical_retained_contract();
     let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
     assert_eq!(retained.cf10.retained_head, RETAINED_HEAD);
 
-    let run = parse_json_no_duplicates(RETAINED_RUN).unwrap();
+    let plan = locator_plan(&retained).unwrap();
+    assert_eq!(
+        plan.workflow_run,
+        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080"
+    );
+    assert_eq!(
+        plan.workflow_run_artifacts,
+        "https://api.github.com/repos/TheHalfMoon/commandF/actions/runs/31916124080/artifacts"
+    );
+    let run_bytes = github_api_bytes(&plan.workflow_run);
+    let run = parse_json_no_duplicates(&run_bytes).unwrap();
     verify_workflow_run(&retained, &run).unwrap();
-    let artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();
+    let artifact_bytes = github_api_bytes(&plan.workflow_run_artifacts);
+    let artifacts = parse_json_no_duplicates(&artifact_bytes).unwrap();
     verify_artifacts(&retained, &artifacts).unwrap();
 
     let retained_manifest = git_object_bytes(
@@ -215,8 +263,14 @@ fn build_baseline() -> authority::AuthorityBaseline {
     let retained_projection =
         project_retained(&retained, &retained_manifest, &retained_donor).unwrap();
 
-    let assurance = parse_json_no_duplicates(ASSURANCE_RULESET).unwrap();
-    let review = parse_json_no_duplicates(REVIEW_RULESET).unwrap();
+    assert_eq!(authority::ASSURANCE_RULESET_ID, 21652953);
+    assert_eq!(authority::REVIEW_RULESET_ID, 21652974);
+    let assurance_bytes =
+        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953");
+    let review_bytes =
+        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974");
+    let assurance = parse_json_no_duplicates(&assurance_bytes).unwrap();
+    let review = parse_json_no_duplicates(&review_bytes).unwrap();
     let (oracle_model, cf06_donor, cf06_workflow) = canonical_cf06_sources();
 
     project_authority(
