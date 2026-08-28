@@ -1,0 +1,56 @@
+name: af02-surface-bootstrap
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-surface-scanner
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.repository == 'TheHalfMoon/commandF'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          components: rustfmt,clippy
+      - name: Build and prove isolated AF-02 surface scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          manifest='tools/af02-verifier/Cargo.toml'
+          lock='tools/af02-verifier/Cargo.lock'
+          cargo generate-lockfile --manifest-path "$manifest"
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('tools/af02-verifier/Cargo.lock').read_text()
+          blocks = text.split('[[package]]')
+          matches = [b for b in blocks if '\nname = "syn"\n' in b and '\nversion = "3.0.3"\n' in b]
+          assert len(matches) == 1, f'expected exactly one syn 3.0.3 lock entry, got {len(matches)}'
+          assert 'checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"' in matches[0]
+          PY
+          cargo fmt --manifest-path "$manifest" --all
+          cargo clippy --locked --manifest-path "$manifest" --all-targets -- -D warnings
+          cargo test --locked --manifest-path "$manifest"
+          cargo run --quiet --locked --manifest-path "$manifest" -- \
+            parse-surface-policy specs/016-af-02-adversarial-test-strength/surface-policy.json \
+            > /tmp/af02-surface-policy.canonical.json
+          cargo run --quiet --locked --manifest-path "$manifest" -- \
+            scan-surface specs/016-af-02-adversarial-test-strength/surface-policy.json . \
+            > /tmp/af02-surface-findings.json
+          test -s /tmp/af02-surface-policy.canonical.json
+          test -s /tmp/af02-surface-findings.json
+          rm .github/workflows/af02-surface-bootstrap.yml
+          git add -A tools/af02-verifier .github/workflows/af02-surface-bootstrap.yml
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test(af02): lock and qualify surface scanner'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
