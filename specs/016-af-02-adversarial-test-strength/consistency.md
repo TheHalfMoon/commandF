@@ -24,7 +24,7 @@ AF-02 precedence is singular:
 
 Authority-baseline v1 remains deprecated and non-implementable. Baseline v2 is the only authority-baseline schema.
 
-The final proof path and schema id remain `schemas/af02-adversarial-proof-v1.schema.json` / `commandf.af02-adversarial-proof/v1`. During planning it was strengthened into an envelope over the byte-identical prior schema now retained as `af02-adversarial-proof-core-v1.schema.json`. The core preserves the previous 25 contract roles. The envelope adds 16 required extension roles, so the final deterministic proof binds 41 distinct contract files without discarding earlier structural constraints.
+The final proof path and schema id remain `schemas/af02-adversarial-proof-v1.schema.json` / `commandf.af02-adversarial-proof/v1`. During planning it was strengthened into an envelope over the byte-identical prior schema now retained as `af02-adversarial-proof-core-v1.schema.json`. The core preserves the previous 25 contract roles. The envelope adds 18 required extension roles, including the enforcement-inventory instance and its standalone schema, so the final deterministic proof binds 43 distinct contract files without discarding earlier structural constraints.
 
 ## Preserved external authority
 
@@ -42,9 +42,10 @@ The latest planning round is addressed as follows:
 - **Required-check provenance:** `required-check-policy.json` freezes repository, GitHub Actions app, workflow ids/paths/base blobs and job names; runtime provenance has a dedicated schema including run/job/check-suite/head/base identities.
 - **Retained locator semantics:** exact repository/commit/blob/run/artifact URL relationships have a closed retained-authority schema; supplied URLs are reconstructed rather than trusted.
 - **Prose-only semantic relations:** `semantic-contract.json` freezes algorithm ids, verifier package/path/entrypoint and required negative-fixture ids. Missing implementation/test mapping is non-green.
-- **Candidate parser/resource boundary:** `verifier-input-policy.json` freezes preparse size/containment/symlink limits, JSON/YAML depth/record/string constraints, YAML safe-loader restrictions and aggregate wall-time/memory bounds.
+- **Candidate parser/resource boundary:** `verifier-input-policy.json` freezes preparse size/containment/symlink limits, JSON/YAML depth/record/string constraints, YAML safe-loader restrictions, aggregate wall-time/memory bounds, separate stdout/stderr byte ceilings, and observed-byte/overflow evidence.
 - **Proof-critical policy schemas:** separate closed schemas now exist for surface, resource, corpus, coverage and mutation policy instances before dependent execution.
-- **Proof binding:** the proof envelope retains the original core schema and adds 16 exact extension contract roles plus final required-check provenance and extension-authority digests.
+- **Enforcement-inventory closure:** `enforcement-inventory.json` and `schemas/af02-enforcement-inventory-v1.schema.json` freeze the 27-role activation inventory; the aggregate evidence schema requires exactly one runtime entry for each role.
+- **Proof binding:** the proof envelope retains the original core schema and adds 18 exact extension contract roles, including enforcement inventory + schema, plus final required-check provenance and extension-authority digests.
 
 ## Anti-self-forgery consistency
 
@@ -84,7 +85,7 @@ Integration id 15368 alone is insufficient. Qualification binds each context to 
 
 ## Parser and resource consistency
 
-The privileged/base-controlled verifier treats candidate files as hostile data. Size is checked before parsing. Symlinks/path escapes are rejected. JSON and YAML have explicit depth/item/string bounds. YAML aliases, merge keys and custom tags are prohibited. Aggregate file/record/byte, parser wall-time and memory limits are fixed. Parser exhaustion is failure, not neutral topology.
+The privileged/base-controlled verifier treats candidate files as hostile data. Size is checked before parsing. Symlinks/path escapes are rejected. JSON and YAML have explicit depth/item/string bounds. YAML aliases, merge keys and custom tags are prohibited. Aggregate file/record/byte, parser wall-time and memory limits are fixed. Parent-enforced stdout/stderr byte ceilings are fixed separately, and evidence retains observed bytes plus overflow classification for both streams. Parser exhaustion or output-limit breach is failure, not neutral topology.
 
 ## Tool and corpus consistency
 

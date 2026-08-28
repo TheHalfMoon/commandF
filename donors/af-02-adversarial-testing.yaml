@@ -74,6 +74,8 @@ normative_contract:
     - specs/016-af-02-adversarial-test-strength/required-check-policy.json
     - specs/016-af-02-adversarial-test-strength/semantic-contract.json
     - specs/016-af-02-adversarial-test-strength/verifier-input-policy.json
+  inventory_files:
+    - specs/016-af-02-adversarial-test-strength/enforcement-inventory.json
   schema_files:
     - specs/016-af-02-adversarial-test-strength/schemas/af02-authority-baseline-v2.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-adversarial-proof-v1.schema.json
@@ -93,6 +95,7 @@ normative_contract:
     - specs/016-af-02-adversarial-test-strength/schemas/af02-corpus-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-coverage-policy-v1.schema.json
     - specs/016-af-02-adversarial-test-strength/schemas/af02-mutation-policy-v1.schema.json
+    - specs/016-af-02-adversarial-test-strength/schemas/af02-enforcement-inventory-v1.schema.json
 
 review_before_copy:
   - verify exact source path and commit before copying upstream code

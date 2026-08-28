@@ -38,7 +38,7 @@ Unknown fields, missing fields, wrong type/range/pattern/cardinality/order, dupl
 schemas/af02-adversarial-proof-core-v1.schema.json
 ```
 
-The core retains the original 25 contract roles and deterministic/stochastic structure. The envelope adds exactly 16 ordered extension roles:
+The core retains the original 25 contract roles and deterministic/stochastic structure. The envelope adds exactly 18 ordered extension roles:
 
 ```text
 proof_core_schema
@@ -57,9 +57,11 @@ resource_policy_schema
 corpus_manifest_schema
 coverage_policy_schema
 mutation_policy_schema
+enforcement_inventory
+enforcement_inventory_schema
 ```
 
-Thus final proof binds 41 distinct contract files across the core and extension sets. Paths and roles are unique across both sets.
+Thus final proof binds 43 distinct contract files across the core and extension sets. Paths and roles are unique across both sets.
 
 `core.af02_adversarial_sha256` retains the historical core deterministic digest. The authoritative final `af02_adversarial_sha256` hashes the independently reconstructed deterministic envelope consisting of:
 - `core.deterministic`;
@@ -117,6 +119,7 @@ waiver-policy.json
 required-check-policy.json
 semantic-contract.json
 verifier-input-policy.json
+enforcement-inventory.json
 
 schemas/af02-authority-baseline-v2.schema.json
 schemas/af02-adversarial-proof-v1.schema.json
@@ -136,6 +139,7 @@ schemas/af02-resource-policy-v1.schema.json
 schemas/af02-corpus-v1.schema.json
 schemas/af02-coverage-policy-v1.schema.json
 schemas/af02-mutation-policy-v1.schema.json
+schemas/af02-enforcement-inventory-v1.schema.json
 ```
 
 Every schema uses fail-closed unknown-field behavior for its object contracts. Repository semantic validation remains mandatory where JSON Schema cannot express cross-object relations.
@@ -162,7 +166,7 @@ For each context the verifier queries GitHub and proves exactly one matching che
 
 The base verifier must implement every listed algorithm exactly once and own tests for each algorithm and negative fixture. Missing algorithm/test identity is non-green.
 
-`verifier-input-policy.json` validates against `schemas/af02-verifier-input-policy-v1.schema.json`. Candidate files are untrusted data. Before semantic parsing the base gate enforces regular-file/no-symlink/containment and byte limits. JSON/YAML parsing enforces bounded depth, strings, properties/sequences/records and aggregate file/byte counts. YAML aliases, merge keys and custom tags are prohibited. Parser wall time and memory are bounded. Limit breach is explicit failure, never `NOT_APPLICABLE`.
+`verifier-input-policy.json` validates against `schemas/af02-verifier-input-policy-v1.schema.json`. Candidate files are untrusted data. Before semantic parsing the base gate enforces regular-file/no-symlink/containment and byte limits. JSON/YAML parsing enforces bounded depth, strings, properties/sequences/records and aggregate file/byte counts. YAML aliases, merge keys and custom tags are prohibited. Parser wall time and memory are bounded. Parent enforcement applies separate stdout/stderr byte ceilings; retained process evidence records observed bytes and per-stream overflow classification. Limit breach is explicit failure, never `NOT_APPLICABLE`.
 
 ## 8. Policy schemas before dependent execution
 
@@ -174,6 +178,7 @@ commandf.af02-resource-policy/v1 -> schemas/af02-resource-policy-v1.schema.json
 commandf.af02-corpus/v1 -> schemas/af02-corpus-v1.schema.json
 commandf.af02-coverage-policy/v1 -> schemas/af02-coverage-policy-v1.schema.json
 commandf.af02-mutation-policy/v1 -> schemas/af02-mutation-policy-v1.schema.json
+commandf.af02-enforcement-inventory/v1 -> schemas/af02-enforcement-inventory-v1.schema.json
 ```
 
 The base verifier validates each instance before accepting its digest. Same-candidate weakening cannot self-green dependent evidence.
@@ -182,7 +187,7 @@ Surface and coverage consume the same Git-derived tracked Rust universe under `c
 
 Mutation selection is exactly every cargo-mutants-listed mutant inside frozen target paths minus exact pre-frozen exclusions. No top-N, percentage, operator preference or post-result selection exists.
 
-Coverage descriptor/floors, mutation target/timeout/waiver bindings, corpus limits/provenance and resource units/ranges are schema-bound before observations.
+Coverage descriptor/floors, mutation target/timeout/waiver bindings, corpus limits/provenance and resource units/ranges are schema-bound before observations. Enforcement role membership and activation-stack closure are schema/semantic-contract bound before a role becomes qualification authority.
 
 ## 9. Tool identity and execution isolation
 
@@ -202,7 +207,7 @@ An incompatible verifier/schema strengthening is a dedicated policy/verifier PR 
 
 ## 11. Deterministic evidence rules
 
-The existing evidence inventory schema plus the semantic contract jointly enforce sorted/unique source universe and exact Git blob reconstruction; corpus/assertion/replay bijection; no PHI and bounded corpus sizes; independently normalized replay outcomes; nextest first-fail/retry-pass with forced flaky failure and non-zero process exit; exact Git-derived coverage membership and integer floor arithmetic; complete mutation inventory/result membership; waiver ancestry and mutant binding; canonical cargo-test counter equality; policy/inventory/digest cross-links; and path containment/no-follow rules.
+The existing evidence inventory schema plus the semantic contract jointly enforce sorted/unique source universe and exact Git blob reconstruction; corpus/assertion/replay bijection; no PHI and bounded corpus sizes; independently normalized replay outcomes; nextest first-fail/retry-pass with forced flaky failure and non-zero process exit; exact Git-derived coverage membership and integer floor arithmetic; complete mutation inventory/result membership; waiver ancestry and mutant binding; canonical cargo-test counter equality; policy/inventory/digest cross-links; exact enforcement-role membership and activation closure; and path containment/no-follow rules.
 
 Schema validation alone is never sufficient for cross-object semantics.
 
