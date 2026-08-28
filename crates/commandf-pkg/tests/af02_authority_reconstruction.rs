@@ -1,9 +1,9 @@
+#[path = "../../../tools/af02-verifier/src/authority.rs"]
+mod authority;
 #[path = "../../../tools/af02-verifier/src/canonical.rs"]
 mod canonical;
 #[path = "../../../tools/af02-verifier/src/retained.rs"]
 mod retained;
-#[path = "../../../tools/af02-verifier/src/authority.rs"]
-mod authority;
 
 use std::fs;
 use std::path::PathBuf;
@@ -79,10 +79,10 @@ fn build_baseline() -> authority::AuthorityBaseline {
 #[test]
 fn retained_schema_rejects_candidate_url_authority() {
     let mut value: Value = serde_json::from_slice(RETAINED_SOURCES).unwrap();
-    value
-        .as_object_mut()
-        .unwrap()
-        .insert("url".to_owned(), Value::String("https://example.invalid".to_owned()));
+    value.as_object_mut().unwrap().insert(
+        "url".to_owned(),
+        Value::String("https://example.invalid".to_owned()),
+    );
     let bytes = serde_json::to_vec(&value).unwrap();
     let error = validate_and_parse(&bytes, RETAINED_SCHEMA).unwrap_err();
     assert!(error.to_string().contains("unknown field"));
@@ -104,8 +104,7 @@ fn retained_artifact_binding_rejects_wrong_digest() {
     let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
     let mut artifacts: Value = serde_json::from_slice(RETAINED_ARTIFACTS).unwrap();
     artifacts["artifacts"][0]["digest"] = Value::String(
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-            .to_owned(),
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
     );
     let error = verify_artifacts(&retained, &artifacts).unwrap_err();
     assert!(error.to_string().contains("artifact digest mismatch"));

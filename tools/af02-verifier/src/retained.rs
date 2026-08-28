@@ -199,13 +199,14 @@ pub fn validate_and_parse(
 ) -> Result<RetainedAuthoritySources, RetainedError> {
     let instance: Value = serde_json::from_slice(instance_bytes)?;
     let schema: Value = serde_json::from_slice(schema_bytes)?;
-    let schema_id = schema
-        .get("$id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| RetainedError::Schema {
-            path: "$".to_owned(),
-            message: "trusted schema is missing $id".to_owned(),
-        })?;
+    let schema_id =
+        schema
+            .get("$id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| RetainedError::Schema {
+                path: "$".to_owned(),
+                message: "trusted schema is missing $id".to_owned(),
+            })?;
     if schema_id != "https://commandf.dev/schemas/af02-retained-authority-sources-v1.schema.json" {
         return Err(RetainedError::Schema {
             path: "$".to_owned(),
@@ -236,7 +237,9 @@ pub fn locator_plan(retained: &RetainedAuthoritySources) -> Result<LocatorPlan, 
             .reconstruction
             .api_urls_reconstructed_from_structured_fields
         || !retained.reconstruction.git_blob_verified_before_parse
-        || !retained.reconstruction.raw_sha256_computed_after_git_identity
+        || !retained
+            .reconstruction
+            .raw_sha256_computed_after_git_identity
         || !retained.reconstruction.retained_failure_preserved
     {
         return Err(RetainedError::Mismatch(
@@ -247,7 +250,10 @@ pub fn locator_plan(retained: &RetainedAuthoritySources) -> Result<LocatorPlan, 
     let repo = &retained.repository.full_name;
     let cf10 = &retained.cf10;
     Ok(LocatorPlan {
-        pull_request: format!("https://api.github.com/repos/{repo}/pulls/{}", cf10.pull_request.number),
+        pull_request: format!(
+            "https://api.github.com/repos/{repo}/pulls/{}",
+            cf10.pull_request.number
+        ),
         retained_head_commit: format!(
             "https://api.github.com/repos/{repo}/commits/{}",
             cf10.retained_head
@@ -302,10 +308,14 @@ pub fn verify_workflow_run(
     let pull_requests = run
         .get("pull_requests")
         .and_then(Value::as_array)
-        .ok_or_else(|| RetainedError::Mismatch("workflow run pull_requests is missing".to_owned()))?;
+        .ok_or_else(|| {
+            RetainedError::Mismatch("workflow run pull_requests is missing".to_owned())
+        })?;
     let matching: Vec<&Value> = pull_requests
         .iter()
-        .filter(|item| item.get("number").and_then(Value::as_u64) == Some(expected.pull_request_number))
+        .filter(|item| {
+            item.get("number").and_then(Value::as_u64) == Some(expected.pull_request_number)
+        })
         .collect();
     if matching.len() != 1 {
         return Err(RetainedError::Mismatch(format!(
@@ -345,7 +355,9 @@ pub fn verify_artifacts(
     let items = artifacts
         .get("artifacts")
         .and_then(Value::as_array)
-        .ok_or_else(|| RetainedError::Mismatch("artifact collection is missing artifacts".to_owned()))?;
+        .ok_or_else(|| {
+            RetainedError::Mismatch("artifact collection is missing artifacts".to_owned())
+        })?;
     let expected = &retained.cf10.artifact;
     let matching: Vec<&Value> = items
         .iter()

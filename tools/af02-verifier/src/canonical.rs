@@ -75,10 +75,8 @@ mod tests {
 
     #[test]
     fn canonicalizes_recursive_object_keys_and_preserves_array_order() {
-        let value: Value = serde_json::from_str(
-            r#"{"z":{"b":2,"a":1},"a":[{"y":2,"x":1},0]}"#,
-        )
-        .unwrap();
+        let value: Value =
+            serde_json::from_str(r#"{"z":{"b":2,"a":1},"a":[{"y":2,"x":1},0]}"#).unwrap();
         assert_eq!(
             canonical_json_bytes(&value).unwrap(),
             br#"{"a":[{"x":1,"y":2},0],"z":{"a":1,"b":2}}"#
