@@ -9,7 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use authority::{project_assurance_ruleset, project_authority, project_cf06, Cf06Source};
-use canonical::canonical_json_bytes;
+use canonical::{canonical_json_bytes, git_blob_sha1_hex, parse_json_no_duplicates};
 use retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
 };
@@ -17,6 +17,8 @@ use serde_json::Value;
 
 const MAIN_SHA: &str = "54b9772a3b86464da6f395f8ba8371f364c9bb38";
 const MAIN_TREE: &str = "4ac26d8de419a0bec0faba8e14ded1763cfe30b3";
+const RETAINED_SOURCES_BLOB: &str = "f9c0bc16ac742238c93ff77a85486cd1db5dbcf3";
+const RETAINED_SCHEMA_BLOB: &str = "7d0daced343fd15d797cc0d4d53e9d63aac790c5";
 
 const ORACLE_MODEL: &[u8] = include_bytes!("../src/oracle_model.rs");
 const CF06_DONOR: &[u8] = include_bytes!("../../../donors/hl7-fhir-validator-6.10.2.yaml");
@@ -40,16 +42,22 @@ const RETAINED_RUN: &[u8] =
 const RETAINED_ARTIFACTS: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-artifacts.json");
 
+fn assert_canonical_contract_objects() {
+    assert_eq!(git_blob_sha1_hex(RETAINED_SOURCES), RETAINED_SOURCES_BLOB);
+    assert_eq!(git_blob_sha1_hex(RETAINED_SCHEMA), RETAINED_SCHEMA_BLOB);
+}
+
 fn build_baseline() -> authority::AuthorityBaseline {
+    assert_canonical_contract_objects();
     let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
-    let run: Value = serde_json::from_slice(RETAINED_RUN).unwrap();
+    let run = parse_json_no_duplicates(RETAINED_RUN).unwrap();
     verify_workflow_run(&retained, &run).unwrap();
-    let artifacts: Value = serde_json::from_slice(RETAINED_ARTIFACTS).unwrap();
+    let artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();
     verify_artifacts(&retained, &artifacts).unwrap();
     let retained_projection =
         project_retained(&retained, RETAINED_MANIFEST, RETAINED_DONOR).unwrap();
-    let assurance: Value = serde_json::from_slice(ASSURANCE_RULESET).unwrap();
-    let review: Value = serde_json::from_slice(REVIEW_RULESET).unwrap();
+    let assurance = parse_json_no_duplicates(ASSURANCE_RULESET).unwrap();
+    let review = parse_json_no_duplicates(REVIEW_RULESET).unwrap();
 
     project_authority(
         MAIN_SHA,
@@ -78,9 +86,16 @@ fn build_baseline() -> authority::AuthorityBaseline {
     .unwrap()
 }
 
+fn duplicate_probe(bytes: &[u8]) -> Vec<u8> {
+    assert_eq!(bytes.first(), Some(&b'{'));
+    let mut duplicate = br#"{"__duplicate_probe":0,"__duplicate_probe":1,"#.to_vec();
+    duplicate.extend_from_slice(&bytes[1..]);
+    duplicate
+}
+
 #[test]
 fn retained_schema_rejects_candidate_url_authority() {
-    let mut value: Value = serde_json::from_slice(RETAINED_SOURCES).unwrap();
+    let mut value: Value = parse_json_no_duplicates(RETAINED_SOURCES).unwrap();
     value.as_object_mut().unwrap().insert(
         "url".to_owned(),
         Value::String("https://example.invalid".to_owned()),
@@ -91,7 +106,33 @@ fn retained_schema_rejects_candidate_url_authority() {
 }
 
 #[test]
+fn retained_contract_rejects_duplicate_semantic_keys_before_schema_validation() {
+    let mut duplicate = br#"{"schema":"forged","#.to_vec();
+    duplicate.extend_from_slice(&RETAINED_SOURCES[1..]);
+    let error = validate_and_parse(&duplicate, RETAINED_SCHEMA).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("duplicate JSON object key \"schema\""));
+}
+
+#[test]
+fn authority_api_inputs_reject_duplicate_keys_before_projection() {
+    for bytes in [
+        ASSURANCE_RULESET,
+        REVIEW_RULESET,
+        RETAINED_RUN,
+        RETAINED_ARTIFACTS,
+    ] {
+        let error = parse_json_no_duplicates(&duplicate_probe(bytes)).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("duplicate JSON object key \"__duplicate_probe\""));
+    }
+}
+
+#[test]
 fn retained_locator_plan_reconstructs_frozen_github_urls() {
+    assert_canonical_contract_objects();
     let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
     let plan = locator_plan(&retained).unwrap();
 
@@ -136,7 +177,7 @@ fn retained_locator_plan_reconstructs_frozen_github_urls() {
 #[test]
 fn retained_run_binding_rejects_wrong_event() {
     let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
-    let mut run: Value = serde_json::from_slice(RETAINED_RUN).unwrap();
+    let mut run = parse_json_no_duplicates(RETAINED_RUN).unwrap();
     run.as_object_mut()
         .unwrap()
         .insert("event".to_owned(), Value::String("push".to_owned()));
@@ -147,7 +188,7 @@ fn retained_run_binding_rejects_wrong_event() {
 #[test]
 fn retained_artifact_binding_rejects_wrong_digest() {
     let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
-    let mut artifacts: Value = serde_json::from_slice(RETAINED_ARTIFACTS).unwrap();
+    let mut artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();
     artifacts["artifacts"][0]["digest"] = Value::String(
         "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
     );
@@ -156,8 +197,18 @@ fn retained_artifact_binding_rejects_wrong_digest() {
 }
 
 #[test]
+fn retained_projection_rejects_candidate_controlled_manifest_bytes() {
+    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let mut manifest = RETAINED_MANIFEST.to_vec();
+    let index = manifest.iter().position(|byte| *byte == b'C').unwrap();
+    manifest[index] = b'X';
+    let error = project_retained(&retained, &manifest, RETAINED_DONOR).unwrap_err();
+    assert!(error.to_string().contains("retained manifest Git blob mismatch"));
+}
+
+#[test]
 fn assurance_projection_rejects_wrong_required_check_app() {
-    let mut assurance: Value = serde_json::from_slice(ASSURANCE_RULESET).unwrap();
+    let mut assurance = parse_json_no_duplicates(ASSURANCE_RULESET).unwrap();
     assurance["rules"][2]["parameters"]["required_status_checks"][0]["integration_id"] =
         Value::from(1);
     let error = project_assurance_ruleset(&assurance).unwrap_err();
@@ -165,7 +216,7 @@ fn assurance_projection_rejects_wrong_required_check_app() {
 }
 
 #[test]
-fn cf06_projection_rejects_missing_source_pin() {
+fn cf06_projection_rejects_candidate_controlled_source_bytes() {
     let altered = ORACLE_MODEL
         .windows(authority::CF06_SOURCE_COMMIT.len())
         .position(|window| window == authority::CF06_SOURCE_COMMIT.as_bytes())
@@ -191,7 +242,7 @@ fn cf06_projection_rejects_missing_source_pin() {
         },
     ])
     .unwrap_err();
-    assert!(error.to_string().contains("does not bind"));
+    assert!(error.to_string().contains("Git blob mismatch"));
 }
 
 #[test]
