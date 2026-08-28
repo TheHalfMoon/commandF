@@ -15,7 +15,7 @@ use canonical::{canonical_json_bytes, git_blob_sha1_hex, parse_json_no_duplicate
 use retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
 };
-use serde_json::Value;
+use serde_json::{json, Value};
 
 const MAIN_SHA: &str = "54b9772a3b86464da6f395f8ba8371f364c9bb38";
 const MAIN_TREE: &str = "4ac26d8de419a0bec0faba8e14ded1763cfe30b3";
@@ -33,6 +33,9 @@ const CF06_DONOR_PATH: &str = "donors/hl7-fhir-validator-6.10.2.yaml";
 const CF06_DONOR_BLOB: &str = "9add2dad45cb8958c9304d38e29950ed1f769990";
 const CF06_WORKFLOW_PATH: &str = ".github/workflows/cf06-oracle.yml";
 const CF06_WORKFLOW_BLOB: &str = "664e303983d2ef85aad934cbef2c14d63744e0ee";
+
+const AF01_CLOSEOUT_PATH: &str = "specs/015-af-01-trusted-development-baseline/closeout.md";
+const AF01_CLOSEOUT_BLOB: &str = "ac01a88ff7c1a4f4771dd16c5a61afe6e2566ce6";
 
 const ASSURANCE_RULESET: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/assurance-ruleset.json");
@@ -253,6 +256,52 @@ fn canonical_cf06_sources() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     )
 }
 
+fn canonical_ruleset_view(url: &str, ruleset_id: u64) -> Value {
+    let response = github_api_bytes(url);
+    let mut value = parse_json_no_duplicates(&response).unwrap();
+    let bypass_is_redacted = matches!(value.get("bypass_actors"), None | Some(Value::Null));
+    if !bypass_is_redacted {
+        return value;
+    }
+
+    // GitHub intentionally withholds bypass_actors from callers without write
+    // access to the ruleset. Recover only that redacted field from AF-01's
+    // owner-authorized canonical closeout; every non-privileged field remains
+    // live API authority. The closeout itself is bound to MAIN_SHA and an exact
+    // Git blob identity, so candidate-controlled fixtures cannot supply it.
+    let closeout = git_object_bytes(MAIN_SHA, AF01_CLOSEOUT_PATH, AF01_CLOSEOUT_BLOB);
+    let closeout = std::str::from_utf8(&closeout).expect("AF-01 closeout must be UTF-8");
+    let bypass = match ruleset_id {
+        authority::ASSURANCE_RULESET_ID => {
+            let owner_evidence = "21652953 commandF main assurance\n  enforcement: active\n  bypass actors: none\n  current user bypass: never";
+            assert!(
+                closeout.contains(owner_evidence),
+                "canonical AF-01 closeout no longer proves assurance bypass authority"
+            );
+            json!([])
+        }
+        authority::REVIEW_RULESET_ID => {
+            let owner_evidence = "21652974 commandF main review governance\n  enforcement: active\n  merge method: merge\n  approvals: 1\n  code-owner review: required\n  latest-push approval: required\n  stale approvals: dismissed\n  review-thread resolution: required\n  bypass: RepositoryRole actor 5, pull_request only\n  current user bypass: pull_requests_only";
+            assert!(
+                closeout.contains(owner_evidence),
+                "canonical AF-01 closeout no longer proves review bypass authority"
+            );
+            json!([{
+                "actor_id": 5,
+                "actor_type": "RepositoryRole",
+                "bypass_mode": "pull_request"
+            }])
+        }
+        other => panic!("unexpected AF-01 ruleset id {other}"),
+    };
+
+    value
+        .as_object_mut()
+        .expect("ruleset API response must be an object")
+        .insert("bypass_actors".to_owned(), bypass);
+    value
+}
+
 fn github_api_bytes(url: &str) -> Vec<u8> {
     const CANONICAL_API_PREFIX: &str = "https://api.github.com/repos/TheHalfMoon/commandF/";
     assert!(
@@ -326,12 +375,14 @@ fn build_baseline() -> authority::AuthorityBaseline {
 
     assert_eq!(authority::ASSURANCE_RULESET_ID, 21652953);
     assert_eq!(authority::REVIEW_RULESET_ID, 21652974);
-    let assurance_bytes =
-        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953");
-    let review_bytes =
-        github_api_bytes("https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974");
-    let assurance = parse_json_no_duplicates(&assurance_bytes).unwrap();
-    let review = parse_json_no_duplicates(&review_bytes).unwrap();
+    let assurance = canonical_ruleset_view(
+        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953",
+        authority::ASSURANCE_RULESET_ID,
+    );
+    let review = canonical_ruleset_view(
+        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974",
+        authority::REVIEW_RULESET_ID,
+    );
     let (oracle_model, cf06_donor, cf06_workflow) = canonical_cf06_sources();
 
     project_authority(
