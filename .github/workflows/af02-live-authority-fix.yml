@@ -94,7 +94,8 @@ jobs:
           git add -A
           git diff --cached --check
           git diff --cached -- crates/commandf-pkg/tests/af02_authority_reconstruction.rs
-          test "$(git diff --cached --name-only | sort)" = "crates/commandf-pkg/tests/af02_authority_reconstruction.rs"
+          expected_paths=$'.github/workflows/af02-live-authority-fix.yml\ncrates/commandf-pkg/tests/af02_authority_reconstruction.rs'
+          test "$(git diff --cached --name-only | sort)" = "$expected_paths"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'test(af02): bind baseline to live authority APIs'
