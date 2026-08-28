@@ -140,7 +140,7 @@ Unknown divergence fails until minimized and understood.
 Adopt:
 
 ```text
-proptest = =1.11.0
+proptest = "=1.11.0"
 ```
 
 Property configuration, case count, shrinking behavior, and model registry MUST be checked in before qualification. A counterexample MUST be retained as a deterministic reproducer before its defect can close.

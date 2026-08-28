@@ -104,7 +104,56 @@
     "enforcementInventory":{
       "type":"object","additionalProperties":false,
       "required":["schema","policy_base_sha","entries"],
-      "properties":{"schema":{"const":"commandf.af02-enforcement-inventory/v1"},"policy_base_sha":{"$ref":"#/$defs/gitSha"},"entries":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["role","path","blob_sha_at_policy_base","language_or_format","entry_symbol_or_job","owned_test_paths"],"properties":{"role":{"enum":["AUTHORITY_PROJECTOR","SURFACE_SCANNER","SURFACE_POLICY_PARSER","RESOURCE_RUNNER","RESOURCE_POLICY_PARSER","TOOL_ACQUISITION_VERIFIER","CORPUS_MANIFEST_PARSER","ASSERTION_REGISTRY_PARSER","REPLAY_RUNNER","RESULT_NORMALIZER","NEXTEST_RESULT_PARSER","COVERAGE_REPORT_PARSER","COVERAGE_POLICY_PARSER","MUTATION_INVENTORY_PARSER","MUTATION_RESULT_PARSER","MUTATION_POLICY_PARSER","BASE_POLICY_COMPARATOR","PROOF_BUILDER","PROOF_VERIFIER","AF02_WORKFLOW","AF02_ACTION_OR_SCRIPT","AF02_SCHEMA"]},"path":{"$ref":"#/$defs/path"},"blob_sha_at_policy_base":{"$ref":"#/$defs/gitSha"},"language_or_format":{"type":"string","minLength":1},"entry_symbol_or_job":{"type":"string","minLength":1},"owned_test_paths":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/path"},"uniqueItems":true}}}}}
+      "properties":{
+        "schema":{"const":"commandf.af02-enforcement-inventory/v1"},
+        "policy_base_sha":{"$ref":"#/$defs/gitSha"},
+        "entries":{
+          "type":"array",
+          "minItems":27,
+          "maxItems":27,
+          "items":{
+            "type":"object","additionalProperties":false,
+            "required":["role","path","blob_sha_at_policy_base","language_or_format","entry_symbol_or_job","owned_test_paths"],
+            "properties":{
+              "role":{"enum":["AF02_SCHEMA","AUTHORITY_PROJECTOR","RETAINED_AUTHORITY_PROJECTOR","SURFACE_SCANNER","SURFACE_POLICY_PARSER","RESOURCE_RUNNER","RESOURCE_POLICY_PARSER","TOOL_ACQUISITION_VERIFIER","CORPUS_MANIFEST_PARSER","ASSERTION_REGISTRY_PARSER","VERIFIER_INPUT_GUARD","BASE_POLICY_COMPARATOR","SEMANTIC_CONTRACT_VERIFIER","REQUIRED_CHECK_PROVENANCE_VERIFIER","AF02_WORKFLOW","AF02_ACTION_OR_SCRIPT","REPLAY_RUNNER","RESULT_NORMALIZER","NEXTEST_RESULT_PARSER","COVERAGE_REPORT_PARSER","COVERAGE_POLICY_PARSER","MUTATION_INVENTORY_PARSER","MUTATION_RESULT_PARSER","MUTATION_POLICY_PARSER","WAIVER_POLICY_VERIFIER","PROOF_BUILDER","PROOF_VERIFIER"]},
+              "path":{"$ref":"#/$defs/path"},
+              "blob_sha_at_policy_base":{"$ref":"#/$defs/gitSha"},
+              "language_or_format":{"type":"string","minLength":1},
+              "entry_symbol_or_job":{"type":"string","minLength":1},
+              "owned_test_paths":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/path"},"uniqueItems":true}
+            }
+          },
+          "allOf":[
+            {"contains":{"properties":{"role":{"const":"AF02_SCHEMA"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"AUTHORITY_PROJECTOR"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"RETAINED_AUTHORITY_PROJECTOR"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"SURFACE_SCANNER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"SURFACE_POLICY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"RESOURCE_RUNNER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"RESOURCE_POLICY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"TOOL_ACQUISITION_VERIFIER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"CORPUS_MANIFEST_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"ASSERTION_REGISTRY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"VERIFIER_INPUT_GUARD"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"BASE_POLICY_COMPARATOR"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"SEMANTIC_CONTRACT_VERIFIER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"REQUIRED_CHECK_PROVENANCE_VERIFIER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"AF02_WORKFLOW"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"AF02_ACTION_OR_SCRIPT"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"REPLAY_RUNNER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"RESULT_NORMALIZER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"NEXTEST_RESULT_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"COVERAGE_REPORT_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"COVERAGE_POLICY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"MUTATION_INVENTORY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"MUTATION_RESULT_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"MUTATION_POLICY_PARSER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"WAIVER_POLICY_VERIFIER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"PROOF_BUILDER"}},"required":["role"]},"minContains":1,"maxContains":1},
+            {"contains":{"properties":{"role":{"const":"PROOF_VERIFIER"}},"required":["role"]},"minContains":1,"maxContains":1}
+          ]
+        }
+      }
     }
   }
 }
