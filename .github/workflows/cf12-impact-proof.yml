@@ -34,7 +34,7 @@ jobs:
       image: docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
