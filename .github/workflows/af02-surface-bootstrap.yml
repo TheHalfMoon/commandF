@@ -26,7 +26,18 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           manifest='tools/af02-verifier/Cargo.toml'
-          lock='tools/af02-verifier/Cargo.lock'
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/af02-verifier/src/surface.rs')
+          text = path.read_text()
+          old_one = r'r#"fn f() { let _ = \"std::fs::read(\\\"x\\\")\"; /* std::fs::read(\"x\"); */ }"#'
+          new_one = r'r#"fn f() { let _ = "std::fs::read(\"x\")"; /* std::fs::read("x"); */ }"#'
+          old_two = r'r#"fn f() { tokio::select! { _ = async {} => {} } let _ = \"tokio::select!\"; }"#'
+          new_two = r'r#"fn f() { tokio::select! { _ = async {} => {} } let _ = "tokio::select!"; }"#'
+          assert text.count(old_one) == 1, text.count(old_one)
+          assert text.count(old_two) == 1, text.count(old_two)
+          path.write_text(text.replace(old_one, new_one).replace(old_two, new_two))
+          PY
           cargo generate-lockfile --manifest-path "$manifest"
           python3 - <<'PY'
           from pathlib import Path
