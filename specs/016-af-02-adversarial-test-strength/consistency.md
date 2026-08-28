@@ -24,7 +24,7 @@ AF-02 precedence is singular:
 
 Authority-baseline v1 remains deprecated and non-implementable. Baseline v2 is the only authority-baseline schema.
 
-The final proof path and schema id remain `schemas/af02-adversarial-proof-v1.schema.json` / `commandf.af02-adversarial-proof/v1`. During planning it was strengthened into an envelope over the byte-identical prior schema now retained as `af02-adversarial-proof-core-v1.schema.json`. The core preserves the previous 25 contract roles. The envelope adds 18 required extension roles, including the enforcement-inventory instance and its standalone schema, so the final deterministic proof binds 43 distinct contract files without discarding earlier structural constraints.
+The final proof path and schema id remain `schemas/af02-adversarial-proof-v1.schema.json` / `commandf.af02-adversarial-proof/v1`. During planning it was strengthened into an envelope over the byte-identical prior schema now retained as `af02-adversarial-proof-core-v1.schema.json`. The core preserves the previous 25 contract roles and already contains the `enforcement_inventory` instance role. The envelope therefore adds 17 required extension roles, including only the standalone enforcement-inventory schema, so the final deterministic proof binds 42 distinct contract files without discarding or duplicating earlier structural constraints. The extension authority separately cross-binds the enforcement-inventory instance digest to the core role and the schema digest to the extension role.
 
 ## Preserved external authority
 
@@ -45,7 +45,7 @@ The latest planning round is addressed as follows:
 - **Candidate parser/resource boundary:** `verifier-input-policy.json` freezes preparse size/containment/symlink limits, JSON/YAML depth/record/string constraints, YAML safe-loader restrictions, aggregate wall-time/memory bounds, separate stdout/stderr byte ceilings, and observed-byte/overflow evidence.
 - **Proof-critical policy schemas:** separate closed schemas now exist for surface, resource, corpus, coverage and mutation policy instances before dependent execution.
 - **Enforcement-inventory closure:** `enforcement-inventory.json` and `schemas/af02-enforcement-inventory-v1.schema.json` freeze the 27-role activation inventory; the aggregate evidence schema requires exactly one runtime entry for each role.
-- **Proof binding:** the proof envelope retains the original core schema and adds 18 exact extension contract roles, including enforcement inventory + schema, plus final required-check provenance and extension-authority digests.
+- **Proof binding:** the proof envelope retains the original 25-role core, where `enforcement_inventory` already exists, and adds 17 exact extension contract roles including only `enforcement_inventory_schema`; final authority digests cross-bind the core instance and extension schema without duplicating a contract path.
 
 ## Anti-self-forgery consistency
 

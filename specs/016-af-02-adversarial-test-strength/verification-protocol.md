@@ -38,7 +38,7 @@ Unknown fields, missing fields, wrong type/range/pattern/cardinality/order, dupl
 schemas/af02-adversarial-proof-core-v1.schema.json
 ```
 
-The core retains the original 25 contract roles and deterministic/stochastic structure. The envelope adds exactly 18 ordered extension roles:
+The core retains the original 25 contract roles and deterministic/stochastic structure. The core already contains the `enforcement_inventory` contract role. The envelope therefore adds exactly 17 ordered extension roles and MUST NOT repeat that instance role:
 
 ```text
 proof_core_schema
@@ -57,11 +57,10 @@ resource_policy_schema
 corpus_manifest_schema
 coverage_policy_schema
 mutation_policy_schema
-enforcement_inventory
 enforcement_inventory_schema
 ```
 
-Thus final proof binds 43 distinct contract files across the core and extension sets. Paths and roles are unique across both sets.
+Thus final proof binds 42 distinct contract files across the core and extension sets. Paths and roles are unique across both sets. `extension_authority.enforcement_inventory_sha256` MUST equal the raw SHA-256 of the core contract file whose role is `enforcement_inventory`; `extension_authority.enforcement_inventory_schema_sha256` MUST equal the raw SHA-256 of the extension contract file whose role is `enforcement_inventory_schema`. The semantic verifier applies the same exact digest cross-binding to every extension-authority field and its corresponding contract role.
 
 `core.af02_adversarial_sha256` retains the historical core deterministic digest. The authoritative final `af02_adversarial_sha256` hashes the independently reconstructed deterministic envelope consisting of:
 - `core.deterministic`;
