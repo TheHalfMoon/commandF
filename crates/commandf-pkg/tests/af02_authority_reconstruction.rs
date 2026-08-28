@@ -7,6 +7,7 @@ mod retained;
 
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use authority::{project_assurance_ruleset, project_authority, project_cf06, Cf06Source};
 use canonical::{canonical_json_bytes, git_blob_sha1_hex, parse_json_no_duplicates};
@@ -17,47 +18,117 @@ use serde_json::Value;
 
 const MAIN_SHA: &str = "54b9772a3b86464da6f395f8ba8371f364c9bb38";
 const MAIN_TREE: &str = "4ac26d8de419a0bec0faba8e14ded1763cfe30b3";
+const RETAINED_HEAD: &str = "5fe10d9859407272acf6649fc3e868d3eb2fbd12";
+
+const RETAINED_SOURCES_PATH: &str =
+    "specs/016-af-02-adversarial-test-strength/retained-authority-sources.json";
 const RETAINED_SOURCES_BLOB: &str = "f9c0bc16ac742238c93ff77a85486cd1db5dbcf3";
+const RETAINED_SCHEMA_PATH: &str = "specs/016-af-02-adversarial-test-strength/schemas/af02-retained-authority-sources-v1.schema.json";
 const RETAINED_SCHEMA_BLOB: &str = "7d0daced343fd15d797cc0d4d53e9d63aac790c5";
 
-const ORACLE_MODEL: &[u8] = include_bytes!("../src/oracle_model.rs");
-const CF06_DONOR: &[u8] = include_bytes!("../../../donors/hl7-fhir-validator-6.10.2.yaml");
-const CF06_WORKFLOW: &[u8] = include_bytes!("../../../.github/workflows/cf06-oracle.yml");
-const RETAINED_SOURCES: &[u8] = include_bytes!(
-    "../../../specs/016-af-02-adversarial-test-strength/retained-authority-sources.json"
-);
-const RETAINED_SCHEMA: &[u8] = include_bytes!(
-    "../../../specs/016-af-02-adversarial-test-strength/schemas/af02-retained-authority-sources-v1.schema.json"
-);
+const ORACLE_MODEL_PATH: &str = "crates/commandf-pkg/src/oracle_model.rs";
+const ORACLE_MODEL_BLOB: &str = "9046546a86061961cf3e17f3f1880165625edea8";
+const CF06_DONOR_PATH: &str = "donors/hl7-fhir-validator-6.10.2.yaml";
+const CF06_DONOR_BLOB: &str = "9add2dad45cb8958c9304d38e29950ed1f769990";
+const CF06_WORKFLOW_PATH: &str = ".github/workflows/cf06-oracle.yml";
+const CF06_WORKFLOW_BLOB: &str = "664e303983d2ef85aad934cbef2c14d63744e0ee";
+
 const ASSURANCE_RULESET: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/assurance-ruleset.json");
 const REVIEW_RULESET: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/review-ruleset.json");
-const RETAINED_MANIFEST: &[u8] =
-    include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-corpus.json");
-const RETAINED_DONOR: &[u8] =
-    include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-donor.yaml");
 const RETAINED_RUN: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-run.json");
 const RETAINED_ARTIFACTS: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-artifacts.json");
 
-fn assert_canonical_contract_objects() {
-    assert_eq!(git_blob_sha1_hex(RETAINED_SOURCES), RETAINED_SOURCES_BLOB);
-    assert_eq!(git_blob_sha1_hex(RETAINED_SCHEMA), RETAINED_SCHEMA_BLOB);
+fn repository_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn git_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {
+    let root = repository_root();
+    let spec = format!("{revision}:{path}");
+    let resolved = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["rev-parse", &spec])
+        .output()
+        .expect("run git rev-parse");
+    assert!(
+        resolved.status.success(),
+        "git rev-parse failed for {spec}: {}",
+        String::from_utf8_lossy(&resolved.stderr)
+    );
+    let observed_blob = String::from_utf8(resolved.stdout)
+        .expect("git rev-parse UTF-8")
+        .trim()
+        .to_owned();
+    assert_eq!(
+        observed_blob, expected_blob,
+        "canonical Git object identity drifted for {spec}"
+    );
+
+    let object = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["cat-file", "blob", expected_blob])
+        .output()
+        .expect("run git cat-file");
+    assert!(
+        object.status.success(),
+        "git cat-file failed for {expected_blob}: {}",
+        String::from_utf8_lossy(&object.stderr)
+    );
+    assert_eq!(
+        git_blob_sha1_hex(&object.stdout),
+        expected_blob,
+        "Git object bytes do not reproduce expected blob identity"
+    );
+    object.stdout
+}
+
+fn canonical_retained_contract() -> (Vec<u8>, Vec<u8>) {
+    (
+        git_object_bytes(MAIN_SHA, RETAINED_SOURCES_PATH, RETAINED_SOURCES_BLOB),
+        git_object_bytes(MAIN_SHA, RETAINED_SCHEMA_PATH, RETAINED_SCHEMA_BLOB),
+    )
+}
+
+fn canonical_cf06_sources() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    (
+        git_object_bytes(MAIN_SHA, ORACLE_MODEL_PATH, ORACLE_MODEL_BLOB),
+        git_object_bytes(MAIN_SHA, CF06_DONOR_PATH, CF06_DONOR_BLOB),
+        git_object_bytes(MAIN_SHA, CF06_WORKFLOW_PATH, CF06_WORKFLOW_BLOB),
+    )
 }
 
 fn build_baseline() -> authority::AuthorityBaseline {
-    assert_canonical_contract_objects();
-    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
+    assert_eq!(retained.cf10.retained_head, RETAINED_HEAD);
+
     let run = parse_json_no_duplicates(RETAINED_RUN).unwrap();
     verify_workflow_run(&retained, &run).unwrap();
     let artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();
     verify_artifacts(&retained, &artifacts).unwrap();
+
+    let retained_manifest = git_object_bytes(
+        RETAINED_HEAD,
+        &retained.cf10.manifest.path,
+        &retained.cf10.manifest.git_blob_sha,
+    );
+    let retained_donor = git_object_bytes(
+        RETAINED_HEAD,
+        &retained.cf10.donor.path,
+        &retained.cf10.donor.git_blob_sha,
+    );
     let retained_projection =
-        project_retained(&retained, RETAINED_MANIFEST, RETAINED_DONOR).unwrap();
+        project_retained(&retained, &retained_manifest, &retained_donor).unwrap();
+
     let assurance = parse_json_no_duplicates(ASSURANCE_RULESET).unwrap();
     let review = parse_json_no_duplicates(REVIEW_RULESET).unwrap();
+    let (oracle_model, cf06_donor, cf06_workflow) = canonical_cf06_sources();
 
     project_authority(
         MAIN_SHA,
@@ -66,19 +137,19 @@ fn build_baseline() -> authority::AuthorityBaseline {
         &review,
         [
             Cf06Source {
-                path: "crates/commandf-pkg/src/oracle_model.rs",
-                git_blob_sha: "9046546a86061961cf3e17f3f1880165625edea8",
-                bytes: ORACLE_MODEL,
+                path: ORACLE_MODEL_PATH,
+                git_blob_sha: ORACLE_MODEL_BLOB,
+                bytes: &oracle_model,
             },
             Cf06Source {
-                path: "donors/hl7-fhir-validator-6.10.2.yaml",
-                git_blob_sha: "9add2dad45cb8958c9304d38e29950ed1f769990",
-                bytes: CF06_DONOR,
+                path: CF06_DONOR_PATH,
+                git_blob_sha: CF06_DONOR_BLOB,
+                bytes: &cf06_donor,
             },
             Cf06Source {
-                path: ".github/workflows/cf06-oracle.yml",
-                git_blob_sha: "664e303983d2ef85aad934cbef2c14d63744e0ee",
-                bytes: CF06_WORKFLOW,
+                path: CF06_WORKFLOW_PATH,
+                git_blob_sha: CF06_WORKFLOW_BLOB,
+                bytes: &cf06_workflow,
             },
         ],
         retained_projection,
@@ -95,21 +166,23 @@ fn duplicate_probe(bytes: &[u8]) -> Vec<u8> {
 
 #[test]
 fn retained_schema_rejects_candidate_url_authority() {
-    let mut value: Value = parse_json_no_duplicates(RETAINED_SOURCES).unwrap();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let mut value: Value = parse_json_no_duplicates(&retained_sources).unwrap();
     value.as_object_mut().unwrap().insert(
         "url".to_owned(),
         Value::String("https://example.invalid".to_owned()),
     );
     let bytes = serde_json::to_vec(&value).unwrap();
-    let error = validate_and_parse(&bytes, RETAINED_SCHEMA).unwrap_err();
+    let error = validate_and_parse(&bytes, &retained_schema).unwrap_err();
     assert!(error.to_string().contains("unknown field"));
 }
 
 #[test]
 fn retained_contract_rejects_duplicate_semantic_keys_before_schema_validation() {
+    let (retained_sources, retained_schema) = canonical_retained_contract();
     let mut duplicate = br#"{"schema":"forged","#.to_vec();
-    duplicate.extend_from_slice(&RETAINED_SOURCES[1..]);
-    let error = validate_and_parse(&duplicate, RETAINED_SCHEMA).unwrap_err();
+    duplicate.extend_from_slice(&retained_sources[1..]);
+    let error = validate_and_parse(&duplicate, &retained_schema).unwrap_err();
     assert!(error
         .to_string()
         .contains("duplicate JSON object key \"schema\""));
@@ -132,8 +205,8 @@ fn authority_api_inputs_reject_duplicate_keys_before_projection() {
 
 #[test]
 fn retained_locator_plan_reconstructs_frozen_github_urls() {
-    assert_canonical_contract_objects();
-    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
     let plan = locator_plan(&retained).unwrap();
 
     assert_eq!(
@@ -176,7 +249,8 @@ fn retained_locator_plan_reconstructs_frozen_github_urls() {
 
 #[test]
 fn retained_run_binding_rejects_wrong_event() {
-    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
     let mut run = parse_json_no_duplicates(RETAINED_RUN).unwrap();
     run.as_object_mut()
         .unwrap()
@@ -187,7 +261,8 @@ fn retained_run_binding_rejects_wrong_event() {
 
 #[test]
 fn retained_artifact_binding_rejects_wrong_digest() {
-    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
     let mut artifacts = parse_json_no_duplicates(RETAINED_ARTIFACTS).unwrap();
     artifacts["artifacts"][0]["digest"] = Value::String(
         "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
@@ -198,11 +273,21 @@ fn retained_artifact_binding_rejects_wrong_digest() {
 
 #[test]
 fn retained_projection_rejects_candidate_controlled_manifest_bytes() {
-    let retained = validate_and_parse(RETAINED_SOURCES, RETAINED_SCHEMA).unwrap();
-    let mut manifest = RETAINED_MANIFEST.to_vec();
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
+    let mut manifest = git_object_bytes(
+        RETAINED_HEAD,
+        &retained.cf10.manifest.path,
+        &retained.cf10.manifest.git_blob_sha,
+    );
+    let donor = git_object_bytes(
+        RETAINED_HEAD,
+        &retained.cf10.donor.path,
+        &retained.cf10.donor.git_blob_sha,
+    );
     let index = manifest.iter().position(|byte| *byte == b'C').unwrap();
     manifest[index] = b'X';
-    let error = project_retained(&retained, &manifest, RETAINED_DONOR).unwrap_err();
+    let error = project_retained(&retained, &manifest, &donor).unwrap_err();
     assert!(error
         .to_string()
         .contains("retained manifest Git blob mismatch"));
@@ -219,28 +304,28 @@ fn assurance_projection_rejects_wrong_required_check_app() {
 
 #[test]
 fn cf06_projection_rejects_candidate_controlled_source_bytes() {
-    let altered = ORACLE_MODEL
+    let (mut oracle_model, cf06_donor, cf06_workflow) = canonical_cf06_sources();
+    let altered = oracle_model
         .windows(authority::CF06_SOURCE_COMMIT.len())
         .position(|window| window == authority::CF06_SOURCE_COMMIT.as_bytes())
         .unwrap();
-    let mut bytes = ORACLE_MODEL.to_vec();
-    bytes[altered] = b'0';
+    oracle_model[altered] = b'0';
 
     let error = project_cf06([
         Cf06Source {
-            path: "crates/commandf-pkg/src/oracle_model.rs",
-            git_blob_sha: "9046546a86061961cf3e17f3f1880165625edea8",
-            bytes: &bytes,
+            path: ORACLE_MODEL_PATH,
+            git_blob_sha: ORACLE_MODEL_BLOB,
+            bytes: &oracle_model,
         },
         Cf06Source {
-            path: "donors/hl7-fhir-validator-6.10.2.yaml",
-            git_blob_sha: "9add2dad45cb8958c9304d38e29950ed1f769990",
-            bytes: CF06_DONOR,
+            path: CF06_DONOR_PATH,
+            git_blob_sha: CF06_DONOR_BLOB,
+            bytes: &cf06_donor,
         },
         Cf06Source {
-            path: ".github/workflows/cf06-oracle.yml",
-            git_blob_sha: "664e303983d2ef85aad934cbef2c14d63744e0ee",
-            bytes: CF06_WORKFLOW,
+            path: CF06_WORKFLOW_PATH,
+            git_blob_sha: CF06_WORKFLOW_BLOB,
+            bytes: &cf06_workflow,
         },
     ])
     .unwrap_err();
