@@ -185,6 +185,8 @@ pub fn build_docker_plan(
 
     let source = validate_directory(source_dir, false)?;
     let output = validate_directory(output_dir, true)?;
+    validate_mount_path(&source)?;
+    validate_mount_path(&output)?;
     if output.starts_with(&source) || source.starts_with(&output) {
         return Err(ResourceError::Path(
             "source and output directories must be disjoint".to_owned(),
@@ -314,18 +316,26 @@ fn execute_created_container(
         "docker",
         &[
             "inspect".to_owned(),
-            "--format={{.State.ExitCode}}".to_owned(),
+            "--format={{json .State}}".to_owned(),
             container_id.to_owned(),
         ],
     )?;
-    let process_exit_code = String::from_utf8_lossy(&state.stdout)
-        .trim()
-        .parse::<i32>()
-        .map_err(|_| {
-            ResourceError::RuntimeInspection("container exit code is not an integer".to_owned())
+    let state_value = parse_json_no_duplicates(&state.stdout)?;
+    let state_object = state_value.as_object().ok_or_else(|| {
+        ResourceError::RuntimeInspection("container State is not an object".to_owned())
+    })?;
+    expect_string(state_object.get("Status"), "exited", "State.Status")?;
+    let exit_code = state_object
+        .get("ExitCode")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| {
+            ResourceError::RuntimeInspection("container ExitCode is not an integer".to_owned())
         })?;
+    let process_exit_code = i32::try_from(exit_code).map_err(|_| {
+        ResourceError::RuntimeInspection("container ExitCode is outside i32".to_owned())
+    })?;
     let observed = captured.status.code().unwrap_or(-1);
-    if observed != process_exit_code && observed != 125 {
+    if observed != process_exit_code {
         return Err(ResourceError::RuntimeInspection(format!(
             "docker attach exit {observed} disagrees with container exit {process_exit_code}"
         )));
@@ -586,10 +596,10 @@ fn verify_runtime_inspection(
         )));
     }
 
-    let mounts = host
+    let mounts = object
         .get("Mounts")
         .and_then(Value::as_array)
-        .ok_or_else(|| ResourceError::RuntimeInspection("missing HostConfig.Mounts".to_owned()))?;
+        .ok_or_else(|| ResourceError::RuntimeInspection("missing top-level Mounts".to_owned()))?;
     verify_bind_mount(mounts, &plan.source_dir, SOURCE_MOUNT, true)?;
     verify_bind_mount(mounts, &plan.output_dir, OUTPUT_MOUNT, false)?;
     Ok(())
@@ -604,8 +614,8 @@ fn verify_bind_mount(
     let matched = mounts.iter().any(|mount| {
         mount.get("Type").and_then(Value::as_str) == Some("bind")
             && mount.get("Source").and_then(Value::as_str) == Some(source)
-            && mount.get("Target").and_then(Value::as_str) == Some(target)
-            && mount.get("ReadOnly").and_then(Value::as_bool) == Some(read_only)
+            && mount.get("Destination").and_then(Value::as_str) == Some(target)
+            && mount.get("RW").and_then(Value::as_bool) == Some(!read_only)
     });
     if !matched {
         return Err(ResourceError::RuntimeInspection(format!(
@@ -707,6 +717,17 @@ fn validate_directory(path: &Path, require_empty: bool) -> Result<PathBuf, Resou
         path: path.display().to_string(),
         source,
     })
+}
+
+fn validate_mount_path(path: &Path) -> Result<(), ResourceError> {
+    let rendered = path.to_string_lossy();
+    if rendered.contains(',') || rendered.contains('=') {
+        return Err(ResourceError::Path(format!(
+            "Docker --mount path contains an unsupported delimiter: {}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 fn run_simple(program: &str, args: &[String]) -> Result<std::process::Output, ResourceError> {
@@ -915,6 +936,7 @@ fn policy_error<T>(message: impl Into<String>) -> Result<T, ResourceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     const CANONICAL_POLICY: &[u8] = include_bytes!(
         "../../../specs/016-af-02-adversarial-test-strength/resource-policy.json"
@@ -924,12 +946,87 @@ mod tests {
         parse_resource_policy(CANONICAL_POLICY).expect("canonical resource policy must parse")
     }
 
+    fn synthetic_plan() -> DockerPlan {
+        DockerPlan {
+            image: RUNNER_IMAGE.to_owned(),
+            create_args: Vec::new(),
+            source_dir: "/repo/source".to_owned(),
+            output_dir: "/repo/output".to_owned(),
+            user: "1000:1000".to_owned(),
+        }
+    }
+
+    fn synthetic_inspect(policy: &ResourcePolicy, plan: &DockerPlan) -> Value {
+        json!([{
+            "HostConfig": {
+                "NetworkMode": "none",
+                "ReadonlyRootfs": true,
+                "Memory": mib_to_bytes(policy.process_memory_mib),
+                "NanoCpus": policy.cpu_count * 1_000_000_000,
+                "PidsLimit": policy.pids_limit,
+                "CapDrop": ["ALL"],
+                "SecurityOpt": ["no-new-privileges"],
+                "Tmpfs": {
+                    "/tmp": format!(
+                        "rw,noexec,nosuid,nodev,size={}",
+                        mib_to_bytes(policy.tmpfs_mib)
+                    )
+                }
+            },
+            "Config": {
+                "User": plan.user.clone(),
+                "WorkingDir": SOURCE_MOUNT
+            },
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": plan.source_dir.clone(),
+                    "Destination": SOURCE_MOUNT,
+                    "RW": false
+                },
+                {
+                    "Type": "bind",
+                    "Source": plan.output_dir.clone(),
+                    "Destination": OUTPUT_MOUNT,
+                    "RW": true
+                }
+            ]
+        }])
+    }
+
     #[test]
     fn canonical_resource_policy_parses() {
         let policy = policy();
         assert_eq!(policy.runner_image_digest, RUNNER_IMAGE_DIGEST);
         assert_eq!(policy.network_mode, "none");
         assert!(policy.offline_required);
+    }
+
+    #[test]
+    fn resource_policy_rejects_closed_value_and_bound_drift() {
+        let mut wrong_schema = policy();
+        wrong_schema.schema = "commandf.af02-resource-policy/v0".to_owned();
+        assert!(validate_resource_policy(&wrong_schema).is_err());
+
+        let mut wrong_digest = policy();
+        wrong_digest.runner_image_digest = "sha256:deadbeef".to_owned();
+        assert!(validate_resource_policy(&wrong_digest).is_err());
+
+        let mut too_little_memory = policy();
+        too_little_memory.process_memory_mib = 63;
+        assert!(validate_resource_policy(&too_little_memory).is_err());
+    }
+
+    #[test]
+    fn resource_lineage_rejects_temporal_misclassification() {
+        let mut bootstrap_with_predecessor = policy().lineage;
+        bootstrap_with_predecessor.predecessor_blob_sha = Some("a".repeat(40));
+        bootstrap_with_predecessor.predecessor_sha256 = Some("b".repeat(64));
+        assert!(validate_lineage(&bootstrap_with_predecessor).is_err());
+
+        let mut rebase_without_predecessor = policy().lineage;
+        rebase_without_predecessor.mode = ResourceLineageMode::Rebase;
+        assert!(validate_lineage(&rebase_without_predecessor).is_err());
     }
 
     #[test]
@@ -977,6 +1074,30 @@ mod tests {
     }
 
     #[test]
+    fn docker_plan_rejects_mount_delimiters() {
+        let root = std::env::temp_dir().join(format!(
+            "commandf-af02-resource-delimiter-{}",
+            std::process::id()
+        ));
+        let source = root.join("source,invalid");
+        let output = root.join("output");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&output).unwrap();
+        let error = build_docker_plan(
+            &policy(),
+            &source,
+            &output,
+            &["true".to_owned()],
+            "1000:1000",
+            "commandf-af02-test",
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unsupported delimiter"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn output_directory_must_start_empty_and_disjoint() {
         let root = std::env::temp_dir().join(format!(
             "commandf-af02-resource-invalid-{}",
@@ -999,6 +1120,28 @@ mod tests {
         .unwrap_err();
         assert!(error.to_string().contains("not empty"));
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn runtime_inspection_accepts_exact_docker_schema() {
+        let policy = policy();
+        let plan = synthetic_plan();
+        let inspect = synthetic_inspect(&policy, &plan);
+        verify_runtime_inspection(&policy, &inspect, &plan).unwrap();
+    }
+
+    #[test]
+    fn runtime_inspection_rejects_network_and_writable_source_drift() {
+        let policy = policy();
+        let plan = synthetic_plan();
+
+        let mut network_drift = synthetic_inspect(&policy, &plan);
+        network_drift[0]["HostConfig"]["NetworkMode"] = json!("bridge");
+        assert!(verify_runtime_inspection(&policy, &network_drift, &plan).is_err());
+
+        let mut writable_source = synthetic_inspect(&policy, &plan);
+        writable_source[0]["Mounts"][0]["RW"] = json!(true);
+        assert!(verify_runtime_inspection(&policy, &writable_source, &plan).is_err());
     }
 
     #[test]
