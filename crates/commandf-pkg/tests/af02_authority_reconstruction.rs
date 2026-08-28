@@ -6,8 +6,9 @@ mod canonical;
 mod retained;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 use authority::{project_assurance_ruleset, project_authority, project_cf06, Cf06Source};
 use canonical::{canonical_json_bytes, git_blob_sha1_hex, parse_json_no_duplicates};
@@ -42,12 +43,100 @@ const RETAINED_RUN: &[u8] =
 const RETAINED_ARTIFACTS: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-artifacts.json");
 
+static GIT_FETCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
 fn repository_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+fn pinned_commit_available(root: &Path, revision: &str) -> bool {
+    let commit = format!("{revision}^{{commit}}");
+    Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["cat-file", "-e", &commit])
+        .status()
+        .expect("run git cat-file commit probe")
+        .success()
+}
+
+fn ensure_pinned_commit_available(root: &Path, revision: &str) {
+    if pinned_commit_available(root, revision) {
+        return;
+    }
+
+    let fetch_lock = GIT_FETCH_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = fetch_lock.lock().expect("Git fetch mutex poisoned");
+    if pinned_commit_available(root, revision) {
+        return;
+    }
+
+    let remote = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .expect("read Git origin URL");
+    assert!(
+        remote.status.success(),
+        "git remote get-url origin failed: {}",
+        String::from_utf8_lossy(&remote.stderr)
+    );
+    let origin = String::from_utf8(remote.stdout)
+        .expect("Git origin URL UTF-8")
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .to_owned();
+    assert!(
+        origin == "https://github.com/TheHalfMoon/commandF"
+            || origin == "git@github.com:TheHalfMoon/commandF",
+        "refusing to fetch authority objects from non-canonical origin {origin}"
+    );
+
+    let fetched = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args([
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--depth=1",
+            "origin",
+            revision,
+        ])
+        .output()
+        .expect("fetch pinned authority commit");
+    assert!(
+        fetched.status.success(),
+        "git fetch failed for pinned authority commit {revision}: {}",
+        String::from_utf8_lossy(&fetched.stderr)
+    );
+
+    let commit = format!("{revision}^{{commit}}");
+    let resolved = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--verify", &commit])
+        .output()
+        .expect("verify fetched authority commit");
+    assert!(
+        resolved.status.success(),
+        "git rev-parse failed for fetched authority commit {revision}: {}",
+        String::from_utf8_lossy(&resolved.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(resolved.stdout)
+            .expect("fetched authority commit UTF-8")
+            .trim(),
+        revision,
+        "fetched authority commit identity drifted"
+    );
+}
+
 fn git_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {
     let root = repository_root();
+    ensure_pinned_commit_available(&root, revision);
     let spec = format!("{revision}:{path}");
     let resolved = Command::new("git")
         .arg("-C")
