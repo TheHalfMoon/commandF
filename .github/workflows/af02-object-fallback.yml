@@ -1,0 +1,130 @@
+name: AF-02 immutable object fallback repair
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-authority-reconstruction
+    paths:
+      - .github/workflows/af02-object-fallback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f399b9d5de9e5dd0a1f15dc4164a1b3f47c0
+        with:
+          ref: feat/af02-a0-authority-reconstruction
+      - uses: dtolnay/rust-toolchain@032958f5c5cdd45579c67c5e92f06e2f1f949122
+        with:
+          toolchain: stable
+      - name: Apply fail-closed immutable GitHub object fallback
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/commandf-pkg/tests/af02_authority_reconstruction.rs')
+          text = path.read_text()
+          marker = 'fn git_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {'
+          if marker not in text:
+              raise SystemExit('git_object_bytes marker missing')
+
+          helper = r'''fn github_content_object_bytes(revision: &str, path: &str, expected_blob: &str) -> Vec<u8> {
+              assert!(
+                  revision.len() == 40
+                      && revision
+                          .bytes()
+                          .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+                  "refusing non-immutable GitHub revision {revision}"
+              );
+              assert!(
+                  expected_blob.len() == 40
+                      && expected_blob
+                          .bytes()
+                          .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+                  "invalid expected Git blob identity {expected_blob}"
+              );
+              assert!(
+                  !path.starts_with('/')
+                      && !path.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..")
+                      && path.bytes().all(|byte| {
+                          byte.is_ascii_alphanumeric()
+                              || matches!(byte, b'/' | b'.' | b'_' | b'-')
+                      }),
+                  "refusing unsafe GitHub authority path {path}"
+              );
+
+              let url = format!(
+                  "https://api.github.com/repos/TheHalfMoon/commandF/contents/{path}?ref={revision}"
+              );
+              let response = Command::new("curl")
+                  .args([
+                      "--fail",
+                      "--silent",
+                      "--show-error",
+                      "--proto",
+                      "=https",
+                      "--tlsv1.2",
+                      "--connect-timeout",
+                      "10",
+                      "--max-time",
+                      "30",
+                      "--header",
+                      "Accept: application/vnd.github.raw+json",
+                      "--header",
+                      "X-GitHub-Api-Version: 2022-11-28",
+                      "--header",
+                      "User-Agent: commandF-af02-authority-reconstruction",
+                      &url,
+                  ])
+                  .output()
+                  .expect("fetch immutable GitHub authority object with curl");
+              assert!(
+                  response.status.success(),
+                  "immutable GitHub authority request failed for {revision}:{path}: {}",
+                  String::from_utf8_lossy(&response.stderr)
+              );
+              assert_eq!(
+                  git_blob_sha1_hex(&response.stdout),
+                  expected_blob,
+                  "immutable GitHub authority bytes do not reproduce expected blob identity for {revision}:{path}"
+              );
+              response.stdout
+          }
+
+          '''
+          text = text.replace(marker, helper + marker, 1)
+
+          old = r'''    assert!(
+              resolved.status.success(),
+              "git rev-parse failed for {spec}: {}",
+              String::from_utf8_lossy(&resolved.stderr)
+          );
+          let observed_blob = String::from_utf8(resolved.stdout)
+'''
+          new = r'''    if !resolved.status.success() {
+              return github_content_object_bytes(revision, path, expected_blob);
+          }
+          let observed_blob = String::from_utf8(resolved.stdout)
+'''
+          if old not in text:
+              raise SystemExit('rev-parse assertion block missing')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+          cargo fmt --all
+          rm .github/workflows/af02-object-fallback.yml
+          git add crates/commandf-pkg/tests/af02_authority_reconstruction.rs .github/workflows/af02-object-fallback.yml
+          git diff --cached --check
+          paths="$(git diff --cached --name-only)"
+          test "$paths" = "crates/commandf-pkg/tests/af02_authority_reconstruction.rs" || {
+            printf 'unexpected staged paths:\n%s\n' "$paths" >&2
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "fix(af02): bind historical objects through immutable API"
+          git push origin HEAD:feat/af02-a0-authority-reconstruction
