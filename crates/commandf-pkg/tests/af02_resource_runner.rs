@@ -6,7 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const VERIFIER_MANIFEST: &str = "tools/af02-verifier/Cargo.toml";
 const RESOURCE_POLICY: &str = "specs/016-af-02-adversarial-test-strength/resource-policy.json";
-const RUNNER_IMAGE: &str = "docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f";
+const RUNNER_IMAGE: &str =
+    "docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
