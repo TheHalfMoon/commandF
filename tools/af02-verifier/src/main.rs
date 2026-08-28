@@ -50,7 +50,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let command = args.next().ok_or("missing entrypoint")?;
     match command.as_str() {
         "project-retained" => {
-            let retained_path = PathBuf::from(args.next().ok_or("missing retained authority path")?);
+            let retained_path =
+                PathBuf::from(args.next().ok_or("missing retained authority path")?);
             let schema_path = PathBuf::from(args.next().ok_or("missing retained schema path")?);
             if args.next().is_some() {
                 return Err("project-retained accepts exactly two paths".into());
@@ -90,8 +91,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             )?;
             let assurance: Value =
                 parse_json_no_duplicates(&fs::read(&input.assurance_ruleset_path)?)?;
-            let review: Value =
-                parse_json_no_duplicates(&fs::read(&input.review_ruleset_path)?)?;
+            let review: Value = parse_json_no_duplicates(&fs::read(&input.review_ruleset_path)?)?;
 
             let oracle_model = fs::read(&input.cf06_oracle_model.local_path)?;
             let donor = fs::read(&input.cf06_donor.local_path)?;
@@ -142,7 +142,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let policy_path = PathBuf::from(args.next().ok_or("missing surface policy path")?);
             let repo_root = PathBuf::from(args.next().ok_or("missing repository root")?);
             if args.next().is_some() {
-                return Err("scan-surface accepts exactly a policy path and repository root".into());
+                return Err(
+                    "scan-surface accepts exactly a policy path and repository root".into(),
+                );
             }
             let policy = parse_surface_policy(&fs::read(policy_path)?)?;
             let sources = discover_tracked_rust_sources(&repo_root)?;

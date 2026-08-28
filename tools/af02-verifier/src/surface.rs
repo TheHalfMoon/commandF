@@ -5,7 +5,10 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprAssign, ExprCall, ExprMethodCall, ExprStruct, Item, ItemMod, Local, Macro, Pat, Path as SynPath, UseTree};
+use syn::{
+    Expr, ExprAssign, ExprCall, ExprMethodCall, ExprStruct, Item, ItemMod, Local, Macro, Pat,
+    Path as SynPath, UseTree,
+};
 use thiserror::Error;
 
 use crate::canonical::parse_json_no_duplicates;
@@ -35,7 +38,10 @@ pub enum SurfaceError {
     #[error("repository source is not a regular file: {0}")]
     NonRegularSource(String),
     #[error("I/O error for {path}: {source}")]
-    Io { path: String, source: std::io::Error },
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("git ls-files failed: {0}")]
     Git(String),
 }
@@ -174,7 +180,11 @@ pub fn discover_tracked_rust_sources(repo_root: &Path) -> Result<Vec<SourceFile>
     }
 
     let mut paths = Vec::new();
-    for raw in output.stdout.split(|byte| *byte == 0).filter(|raw| !raw.is_empty()) {
+    for raw in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|raw| !raw.is_empty())
+    {
         let path = std::str::from_utf8(raw)
             .map_err(|_| SurfaceError::SourcePath("git returned a non-UTF-8 path".to_owned()))?;
         if is_surface_source_path(path) {
@@ -317,8 +327,7 @@ fn validate_surface_policy(policy: &SurfacePolicy) -> Result<(), SurfaceError> {
                 matcher.matcher_id
             ));
         }
-        if matcher.kind != MatcherKind::MethodCall
-            && matcher.receiver_constructor_or_null.is_some()
+        if matcher.kind != MatcherKind::MethodCall && matcher.receiver_constructor_or_null.is_some()
         {
             return policy_error(format!(
                 "matcher {} sets receiver constructor for non-method matcher",
@@ -348,7 +357,10 @@ fn validate_surface_policy(policy: &SurfacePolicy) -> Result<(), SurfaceError> {
         }
         surface_categories.insert(surface.category.as_str());
         if surface.matcher_ids.is_empty() || surface.source_paths.is_empty() {
-            return policy_error(format!("surface {} has an empty membership", surface.surface_id));
+            return policy_error(format!(
+                "surface {} has an empty membership",
+                surface.surface_id
+            ));
         }
         ensure_unique_strings(
             surface.matcher_ids.iter().map(String::as_str),
@@ -387,12 +399,14 @@ fn validate_surface_policy(policy: &SurfacePolicy) -> Result<(), SurfaceError> {
             return policy_error(format!("duplicate witness_id {}", witness.witness_id));
         }
         witness_categories.insert(witness.category.as_str());
-        let category = matcher_category.get(witness.matcher_id.as_str()).ok_or_else(|| {
-            SurfaceError::Policy(format!(
-                "witness {} references unknown matcher {}",
-                witness.witness_id, witness.matcher_id
-            ))
-        })?;
+        let category = matcher_category
+            .get(witness.matcher_id.as_str())
+            .ok_or_else(|| {
+                SurfaceError::Policy(format!(
+                    "witness {} references unknown matcher {}",
+                    witness.witness_id, witness.matcher_id
+                ))
+            })?;
         if *category != witness.category {
             return policy_error(format!(
                 "witness {} category disagrees with matcher {}",
@@ -431,7 +445,11 @@ fn validate_surface_policy(policy: &SurfacePolicy) -> Result<(), SurfaceError> {
             ));
         }
         validate_repo_path(&exclusion.source_path)?;
-        validate_hex(&exclusion.introduced_policy_sha, 40, "introduced_policy_sha")?;
+        validate_hex(
+            &exclusion.introduced_policy_sha,
+            40,
+            "introduced_policy_sha",
+        )?;
         if exclusion.reason.len() < 20 || exclusion.reason.len() > 2048 {
             return policy_error(format!(
                 "finding exclusion {} has invalid reason length",
@@ -452,7 +470,9 @@ fn validate_lineage(lineage: &PolicyLineage) -> Result<(), SurfaceError> {
         return policy_error("surface policy lineage must be policy-only");
     }
     if lineage.dependent_evidence_allowed_in_same_candidate {
-        return policy_error("surface policy lineage cannot allow same-candidate dependent evidence");
+        return policy_error(
+            "surface policy lineage cannot allow same-candidate dependent evidence",
+        );
     }
     if lineage.comparison_rule != "BASE_CONTROLLED_PREDECESSOR_OR_SINGLE_BOOTSTRAP" {
         return policy_error("unexpected surface policy comparison_rule");
@@ -464,14 +484,12 @@ fn validate_lineage(lineage: &PolicyLineage) -> Result<(), SurfaceError> {
             }
         }
         PolicyLineageMode::Rebase => {
-            let blob = lineage
-                .predecessor_blob_sha
-                .as_deref()
-                .ok_or_else(|| SurfaceError::Policy("REBASE lineage missing predecessor blob".into()))?;
-            let digest = lineage
-                .predecessor_sha256
-                .as_deref()
-                .ok_or_else(|| SurfaceError::Policy("REBASE lineage missing predecessor digest".into()))?;
+            let blob = lineage.predecessor_blob_sha.as_deref().ok_or_else(|| {
+                SurfaceError::Policy("REBASE lineage missing predecessor blob".into())
+            })?;
+            let digest = lineage.predecessor_sha256.as_deref().ok_or_else(|| {
+                SurfaceError::Policy("REBASE lineage missing predecessor digest".into())
+            })?;
             validate_hex(blob, 40, "predecessor_blob_sha")?;
             validate_hex(digest, 64, "predecessor_sha256")?;
         }
@@ -493,14 +511,7 @@ fn scan_module_items(
             if let Some((_, nested)) = &module.content {
                 let mut nested_path = module_path.to_vec();
                 nested_path.push(module.ident.to_string());
-                scan_module_items(
-                    policy,
-                    source_path,
-                    nested,
-                    &nested_path,
-                    ordinal,
-                    findings,
-                );
+                scan_module_items(policy, source_path, nested, &nested_path, ordinal, findings);
             }
             continue;
         }
@@ -527,12 +538,7 @@ fn collect_imports(items: &[Item], module_path: &[String]) -> ImportTable {
     let mut table = ImportTable::default();
     for item in items {
         if let Item::Use(item_use) = item {
-            expand_use_tree(
-                &item_use.tree,
-                Vec::new(),
-                module_path,
-                &mut table,
-            );
+            expand_use_tree(&item_use.tree, Vec::new(), module_path, &mut table);
         }
     }
     table.globs.sort();
@@ -613,12 +619,7 @@ impl ScannerVisitor<'_> {
         current
     }
 
-    fn classify_path(
-        &mut self,
-        ordinal: u64,
-        path: &SynPath,
-        allowed_kinds: &[MatcherKind],
-    ) {
+    fn classify_path(&mut self, ordinal: u64, path: &SynPath, allowed_kinds: &[MatcherKind]) {
         let raw = syn_path_segments(path);
         let resolved = resolve_segments(&raw, self.module_path, self.imports);
         for matcher in &self.policy.matchers {
@@ -886,25 +887,19 @@ fn path_has_glob_ambiguity(raw: &[String], imports: &ImportTable) -> bool {
     let Some(first) = raw.first() else {
         return false;
     };
-    if imports.aliases.contains_key(first)
-        || matches!(first.as_str(), "crate" | "self" | "super")
-    {
+    if imports.aliases.contains_key(first) || matches!(first.as_str(), "crate" | "self" | "super") {
         return false;
     }
     imports.globs.iter().any(|glob| {
         !glob.is_empty()
             && (raw.len() == 1
-                || raw.first().is_some_and(|segment| {
-                    glob.last().is_some_and(|last| last != segment)
-                }))
+                || raw
+                    .first()
+                    .is_some_and(|segment| glob.last().is_some_and(|last| last != segment)))
     })
 }
 
-fn resolve_segments(
-    raw: &[String],
-    module_path: &[String],
-    imports: &ImportTable,
-) -> Vec<String> {
+fn resolve_segments(raw: &[String], module_path: &[String], imports: &ImportTable) -> Vec<String> {
     let mut current = normalize_special_segments(raw, module_path);
     let mut seen = BTreeSet::new();
     for _ in 0..=imports.aliases.len() {
@@ -1014,23 +1009,19 @@ fn validate_repo_path(path: &str) -> Result<(), SurfaceError> {
     Ok(())
 }
 
-fn validate_category(
-    category: &str,
-    allowed: &BTreeSet<&str>,
-) -> Result<(), SurfaceError> {
+fn validate_category(category: &str, allowed: &BTreeSet<&str>) -> Result<(), SurfaceError> {
     if !allowed.contains(category) {
         return policy_error(format!("unknown boundary category {category}"));
     }
     Ok(())
 }
 
-fn ensure_all_categories(
-    label: &str,
-    categories: &BTreeSet<&str>,
-) -> Result<(), SurfaceError> {
+fn ensure_all_categories(label: &str, categories: &BTreeSet<&str>) -> Result<(), SurfaceError> {
     let expected: BTreeSet<&str> = BOUNDARY_CATEGORIES.into_iter().collect();
     if *categories != expected {
-        return policy_error(format!("{label} does not cover all six boundary categories"));
+        return policy_error(format!(
+            "{label} does not cover all six boundary categories"
+        ));
     }
     Ok(())
 }
@@ -1051,13 +1042,9 @@ fn ensure_unique_strings<'a>(
 fn validate_id(value: &str, label: &str) -> Result<(), SurfaceError> {
     if value.is_empty()
         || value.len() > 160
-        || !value
-            .bytes()
-            .enumerate()
-            .all(|(index, byte)| {
-                byte.is_ascii_alphanumeric()
-                    || (index > 0 && matches!(byte, b'.' | b'_' | b':' | b'-'))
-            })
+        || !value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphanumeric() || (index > 0 && matches!(byte, b'.' | b'_' | b':' | b'-'))
+        })
     {
         return policy_error(format!("invalid {label} {value}"));
     }
@@ -1089,9 +1076,8 @@ fn policy_error<T>(message: impl Into<String>) -> Result<T, SurfaceError> {
 mod tests {
     use super::*;
 
-    const CANONICAL_POLICY: &[u8] = include_bytes!(
-        "../../../specs/016-af-02-adversarial-test-strength/surface-policy.json"
-    );
+    const CANONICAL_POLICY: &[u8] =
+        include_bytes!("../../../specs/016-af-02-adversarial-test-strength/surface-policy.json");
 
     fn policy() -> SurfacePolicy {
         parse_surface_policy(CANONICAL_POLICY).expect("canonical surface policy must parse")
@@ -1117,9 +1103,7 @@ mod tests {
 
     #[test]
     fn explicit_alias_resolves_to_canonical_path() {
-        let findings = findings_for(
-            "use std::fs as io; fn f() { let _ = io::read(\"fixture\"); }",
-        );
+        let findings = findings_for("use std::fs as io; fn f() { let _ = io::read(\"fixture\"); }");
         assert!(findings.iter().any(|finding| {
             finding.matcher_id == "filesystem-read"
                 && finding.certainty == FindingCertainty::Definite
@@ -1128,8 +1112,7 @@ mod tests {
 
     #[test]
     fn glob_import_emits_uncertain_finding() {
-        let findings =
-            findings_for("use std::fs::*; fn f() { let _ = read(\"fixture\"); }");
+        let findings = findings_for("use std::fs::*; fn f() { let _ = read(\"fixture\"); }");
         assert!(findings.iter().any(|finding| {
             finding.matcher_id == "filesystem-read"
                 && finding.certainty == FindingCertainty::Uncertain
@@ -1138,9 +1121,8 @@ mod tests {
 
     #[test]
     fn comments_and_literals_do_not_create_findings() {
-        let findings = findings_for(
-            r#"fn f() { let _ = \"std::fs::read(\\\"x\\\")\"; /* std::fs::read(\"x\"); */ }"#,
-        );
+        let findings =
+            findings_for(r#"fn f() { let _ = "std::fs::read(\"x\")"; /* std::fs::read("x"); */ }"#);
         assert!(!findings
             .iter()
             .any(|finding| finding.matcher_id == "filesystem-read"));
@@ -1148,9 +1130,7 @@ mod tests {
 
     #[test]
     fn cfg_disabled_syntax_is_still_scanned() {
-        let findings = findings_for(
-            "#[cfg(any())] fn f() { let _ = std::fs::read(\"fixture\"); }",
-        );
+        let findings = findings_for("#[cfg(any())] fn f() { let _ = std::fs::read(\"fixture\"); }");
         assert!(findings
             .iter()
             .any(|finding| finding.matcher_id == "filesystem-read"));
@@ -1158,8 +1138,7 @@ mod tests {
 
     #[test]
     fn null_receiver_method_matcher_matches_syntactically() {
-        let findings =
-            findings_for("fn f(value: &str) { let _ = value.parse::<u64>(); }");
+        let findings = findings_for("fn f(value: &str) { let _ = value.parse::<u64>(); }");
         assert!(findings.iter().any(|finding| {
             finding.matcher_id == "parser-method-parse"
                 && finding.certainty == FindingCertainty::Definite
@@ -1231,7 +1210,9 @@ mod tests {
         });
         let findings = scan_surface(
             &policy,
-            &[source(r#"fn f() { tokio::select! { _ = async {} => {} } let _ = \"tokio::select!\"; }"#)],
+            &[source(
+                r#"fn f() { tokio::select! { _ = async {} => {} } let _ = "tokio::select!"; }"#,
+            )],
         )
         .expect("scan must succeed");
         assert_eq!(
