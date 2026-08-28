@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "selection_policy": "frozen_pre_result_v1",
+  "cases": [
+    {
+      "id": "C001",
+      "package": "hl7.fhir.us.core",
+      "before": {
+        "version": "8.0.1",
+        "archive_sha256": "3c02eef48ef10617021bee95e58cbc66d596ceda8cada24b72000d33ad67c464",
+        "archive_bytes": 2713046,
+        "publication_url": "https://hl7.org/fhir/us/core/STU8.0.1/"
+      },
+      "after": {
+        "version": "9.0.0",
+        "archive_sha256": "d7b54d2ec2a48cea94ffea5d939ad67a681f80b94d69594a08cebac36da9e059",
+        "archive_bytes": 2749959,
+        "publication_url": "https://hl7.org/fhir/us/core/STU9/"
+      },
+      "fhir_version": "4.0.1",
+      "publisher": "HL7 International",
+      "change_evidence_url": "https://hl7.org/fhir/us/core/STU9/changes.html",
+      "rights_evidence_url": "https://hl7.org/fhir/us/core/STU9/ImplementationGuide-hl7.fhir.us.core.html",
+      "rights_mode": "metadata_only_no_redistribution",
+      "oracle_mode": "changed_structure_definitions_only"
+    },
+    {
+      "id": "C002",
+      "package": "hl7.fhir.uv.ips",
+      "before": {
+        "version": "1.1.0",
+        "archive_sha256": "403c4141101810e924f2928287985084819d8a5cc3a62e2b3840a557129840ef",
+        "archive_bytes": 1065103,
+        "publication_url": "https://hl7.org/fhir/uv/ips/STU1.1/"
+      },
+      "after": {
+        "version": "2.0.1",
+        "archive_sha256": "7183242b70fb2a9058aa3701fb607517a3c2fd0e3100d1d8c538d744c2adf799",
+        "archive_bytes": 725312,
+        "publication_url": "https://hl7.org/fhir/uv/ips/en/"
+      },
+      "fhir_version": "4.0.1",
+      "publisher": "HL7 International",
+      "change_evidence_url": "https://hl7.org/fhir/uv/ips/en/changes.html",
+      "rights_evidence_url": "https://hl7.org/fhir/uv/ips/en/terminology.html",
+      "rights_mode": "metadata_only_no_redistribution",
+      "oracle_mode": "changed_structure_definitions_only"
+    },
+    {
+      "id": "C003",
+      "package": "hl7.fhir.us.mcode",
+      "before": {
+        "version": "3.0.0",
+        "archive_sha256": "c94c91971747efeae760aa037d168e4df992cefb6dacece08217c464b9d39214",
+        "archive_bytes": 1014084,
+        "publication_url": "https://hl7.org/fhir/us/mcode/STU3/"
+      },
+      "after": {
+        "version": "4.0.0",
+        "archive_sha256": "e603283bafa508a3705ad022bce95bba1fbd0b8b3b87b978e7412813b7bc1778",
+        "archive_bytes": 1003918,
+        "publication_url": "https://hl7.org/fhir/us/mcode/STU4/"
+      },
+      "fhir_version": "4.0.1",
+      "publisher": "HL7 International",
+      "change_evidence_url": "https://hl7.org/fhir/us/mcode/STU4/changes.html",
+      "rights_evidence_url": "https://hl7.org/fhir/us/mcode/STU4/terminology.html",
+      "rights_mode": "metadata_only_no_redistribution",
+      "oracle_mode": "changed_structure_definitions_only"
+    }
+  ]
+}
