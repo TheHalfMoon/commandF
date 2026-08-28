@@ -274,73 +274,87 @@ pub fn run_bounded(
         ));
     }
 
-    let execution = (|| {
-        let inspect = run_simple("docker", &["inspect".to_owned(), container_id.clone()])?;
-        let inspect_value = parse_json_no_duplicates(&inspect.stdout)?;
-        verify_runtime_inspection(policy, &inspect_value, &plan)?;
-
-        let timeout = Duration::from_secs(
-            policy
-                .subprocess_timeout_seconds
-                .min(policy.campaign_wall_seconds),
-        );
-        let mut start = Command::new("docker");
-        start.args(["start", "--attach", &container_id]);
-        let captured = run_captured_bounded(&mut start, timeout, CAPTURE_LIMIT_BYTES)?;
-        if captured.stdout_overflow || captured.stderr_overflow {
-            return Err(ResourceError::CaptureLimit);
-        }
-
-        let state = run_simple(
-            "docker",
-            &[
-                "inspect".to_owned(),
-                "--format={{.State.ExitCode}}".to_owned(),
-                container_id.clone(),
-            ],
-        )?;
-        let process_exit_code = String::from_utf8_lossy(&state.stdout)
-            .trim()
-            .parse::<i32>()
-            .map_err(|_| {
-                ResourceError::RuntimeInspection("container exit code is not an integer".to_owned())
-            })?;
-        let observed = captured.status.code().unwrap_or(-1);
-        if observed != process_exit_code && observed != 125 {
-            return Err(ResourceError::RuntimeInspection(format!(
-                "docker attach exit {observed} disagrees with container exit {process_exit_code}"
-            )));
-        }
-        if captured.stderr.windows(b"AF02_RESOURCE_PROBE_FAIL=".len()).any(|window| {
-            window == b"AF02_RESOURCE_PROBE_FAIL="
-        }) {
-            return Err(ResourceError::RuntimeInspection(
-                String::from_utf8_lossy(&captured.stderr).into_owned(),
-            ));
-        }
-
-        let (output_regular_files, output_total_bytes) =
-            validate_artifact_tree(output_dir, policy)?;
-
-        Ok(RunnerOutcome {
-            image: RUNNER_IMAGE.to_owned(),
-            image_digest: RUNNER_IMAGE_DIGEST.to_owned(),
-            container_id: container_id.clone(),
-            process_exit_code,
-            stdout_sha256: sha256_hex(&captured.stdout),
-            stderr_sha256: sha256_hex(&captured.stderr),
-            stdout_bytes: captured.stdout.len() as u64,
-            stderr_bytes: captured.stderr.len() as u64,
-            output_regular_files,
-            output_total_bytes,
-        })
-    })();
-
+    let execution = execute_created_container(policy, output_dir, &plan, &container_id);
     let _ = run_simple(
         "docker",
-        &["rm".to_owned(), "--force".to_owned(), container_id],
+        &[
+            "rm".to_owned(),
+            "--force".to_owned(),
+            container_id,
+        ],
     );
     execution
+}
+
+fn execute_created_container(
+    policy: &ResourcePolicy,
+    output_dir: &Path,
+    plan: &DockerPlan,
+    container_id: &str,
+) -> Result<RunnerOutcome, ResourceError> {
+    let inspect = run_simple(
+        "docker",
+        &["inspect".to_owned(), container_id.to_owned()],
+    )?;
+    let inspect_value = parse_json_no_duplicates(&inspect.stdout)?;
+    verify_runtime_inspection(policy, &inspect_value, plan)?;
+
+    let timeout = Duration::from_secs(
+        policy
+            .subprocess_timeout_seconds
+            .min(policy.campaign_wall_seconds),
+    );
+    let mut start = Command::new("docker");
+    start.args(["start", "--attach", container_id]);
+    let captured = run_captured_bounded(&mut start, timeout, CAPTURE_LIMIT_BYTES)?;
+    if captured.stdout_overflow || captured.stderr_overflow {
+        return Err(ResourceError::CaptureLimit);
+    }
+
+    let state = run_simple(
+        "docker",
+        &[
+            "inspect".to_owned(),
+            "--format={{.State.ExitCode}}".to_owned(),
+            container_id.to_owned(),
+        ],
+    )?;
+    let process_exit_code = String::from_utf8_lossy(&state.stdout)
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| {
+            ResourceError::RuntimeInspection("container exit code is not an integer".to_owned())
+        })?;
+    let observed = captured.status.code().unwrap_or(-1);
+    if observed != process_exit_code && observed != 125 {
+        return Err(ResourceError::RuntimeInspection(format!(
+            "docker attach exit {observed} disagrees with container exit {process_exit_code}"
+        )));
+    }
+    if captured
+        .stderr
+        .windows(b"AF02_RESOURCE_PROBE_FAIL=".len())
+        .any(|window| window == b"AF02_RESOURCE_PROBE_FAIL=")
+    {
+        return Err(ResourceError::RuntimeInspection(
+            String::from_utf8_lossy(&captured.stderr).into_owned(),
+        ));
+    }
+
+    let (output_regular_files, output_total_bytes) = validate_artifact_tree(output_dir, policy)?;
+
+    Ok(RunnerOutcome {
+        image: RUNNER_IMAGE.to_owned(),
+        image_digest: RUNNER_IMAGE_DIGEST.to_owned(),
+        container_id: container_id.to_owned(),
+        process_exit_code,
+        stdout_sha256: sha256_hex(&captured.stdout),
+        stderr_sha256: sha256_hex(&captured.stderr),
+        stdout_bytes: captured.stdout.len() as u64,
+        stderr_bytes: captured.stderr.len() as u64,
+        output_regular_files,
+        output_total_bytes,
+    })
 }
 
 fn validate_resource_policy(policy: &ResourcePolicy) -> Result<(), ResourceError> {
