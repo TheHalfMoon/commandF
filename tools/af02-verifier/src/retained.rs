@@ -199,13 +199,14 @@ pub fn validate_and_parse(
 ) -> Result<RetainedAuthoritySources, RetainedError> {
     let instance = parse_json_no_duplicates(instance_bytes)?;
     let schema = parse_json_no_duplicates(schema_bytes)?;
-    let schema_id = schema
-        .get("$id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| RetainedError::Schema {
-            path: "$".to_owned(),
-            message: "trusted schema is missing $id".to_owned(),
-        })?;
+    let schema_id =
+        schema
+            .get("$id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| RetainedError::Schema {
+                path: "$".to_owned(),
+                message: "trusted schema is missing $id".to_owned(),
+            })?;
     if schema_id != "https://commandf.dev/schemas/af02-retained-authority-sources-v1.schema.json" {
         return Err(RetainedError::Schema {
             path: "$".to_owned(),

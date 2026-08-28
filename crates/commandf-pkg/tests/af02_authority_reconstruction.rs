@@ -203,7 +203,9 @@ fn retained_projection_rejects_candidate_controlled_manifest_bytes() {
     let index = manifest.iter().position(|byte| *byte == b'C').unwrap();
     manifest[index] = b'X';
     let error = project_retained(&retained, &manifest, RETAINED_DONOR).unwrap_err();
-    assert!(error.to_string().contains("retained manifest Git blob mismatch"));
+    assert!(error
+        .to_string()
+        .contains("retained manifest Git blob mismatch"));
 }
 
 #[test]

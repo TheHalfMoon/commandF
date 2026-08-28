@@ -172,11 +172,9 @@ fn sha1_hex(bytes: &[u8]) -> String {
             ]);
         }
         for index in 16..80 {
-            words[index] = (words[index - 3]
-                ^ words[index - 8]
-                ^ words[index - 14]
-                ^ words[index - 16])
-                .rotate_left(1);
+            words[index] =
+                (words[index - 3] ^ words[index - 8] ^ words[index - 14] ^ words[index - 16])
+                    .rotate_left(1);
         }
 
         let mut a = h0;
@@ -266,8 +264,7 @@ mod tests {
     #[test]
     fn canonicalizes_recursive_object_keys_and_preserves_array_order() {
         let value: Value =
-            parse_json_no_duplicates(br#"{"z":{"b":2,"a":1},"a":[{"y":2,"x":1},0]}"#)
-                .unwrap();
+            parse_json_no_duplicates(br#"{"z":{"b":2,"a":1},"a":[{"y":2,"x":1},0]}"#).unwrap();
         assert_eq!(
             canonical_json_bytes(&value).unwrap(),
             br#"{"a":[{"x":1,"y":2},0],"z":{"a":1,"b":2}}"#
@@ -286,7 +283,9 @@ mod tests {
     #[test]
     fn rejects_duplicate_object_keys_at_any_depth() {
         let error = parse_json_no_duplicates(br#"{"outer":{"id":1,"id":2}}"#).unwrap_err();
-        assert!(error.to_string().contains("duplicate JSON object key \"id\""));
+        assert!(error
+            .to_string()
+            .contains("duplicate JSON object key \"id\""));
     }
 
     #[test]
