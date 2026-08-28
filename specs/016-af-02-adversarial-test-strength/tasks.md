@@ -10,7 +10,7 @@ Status: PLANNING_CANDIDATE
 - No PASS/MERGED/CLOSED_CANONICAL claim without exact-head and post-merge evidence.
 - `verification-protocol.md`, checked-in policies, and schemas are normative. `evidence-contracts.md` applies only where not superseded.
 - `commandf.af02-authority-baseline/v1` is prohibited; use v2.
-- Final proof schema remains `commandf.af02-adversarial-proof/v1`, now an envelope over the preserved proof-core schema plus 16 extension contract roles.
+- Final proof schema remains `commandf.af02-adversarial-proof/v1`, now an envelope over the preserved proof-core schema plus 18 extension contract roles (43 total contract files: 25 core + 18 extension).
 
 ## Planning gate
 
@@ -82,7 +82,7 @@ A0 contains policy/schema/verifier infrastructure and tests only. New fuzz/prope
 - [ ] **T072** Derive required set as all listed in-target mutants minus exact pre-frozen exclusions; no post-list selection.
 - [ ] **T073** Freeze mutation result classes; TIMEOUT/UNVIABLE require retry+diagnosis and remain non-green.
 - [ ] **T074** Validate waiver-policy schema and canonical-ancestry/mutant-binding negative tests.
-- [ ] **T075** Validate final proof envelope, preserved proof-core, 16 extension roles, required-check provenance and final deterministic hashing.
+- [ ] **T075** Validate final proof envelope, preserved proof-core, 18 extension roles (43 total contract files), required-check provenance and final deterministic hashing.
 - [ ] **T076** Prove every proof-critical policy instance validates against its planning-frozen schema before dependent evidence.
 - [ ] **T077** Exact-head C0 qualification/review; guarded merge; re-read main before C1.
 
