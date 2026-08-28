@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 
-use crate::canonical::{canonical_sha256, sha256_hex, CanonicalError};
+use crate::canonical::{canonical_sha256, git_blob_sha1_hex, sha256_hex, CanonicalError};
 use crate::retained::{RetainedError, RetainedProjection};
 
 pub const AUTHORITY_BASELINE_SCHEMA: &str = "commandf.af02-authority-baseline/v2";
@@ -349,6 +349,13 @@ pub fn project_cf06(sources: [Cf06Source<'_>; 3]) -> Result<Cf06Baseline, Author
             )));
         }
         validate_git_sha(source.git_blob_sha, source.path)?;
+        let observed_blob = git_blob_sha1_hex(source.bytes);
+        if observed_blob != source.git_blob_sha {
+            return Err(AuthorityError::Mismatch(format!(
+                "CF-06 source {} Git blob mismatch: expected {}, got {observed_blob}",
+                source.path, source.git_blob_sha
+            )));
+        }
     }
 
     let oracle = std::str::from_utf8(sources[0].bytes)
