@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
-use serde::Deserializer as _;
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
