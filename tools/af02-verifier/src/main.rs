@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use commandf_af02_verifier::authority::{project_authority, Cf06Source};
-use commandf_af02_verifier::canonical::canonical_json_bytes;
+use commandf_af02_verifier::canonical::{canonical_json_bytes, parse_json_no_duplicates};
 use commandf_af02_verifier::retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
 };
@@ -67,15 +67,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if args.next().is_some() {
                 return Err("project-authority accepts exactly one input path".into());
             }
-            let input: AuthorityInput = serde_json::from_slice(&fs::read(input_path)?)?;
+            let input_value = parse_json_no_duplicates(&fs::read(input_path)?)?;
+            let input: AuthorityInput = serde_json::from_value(input_value)?;
             let retained_bytes = fs::read(&input.retained_sources_path)?;
             let retained_schema_bytes = fs::read(&input.retained_schema_path)?;
             let retained = validate_and_parse(&retained_bytes, &retained_schema_bytes)?;
 
-            let run: Value = serde_json::from_slice(&fs::read(&input.retained_workflow_run_path)?)?;
+            let run: Value =
+                parse_json_no_duplicates(&fs::read(&input.retained_workflow_run_path)?)?;
             verify_workflow_run(&retained, &run)?;
             let artifacts: Value =
-                serde_json::from_slice(&fs::read(&input.retained_artifacts_path)?)?;
+                parse_json_no_duplicates(&fs::read(&input.retained_artifacts_path)?)?;
             verify_artifacts(&retained, &artifacts)?;
 
             let retained_projection = project_retained(
@@ -84,8 +86,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 &fs::read(&input.retained_donor_path)?,
             )?;
             let assurance: Value =
-                serde_json::from_slice(&fs::read(&input.assurance_ruleset_path)?)?;
-            let review: Value = serde_json::from_slice(&fs::read(&input.review_ruleset_path)?)?;
+                parse_json_no_duplicates(&fs::read(&input.assurance_ruleset_path)?)?;
+            let review: Value =
+                parse_json_no_duplicates(&fs::read(&input.review_ruleset_path)?)?;
 
             let oracle_model = fs::read(&input.cf06_oracle_model.local_path)?;
             let donor = fs::read(&input.cf06_donor.local_path)?;
