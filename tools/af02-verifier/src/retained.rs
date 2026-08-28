@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::canonical::{sha256_hex, CanonicalError};
+use crate::canonical::{git_blob_sha1_hex, parse_json_no_duplicates, sha256_hex, CanonicalError};
 
 pub const RETAINED_SCHEMA_ID: &str = "commandf.af02-retained-authority-sources/v1";
 
@@ -197,16 +197,15 @@ pub fn validate_and_parse(
     instance_bytes: &[u8],
     schema_bytes: &[u8],
 ) -> Result<RetainedAuthoritySources, RetainedError> {
-    let instance: Value = serde_json::from_slice(instance_bytes)?;
-    let schema: Value = serde_json::from_slice(schema_bytes)?;
-    let schema_id =
-        schema
-            .get("$id")
-            .and_then(Value::as_str)
-            .ok_or_else(|| RetainedError::Schema {
-                path: "$".to_owned(),
-                message: "trusted schema is missing $id".to_owned(),
-            })?;
+    let instance = parse_json_no_duplicates(instance_bytes)?;
+    let schema = parse_json_no_duplicates(schema_bytes)?;
+    let schema_id = schema
+        .get("$id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| RetainedError::Schema {
+            path: "$".to_owned(),
+            message: "trusted schema is missing $id".to_owned(),
+        })?;
     if schema_id != "https://commandf.dev/schemas/af02-retained-authority-sources-v1.schema.json" {
         return Err(RetainedError::Schema {
             path: "$".to_owned(),
@@ -396,7 +395,23 @@ pub fn project_retained(
     manifest_bytes: &[u8],
     donor_bytes: &[u8],
 ) -> Result<RetainedProjection, RetainedError> {
-    let manifest: CorpusManifest = serde_json::from_slice(manifest_bytes)?;
+    let manifest_blob = git_blob_sha1_hex(manifest_bytes);
+    if manifest_blob != retained.cf10.manifest.git_blob_sha {
+        return Err(RetainedError::Mismatch(format!(
+            "retained manifest Git blob mismatch: expected {}, got {manifest_blob}",
+            retained.cf10.manifest.git_blob_sha
+        )));
+    }
+    let donor_blob = git_blob_sha1_hex(donor_bytes);
+    if donor_blob != retained.cf10.donor.git_blob_sha {
+        return Err(RetainedError::Mismatch(format!(
+            "retained donor Git blob mismatch: expected {}, got {donor_blob}",
+            retained.cf10.donor.git_blob_sha
+        )));
+    }
+
+    let manifest_value = parse_json_no_duplicates(manifest_bytes)?;
+    let manifest: CorpusManifest = serde_json::from_value(manifest_value)?;
     if manifest.schema != 1 || manifest.selection_policy != "frozen_pre_result_v1" {
         return Err(RetainedError::Mismatch(
             "retained corpus manifest schema/selection policy drifted".to_owned(),
