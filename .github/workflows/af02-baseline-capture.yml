@@ -1,0 +1,55 @@
+name: af02-baseline-capture
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-authority-reconstruction
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Capture generated AF-02 authority baseline
+        run: |
+          set -euo pipefail
+          set +e
+          cargo test --locked -p commandf-pkg --test af02_authority_reconstruction authority_baseline_v2_matches_canonical_snapshot -- --exact --nocapture > /tmp/af02-baseline.log 2>&1
+          test_status=$?
+          set -e
+          cat /tmp/af02-baseline.log
+          TEST_STATUS="$test_status" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          if int(os.environ["TEST_STATUS"]) == 0:
+              raise SystemExit("AF-02 baseline gate unexpectedly passed while capture workflow is active")
+
+          text = Path("/tmp/af02-baseline.log").read_text(encoding="utf-8")
+          marker = "AF02_GENERATED_BASELINE="
+          if marker not in text:
+              raise SystemExit("AF-02 generated baseline marker is absent from test output")
+          baseline = text.split(marker, 1)[1].splitlines()[0]
+          json.loads(baseline)
+          data = baseline.encode("utf-8")
+          Path("authority-baseline.json").write_bytes(data)
+          print(f"AF02_BASELINE_BYTES={len(data)}")
+          print(f"AF02_BASELINE_SHA256={hashlib.sha256(data).hexdigest()}")
+          PY
+      - name: Upload generated AF-02 authority baseline
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af02-generated-authority-baseline
+          path: authority-baseline.json
+          if-no-files-found: error
+          retention-days: 1
