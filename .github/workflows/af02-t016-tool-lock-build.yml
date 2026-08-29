@@ -53,6 +53,7 @@ jobs:
             binary="$5"
             dir="$root/$id"
             target_dir="$root/targets/$id"
+            messages="$root/$id.cargo.jsonl"
             git init -q "$dir"
             git -C "$dir" remote add origin "$repo"
             git -C "$dir" fetch -q --depth=1 origin "$rev"
@@ -64,8 +65,8 @@ jobs:
               printf 'AF02_DERIVED_SOURCE_LOCK %s %s\n' "$id" "$derived_dir/$id.Cargo.lock"
             fi
             source_lock_sha256="$(sha256sum "$dir/Cargo.lock" | awk '{print $1}')"
-            CARGO_TARGET_DIR="$target_dir" cargo build --locked --release --target "$target" --manifest-path "$dir/Cargo.toml" -p "$package"
-            built="$target_dir/$target/release/$binary"
+            CARGO_TARGET_DIR="$target_dir" cargo build --locked --release --target "$target" --manifest-path "$dir/Cargo.toml" -p "$package" --message-format=json-render-diagnostics | tee "$messages" >/dev/null
+            built="$(jq -rs --arg name "$binary" '[.[] | select(.reason == "compiler-artifact" and .target.name == $name and .executable != null) | .executable] | unique | if length == 1 then .[0] else error("expected exactly one executable artifact") end' "$messages")"
             test -x "$built"
             cp "$built" "$install/$binary"
             installed_executable_sha256="$(sha256sum "$install/$binary" | awk '{print $1}')"
@@ -95,46 +96,29 @@ jobs:
                   checksum = item["registry_checksum_sha256_or_null"]
                   if not isinstance(checksum, str) or len(checksum) != 64:
                       raise SystemExit(f"null or invalid registry checksum for {item['id']}")
-                  entries.append({
-                      "kind": "registry_package", "id": item["id"], "package": item["package"],
-                      "version": item["version"], "registry": item["registry"],
-                      "registry_checksum_sha256": checksum, "default_features": item["default_features"],
-                      "features": item["features"],
-                  })
+                  entries.append({"kind":"registry_package","id":item["id"],"package":item["package"],"version":item["version"],"registry":item["registry"],"registry_checksum_sha256":checksum,"default_features":item["default_features"],"features":item["features"]})
               else:
                   source_lock, exe_sha, version_sha = exec_rows[item["id"]]
-                  entries.append({
-                      "kind": "executable", "id": item["id"], "version": item["version"],
-                      "upstream_repository": item["upstream_repository"], "upstream_commit": item["upstream_commit"],
-                      "acquisition_mode": item["acquisition_mode"], "source_lock_sha256": source_lock,
-                      "installed_executable": f"/tmp/af02-tools/bin/{item['id']}",
-                      "installed_executable_sha256": exe_sha, "version_output_sha256": version_sha,
-                      "build_rustc": rustc, "build_cargo": cargo, "build_target": item["build_target"],
-                      "features": item["features"],
-                  })
+                  entries.append({"kind":"executable","id":item["id"],"version":item["version"],"upstream_repository":item["upstream_repository"],"upstream_commit":item["upstream_commit"],"acquisition_mode":item["acquisition_mode"],"source_lock_sha256":source_lock,"installed_executable":f"/tmp/af02-tools/bin/{item['id']}","installed_executable_sha256":exe_sha,"version_output_sha256":version_sha,"build_rustc":rustc,"build_cargo":cargo,"build_target":item["build_target"],"features":item["features"]})
           expected = policy["required_final_entry_ids"]
           actual = [e["id"] for e in entries]
           if actual != expected or len(entries) != 8:
               raise SystemExit(f"tool entry order mismatch: {actual!r}")
-          document = {"schema": "commandf.af02-tool-lock/v1", "tool_policy_sha256": policy_sha,
-                      "source_sha": source_sha, "entries": entries}
-          pathlib.Path(out_path).write_text(json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n")
+          pathlib.Path(out_path).write_text(json.dumps({"schema":"commandf.af02-tool-lock/v1","tool_policy_sha256":policy_sha,"source_sha":source_sha,"entries":entries},sort_keys=True,separators=(",",":"))+"\n")
           PY
 
           python3 - "$out" <<'PY'
           import json, pathlib, re, sys
-          obj = json.loads(pathlib.Path(sys.argv[1]).read_text())
-          assert obj["schema"] == "commandf.af02-tool-lock/v1"
-          assert re.fullmatch(r"[0-9a-f]{64}", obj["tool_policy_sha256"])
-          assert re.fullmatch(r"[0-9a-f]{40}", obj["source_sha"])
-          assert len(obj["entries"]) == 8
+          obj=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert obj["schema"]=="commandf.af02-tool-lock/v1"
+          assert re.fullmatch(r"[0-9a-f]{64}",obj["tool_policy_sha256"])
+          assert re.fullmatch(r"[0-9a-f]{40}",obj["source_sha"])
+          assert len(obj["entries"])==8
           for entry in obj["entries"]:
-              if entry["kind"] == "registry_package":
-                  assert re.fullmatch(r"[0-9a-f]{64}", entry["registry_checksum_sha256"])
+              if entry["kind"]=="registry_package": assert re.fullmatch(r"[0-9a-f]{64}",entry["registry_checksum_sha256"])
               else:
-                  for key in ("source_lock_sha256", "installed_executable_sha256", "version_output_sha256"):
-                      assert re.fullmatch(r"[0-9a-f]{64}", entry[key])
-                  assert entry["build_target"] == "x86_64-unknown-linux-gnu"
+                  for key in ("source_lock_sha256","installed_executable_sha256","version_output_sha256"): assert re.fullmatch(r"[0-9a-f]{64}",entry[key])
+                  assert entry["build_target"]=="x86_64-unknown-linux-gnu"
           PY
           test -f "$derived_dir/cargo-llvm-cov.Cargo.lock"
           test "$(sha256sum "$derived_dir/cargo-llvm-cov.Cargo.lock" | awk '{print $1}')" = "$(jq -r '.entries[] | select(.id=="cargo-llvm-cov") | .source_lock_sha256' "$out")"
