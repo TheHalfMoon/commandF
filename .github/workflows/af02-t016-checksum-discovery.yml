@@ -1,0 +1,40 @@
+name: af02-t016-checksum-discovery
+
+on:
+  push:
+    branches:
+      - chore/af02-t016-checksum-discovery
+    paths:
+      - ".github/workflows/af02-t016-checksum-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Derive crates.io checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          derive() {
+            name="$1"
+            version="$2"
+            index_path="$3"
+            crate_file="${name}-${version}.crate"
+            curl --fail --location --silent --show-error "https://static.crates.io/crates/${name}/${crate_file}" -o "/tmp/${crate_file}"
+            archive_sha="$(sha256sum "/tmp/${crate_file}" | awk '{print $1}')"
+            index_line="$(curl --fail --location --silent --show-error "https://index.crates.io/${index_path}" | jq -rc --arg v "$version" 'select(.vers == $v)')"
+            test -n "$index_line"
+            index_sha="$(printf '%s' "$index_line" | jq -r '.cksum')"
+            test "$archive_sha" = "$index_sha"
+            printf 'AF02_CHECKSUM %s %s %s\n' "$name" "$version" "$archive_sha"
+          }
+          derive arbitrary 1.4.2 ar/bi/arbitrary
+          derive libfuzzer-sys 0.4.13 li/bf/libfuzzer-sys
+          derive proptest 1.11.0 pr/op/proptest
