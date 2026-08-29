@@ -131,7 +131,6 @@ pub fn parse_corpus_manifest(
             "unexpected planning-frozen corpus schema id".to_owned(),
         ));
     }
-
     let value = parse_json_no_duplicates(instance_bytes)?;
     let manifest: CorpusManifest = serde_json::from_value(value)?;
     validate_manifest(&manifest)?;
@@ -143,6 +142,35 @@ pub fn parse_assertion_registry(bytes: &[u8]) -> Result<AssertionRegistry, Corpu
     let registry: AssertionRegistry = serde_json::from_value(value)?;
     validate_registry(&registry)?;
     Ok(registry)
+}
+
+pub fn verify_fixture_bytes(entry: &CorpusEntry, bytes: &[u8]) -> Result<(), CorpusError> {
+    let actual_bytes = u64::try_from(bytes.len()).map_err(|_| {
+        CorpusError::Contract(format!(
+            "fixture {} length cannot be represented as u64",
+            entry.fixture_path
+        ))
+    })?;
+    if actual_bytes > MAX_FIXTURE_BYTES {
+        return Err(CorpusError::Contract(format!(
+            "fixture {} exceeds the per-fixture byte limit",
+            entry.fixture_path
+        )));
+    }
+    if actual_bytes != entry.byte_length {
+        return Err(CorpusError::Contract(format!(
+            "fixture {} byte length mismatch: declared {}, observed {}",
+            entry.fixture_path, entry.byte_length, actual_bytes
+        )));
+    }
+    let actual_sha256 = sha256_hex(bytes);
+    if actual_sha256 != entry.fixture_sha256 {
+        return Err(CorpusError::Contract(format!(
+            "fixture {} SHA-256 mismatch: declared {}, observed {}",
+            entry.fixture_path, entry.fixture_sha256, actual_sha256
+        )));
+    }
+    Ok(())
 }
 
 pub fn validate_corpus_and_assertions(
@@ -188,17 +216,6 @@ pub fn validate_corpus_and_assertions(
         }
     }
 
-    let assertions_by_id = registry
-        .entries
-        .iter()
-        .map(|entry| (entry.assertion_id.as_str(), entry))
-        .collect::<BTreeMap<_, _>>();
-    if assertions_by_id.len() != registry.entries.len() {
-        return Err(CorpusError::Contract(
-            "assertion ids are not unique".to_owned(),
-        ));
-    }
-
     if manifest.entries.len() != registry.entries.len() {
         return Err(CorpusError::Contract(format!(
             "corpus/assertion cardinality mismatch: {} scenarios versus {} assertions",
@@ -206,6 +223,15 @@ pub fn validate_corpus_and_assertions(
             registry.entries.len()
         )));
     }
+    let assertions_by_id = registry
+        .entries
+        .iter()
+        .map(|entry| (entry.assertion_id.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    if assertions_by_id.len() != registry.entries.len() {
+        return Err(CorpusError::Contract("assertion ids are not unique".to_owned()));
+    }
+
     for scenario in &manifest.entries {
         let assertion = assertions_by_id
             .get(scenario.assertion_id.as_str())
@@ -330,12 +356,10 @@ fn validate_manifest(manifest: &CorpusManifest) -> Result<(), CorpusError> {
                 entry.fixture_path
             )));
         }
-        if let Some(previous) = previous_scenario {
-            if previous >= entry.scenario_id.as_str() {
-                return Err(CorpusError::Contract(
-                    "corpus entries must be strictly ordered by scenario_id".to_owned(),
-                ));
-            }
+        if previous_scenario.is_some_and(|previous| previous >= entry.scenario_id.as_str()) {
+            return Err(CorpusError::Contract(
+                "corpus entries must be strictly ordered by scenario_id".to_owned(),
+            ));
         }
         previous_scenario = Some(entry.scenario_id.as_str());
     }
@@ -400,12 +424,15 @@ fn validate_registry(registry: &AssertionRegistry) -> Result<(), CorpusError> {
 
         match entry.runner_kind {
             RunnerKind::CargoTest => {
-                if entry
+                let cargo_target_missing = entry
                     .cargo_target_or_null
                     .as_deref()
-                    .is_none_or(str::is_empty)
-                    || entry.test_name_or_null.as_deref().is_none_or(str::is_empty)
-                {
+                    .map_or(true, str::is_empty);
+                let test_name_missing = entry
+                    .test_name_or_null
+                    .as_deref()
+                    .map_or(true, str::is_empty);
+                if cargo_target_missing || test_name_missing {
                     return Err(CorpusError::Contract(format!(
                         "CARGO_TEST assertion {} requires cargo target and test name",
                         entry.assertion_id
@@ -434,12 +461,10 @@ fn validate_registry(registry: &AssertionRegistry) -> Result<(), CorpusError> {
                 entry.scenario_id
             )));
         }
-        if let Some(previous) = previous_assertion {
-            if previous >= entry.assertion_id.as_str() {
-                return Err(CorpusError::Contract(
-                    "assertion entries must be strictly ordered by assertion_id".to_owned(),
-                ));
-            }
+        if previous_assertion.is_some_and(|previous| previous >= entry.assertion_id.as_str()) {
+            return Err(CorpusError::Contract(
+                "assertion entries must be strictly ordered by assertion_id".to_owned(),
+            ));
         }
         previous_assertion = Some(entry.assertion_id.as_str());
     }
@@ -473,7 +498,9 @@ fn validate_id(value: &str, label: &str) -> Result<(), CorpusError> {
         return Err(CorpusError::Contract(format!("invalid {label}")));
     }
     let mut bytes = value.bytes();
-    let first = bytes.next().ok_or_else(|| CorpusError::Contract(format!("invalid {label}")))?;
+    let first = bytes
+        .next()
+        .ok_or_else(|| CorpusError::Contract(format!("invalid {label}")))?;
     if !first.is_ascii_alphanumeric()
         || !bytes.all(|byte| byte.is_ascii_alphanumeric() || b"._:-".contains(&byte))
     {
@@ -508,12 +535,10 @@ fn validate_sorted_unique_paths(values: &[String], label: &str) -> Result<(), Co
     let mut previous: Option<&str> = None;
     for value in values {
         validate_repo_path(value, label)?;
-        if let Some(prior) = previous {
-            if prior >= value.as_str() {
-                return Err(CorpusError::Contract(format!(
-                    "{label} must be strictly sorted and unique"
-                )));
-            }
+        if previous.is_some_and(|prior| prior >= value.as_str()) {
+            return Err(CorpusError::Contract(format!(
+                "{label} must be strictly sorted and unique"
+            )));
         }
         previous = Some(value.as_str());
     }
@@ -524,12 +549,10 @@ fn validate_sorted_unique_sha256s(values: &[String], label: &str) -> Result<(), 
     let mut previous: Option<&str> = None;
     for value in values {
         validate_sha256(value, label)?;
-        if let Some(prior) = previous {
-            if prior >= value.as_str() {
-                return Err(CorpusError::Contract(format!(
-                    "{label} must be strictly sorted and unique"
-                )));
-            }
+        if previous.is_some_and(|prior| prior >= value.as_str()) {
+            return Err(CorpusError::Contract(format!(
+                "{label} must be strictly sorted and unique"
+            )));
         }
         previous = Some(value.as_str());
     }
@@ -546,25 +569,25 @@ mod tests {
     const SURFACE_POLICY: &[u8] = include_bytes!(
         "../../../specs/016-af-02-adversarial-test-strength/surface-policy.json"
     );
+    const SOURCE_SHA: &str = "94bf4f1a9987f474613e67ddbc182ece8dff5a8d";
 
     fn corpus(entry: &str) -> Vec<u8> {
         format!(
-            "{{\"entries\":[{entry}],\"max_fixture_bytes\":262144,\"max_total_bytes\":8388608,\"schema\":\"commandf.af02-corpus/v1\",\"source_sha\":\"94bf4f1a9987f474613e67ddbc182ece8dff5a8d\"}}"
+            "{{\"entries\":[{entry}],\"max_fixture_bytes\":262144,\"max_total_bytes\":8388608,\"schema\":\"commandf.af02-corpus/v1\",\"source_sha\":\"{SOURCE_SHA}\"}}"
         )
         .into_bytes()
     }
 
-    fn scenario(contains_phi: bool) -> String {
+    fn scenario(contains_phi: bool, fixture_sha256: &str, byte_length: u64) -> String {
         format!(
-            "{{\"assertion_id\":\"A001\",\"byte_length\":2,\"contains_phi\":{contains_phi},\"discovery_origin\":\"HAND_AUTHORED\",\"expected_outcome\":\"REJECT_INVALID\",\"fixture_path\":\"tests/assurance/corpus/f001.json\",\"fixture_sha256\":\"{}\",\"minimization_tool_or_null\":null,\"parent_scenario_id_or_null\":null,\"provenance_class\":\"SYNTHETIC\",\"replay_id\":\"R001\",\"scenario_id\":\"S001\"}}",
-            "0".repeat(64)
+            "{{\"assertion_id\":\"A001\",\"byte_length\":{byte_length},\"contains_phi\":{contains_phi},\"discovery_origin\":\"HAND_AUTHORED\",\"expected_outcome\":\"REJECT_INVALID\",\"fixture_path\":\"tests/assurance/corpus/f001.json\",\"fixture_sha256\":\"{fixture_sha256}\",\"minimization_tool_or_null\":null,\"parent_scenario_id_or_null\":null,\"provenance_class\":\"SYNTHETIC\",\"replay_id\":\"R001\",\"scenario_id\":\"S001\"}}"
         )
     }
 
     fn assertion(corpus_sha: &str, scenario_id: &str) -> Vec<u8> {
         let surface_sha = sha256_hex(SURFACE_POLICY);
         format!(
-            "{{\"corpus_manifest_sha256\":\"{corpus_sha}\",\"entries\":[{{\"argv\":[\"cargo\",\"test\"],\"assertion_id\":\"A001\",\"cargo_target_or_null\":\"af02_corpus\",\"config_sha256s\":[],\"cwd_repo_relative\":\".github\",\"environment_allowlist\":{{}},\"expected_outcome\":\"REJECT_INVALID\",\"manifest_path\":\"crates/commandf-pkg/Cargo.toml\",\"package_or_binary\":\"commandf-pkg\",\"result_parser_id\":\"cargo-test-v1\",\"runner_kind\":\"CARGO_TEST\",\"scenario_id\":\"{scenario_id}\",\"source_paths\":[\"crates/commandf-pkg/src/lock.rs\"],\"surface_id\":\"serde-json-from-slice\",\"test_name_or_null\":\"af02_corpus\"}}],\"schema\":\"commandf.af02-assertion-registry/v1\",\"source_sha\":\"94bf4f1a9987f474613e67ddbc182ece8dff5a8d\",\"surface_policy_sha256\":\"{surface_sha}\"}}"
+            "{{\"corpus_manifest_sha256\":\"{corpus_sha}\",\"entries\":[{{\"argv\":[\"cargo\",\"test\"],\"assertion_id\":\"A001\",\"cargo_target_or_null\":\"af02_corpus\",\"config_sha256s\":[],\"cwd_repo_relative\":\"tools\",\"environment_allowlist\":{{}},\"expected_outcome\":\"REJECT_INVALID\",\"manifest_path\":\"crates/commandf-pkg/Cargo.toml\",\"package_or_binary\":\"commandf-pkg\",\"result_parser_id\":\"cargo-test-v1\",\"runner_kind\":\"CARGO_TEST\",\"scenario_id\":\"{scenario_id}\",\"source_paths\":[\"crates/commandf-pkg/src/lock.rs\"],\"surface_id\":\"serde-json-from-slice\",\"test_name_or_null\":\"af02_corpus\"}}],\"schema\":\"commandf.af02-assertion-registry/v1\",\"source_sha\":\"{SOURCE_SHA}\",\"surface_policy_sha256\":\"{surface_sha}\"}}"
         )
         .into_bytes()
     }
@@ -573,7 +596,7 @@ mod tests {
     fn accepts_empty_design_freeze() {
         let corpus = corpus("");
         let registry = format!(
-            "{{\"corpus_manifest_sha256\":\"{}\",\"entries\":[],\"schema\":\"commandf.af02-assertion-registry/v1\",\"source_sha\":\"94bf4f1a9987f474613e67ddbc182ece8dff5a8d\",\"surface_policy_sha256\":\"{}\"}}",
+            "{{\"corpus_manifest_sha256\":\"{}\",\"entries\":[],\"schema\":\"commandf.af02-assertion-registry/v1\",\"source_sha\":\"{SOURCE_SHA}\",\"surface_policy_sha256\":\"{}\"}}",
             sha256_hex(&corpus),
             sha256_hex(SURFACE_POLICY)
         );
@@ -588,16 +611,18 @@ mod tests {
 
     #[test]
     fn rejects_phi_even_with_approved_provenance_class() {
-        let error = parse_corpus_manifest(&corpus(&scenario(true)), CORPUS_SCHEMA).unwrap_err();
+        let raw = corpus(&scenario(true, &"0".repeat(64), 2));
+        let error = parse_corpus_manifest(&raw, CORPUS_SCHEMA).unwrap_err();
         assert!(error.to_string().contains("containing PHI"));
     }
 
     #[test]
     fn rejects_orphan_assertion_scenario() {
-        let corpus = corpus(&scenario(false));
-        let registry = assertion(&sha256_hex(&corpus), "S999");
+        let fixture = b"{}";
+        let raw = corpus(&scenario(false, &sha256_hex(fixture), 2));
+        let registry = assertion(&sha256_hex(&raw), "S999");
         let error = validate_corpus_and_assertions(
-            &corpus,
+            &raw,
             CORPUS_SCHEMA,
             &registry,
             SURFACE_POLICY,
@@ -607,9 +632,28 @@ mod tests {
     }
 
     #[test]
+    fn rejects_fixture_digest_mismatch() {
+        let fixture = b"{}";
+        let raw = corpus(&scenario(false, &"0".repeat(64), 2));
+        let manifest = parse_corpus_manifest(&raw, CORPUS_SCHEMA).unwrap();
+        let error = verify_fixture_bytes(&manifest.entries[0], fixture).unwrap_err();
+        assert!(error.to_string().contains("SHA-256 mismatch"));
+    }
+
+    #[test]
+    fn accepts_exact_fixture_bytes() {
+        let fixture = b"{}";
+        let raw = corpus(&scenario(false, &sha256_hex(fixture), 2));
+        let manifest = parse_corpus_manifest(&raw, CORPUS_SCHEMA).unwrap();
+        verify_fixture_bytes(&manifest.entries[0], fixture).unwrap();
+    }
+
+    #[test]
     fn rejects_replay_runner_with_cargo_target() {
         let raw = br#"{"corpus_manifest_sha256":"0000000000000000000000000000000000000000000000000000000000000000","entries":[{"argv":["replay"],"assertion_id":"A001","cargo_target_or_null":"not-null","config_sha256s":[],"cwd_repo_relative":"tools","environment_allowlist":{},"expected_outcome":"REJECT_INVALID","manifest_path":"tools/af02-verifier/Cargo.toml","package_or_binary":"commandf-af02-verifier","result_parser_id":"replay-v1","runner_kind":"AF02_REPLAY_BINARY","scenario_id":"S001","source_paths":["tools/af02-verifier/src/main.rs"],"surface_id":"filesystem-read","test_name_or_null":null}],"schema":"commandf.af02-assertion-registry/v1","source_sha":"94bf4f1a9987f474613e67ddbc182ece8dff5a8d","surface_policy_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}"#;
         let error = parse_assertion_registry(raw).unwrap_err();
-        assert!(error.to_string().contains("requires null Cargo target/test fields"));
+        assert!(error
+            .to_string()
+            .contains("requires null Cargo target/test fields"));
     }
 }
