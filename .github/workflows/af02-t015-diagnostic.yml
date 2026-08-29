@@ -30,8 +30,8 @@ jobs:
           grep -F 'let mut bootstrap_with_predecessor = policy().lineage;' "$file"
           grep -F 'let mut rebase_without_predecessor = policy().lineage;' "$file"
           sed -i '/let mut bootstrap_with_predecessor = policy().lineage;/a\        bootstrap_with_predecessor.mode = ResourceLineageMode::Bootstrap;' "$file"
-          sed -i '/rebase_without_predecessor.mode = ResourceLineageMode::Rebase;/a\        rebase_without_predecessor.predecessor_blob_sha = None;\
-        rebase_without_predecessor.predecessor_sha256 = None;' "$file"
+          sed -i '/rebase_without_predecessor.mode = ResourceLineageMode::Rebase;/a\        rebase_without_predecessor.predecessor_blob_sha = None;' "$file"
+          sed -i '/rebase_without_predecessor.predecessor_blob_sha = None;/a\        rebase_without_predecessor.predecessor_sha256 = None;' "$file"
           test "$(git diff --name-only)" = "tools/af02-verifier/src/resource.rs"
           git diff --check
           cargo fmt --all -- --check
