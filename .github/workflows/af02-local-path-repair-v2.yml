@@ -1,0 +1,111 @@
+name: af02-local-path-repair-v2
+
+on:
+  push:
+    branches:
+      - fix/af02-a0-local-path-resolution
+    paths:
+      - ".github/workflows/af02-local-path-repair-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: fix/af02-a0-local-path-resolution
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+        with:
+          components: rustfmt
+      - name: Apply bounded scanner repair
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/af02-verifier/src/surface.rs")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_once(old: str, new: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"repair anchor count {count}, expected 1: {old[:80]!r}")
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "    let imports = collect_imports(items, module_path);\n    for item in items {",
+              "    let imports = collect_imports(items, module_path);\n    let local_items = collect_local_items(items);\n    for item in items {",
+          )
+          replace_once(
+              "            imports: &imports,\n            ordinal,",
+              "            imports: &imports,\n            local_items: &local_items,\n            ordinal,",
+          )
+          replace_once(
+              "    imports: &'a ImportTable,\n    ordinal: &'a mut u64,",
+              "    imports: &'a ImportTable,\n    local_items: &'a BTreeSet<String>,\n    ordinal: &'a mut u64,",
+          )
+          replace_once(
+              "        let resolved = resolve_segments(&raw, self.module_path, self.imports);\n        for matcher in &self.policy.matchers {",
+              "        let resolved = resolve_segments_with_locals(\n            &raw,\n            self.module_path,\n            self.imports,\n            self.local_items,\n        );\n        for matcher in &self.policy.matchers {",
+          )
+          replace_once(
+              "                    let resolved = resolve_segments(&raw, self.module_path, self.imports);\n                    if path_has_glob_ambiguity(&raw, self.imports) {",
+              "                    let resolved = resolve_segments_with_locals(\n                        &raw,\n                        self.module_path,\n                        self.imports,\n                        self.local_items,\n                    );\n                    if path_has_glob_ambiguity(&raw, self.imports) {",
+          )
+          replace_once(
+              "                self.imports,\n                &self.bindings,\n            ) {",
+              "                self.imports,\n                self.local_items,\n                &self.bindings,\n            ) {",
+          )
+          replace_once(
+              "    imports: &ImportTable,\n    bindings: &[BTreeMap<String, Binding>],\n) -> Ownership {",
+              "    imports: &ImportTable,\n    local_items: &BTreeSet<String>,\n    bindings: &[BTreeMap<String, Binding>],\n) -> Ownership {",
+          )
+          replace_once(
+              "        let resolved = resolve_segments(&raw, module_path, imports);\n        if expected.contains(&resolved) {",
+              "        let resolved = resolve_segments_with_locals(&raw, module_path, imports, local_items);\n        if expected.contains(&resolved) {",
+          )
+
+          anchor = "fn collect_imports(items: &[Item], module_path: &[String]) -> ImportTable {\n"
+          start = text.index(anchor)
+          end_marker = "\nfn expand_use_tree("
+          end = text.index(end_marker, start)
+          if "fn collect_local_items" in text:
+              raise SystemExit("collect_local_items already exists")
+          local_helper = '''\n\nfn collect_local_items(items: &[Item]) -> BTreeSet<String> {\n    items\n        .iter()\n        .filter_map(|item| match item {\n            Item::Const(item) => Some(item.ident.to_string()),\n            Item::Enum(item) => Some(item.ident.to_string()),\n            Item::Fn(item) => Some(item.sig.ident.to_string()),\n            Item::Mod(item) => Some(item.ident.to_string()),\n            Item::Static(item) => Some(item.ident.to_string()),\n            Item::Struct(item) => Some(item.ident.to_string()),\n            Item::Trait(item) => Some(item.ident.to_string()),\n            Item::TraitAlias(item) => Some(item.ident.to_string()),\n            Item::Type(item) => Some(item.ident.to_string()),\n            Item::Union(item) => Some(item.ident.to_string()),\n            _ => None,\n        })\n        .collect()\n}\n'''
+          text = text[:end] + local_helper + text[end:]
+
+          anchor = "fn normalize_special_segments(raw: &[String], module_path: &[String]) -> Vec<String> {"
+          insert_at = text.index(anchor)
+          if "fn resolve_segments_with_locals" in text:
+              raise SystemExit("resolve_segments_with_locals already exists")
+          resolver = '''fn resolve_segments_with_locals(\n    raw: &[String],\n    module_path: &[String],\n    imports: &ImportTable,\n    local_items: &BTreeSet<String>,\n) -> Vec<String> {\n    let resolved = resolve_segments(raw, module_path, imports);\n    if resolved != raw {\n        return resolved;\n    }\n    let Some(first) = raw.first() else {\n        return resolved;\n    };\n    if !local_items.contains(first) {\n        return resolved;\n    }\n    let mut canonical = vec!["crate".to_owned()];\n    canonical.extend(module_path.iter().cloned());\n    canonical.extend(raw.iter().cloned());\n    canonical\n}\n\n'''
+          text = text[:insert_at] + resolver + text[insert_at:]
+
+          test_anchor = "    #[test]\n    fn source_order_is_byte_deterministic() {"
+          if text.count(test_anchor) != 1:
+              raise SystemExit("test insertion anchor mismatch")
+          tests = r'''    #[test]\n    fn bare_local_function_resolves_to_module_canonical_path() {\n        let findings = scan_surface(\n            &policy(),\n            &[SourceFile {\n                path: "crates/example/src/source_map.rs".to_owned(),\n                bytes: br#"fn portable_relative_path(_: &str, _: &str, _: bool) {}\nfn f() { portable_relative_path("fixture", "fixture", true); }"#.to_vec(),\n            }],\n        )\n        .expect("scan must succeed");\n        assert!(findings.iter().any(|finding| {\n            finding.matcher_id == "filesystem-portable-relative-path"\n                && finding.certainty == FindingCertainty::Definite\n        }));\n    }\n\n    #[test]\n    fn bare_local_type_resolves_to_crate_root_canonical_path() {\n        let findings = scan_surface(\n            &policy(),\n            &[SourceFile {\n                path: "crates/example/src/main.rs".to_owned(),\n                bytes: b"struct Cli; impl Cli { fn try_parse() {} } fn main() { Cli::try_parse(); }"\n                    .to_vec(),\n            }],\n        )\n        .expect("scan must succeed");\n        assert!(findings.iter().any(|finding| {\n            finding.matcher_id == "parser-cli-try-parse"\n                && finding.certainty == FindingCertainty::Definite\n        }));\n    }\n\n    #[test]\n    fn undeclared_bare_name_is_not_promoted_to_local_canonical_path() {\n        let findings = scan_surface(\n            &policy(),\n            &[SourceFile {\n                path: "crates/example/src/source_map.rs".to_owned(),\n                bytes: b"fn f() { portable_relative_path(\"fixture\", \"fixture\", true); }"\n                    .to_vec(),\n            }],\n        )\n        .expect("scan must succeed");\n        assert!(!findings\n            .iter()\n            .any(|finding| finding.matcher_id == "filesystem-portable-relative-path"));\n    }\n\n'''
+          tests = tests.replace("\\n", "\n")
+          text = text.replace(test_anchor, tests + test_anchor, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+          cargo fmt --manifest-path tools/af02-verifier/Cargo.toml
+          cargo test --locked --manifest-path tools/af02-verifier/Cargo.toml surface::tests
+          git diff --check
+      - name: Commit verified repair
+        run: |
+          set -euo pipefail
+          git config user.name "commandF AF-02 automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/af02-verifier/src/surface.rs
+          test "$(git diff --cached --name-only)" = "tools/af02-verifier/src/surface.rs"
+          git commit -m "fix(af02): resolve same-module surface paths"
+          git push origin HEAD:fix/af02-a0-local-path-resolution
