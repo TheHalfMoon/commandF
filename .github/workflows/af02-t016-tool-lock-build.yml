@@ -150,7 +150,7 @@ jobs:
           test "$(sha256sum "$derived_dir/cargo-llvm-cov.Cargo.lock" | awk '{print $1}')" = "$(jq -r '.entries[] | select(.id=="cargo-llvm-cov") | .source_lock_sha256' "$out")"
           git diff --check
           printf '%s\n' "$out" "$derived_dir/cargo-llvm-cov.Cargo.lock" | sort > "$root/expected-files"
-          git diff --name-only | sort > "$root/actual-files"
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > "$root/actual-files"
           diff -u "$root/expected-files" "$root/actual-files"
       - name: Commit verified T016 tool lock
         shell: bash
