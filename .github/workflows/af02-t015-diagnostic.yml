@@ -19,6 +19,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          components: rustfmt, clippy
       - name: Run exact canonical CI Test command with output
         env:
           RUST_BACKTRACE: "1"
