@@ -33,14 +33,18 @@ jobs:
       - name: Derive exact canonical T013 evidence
         run: |
           set -euo pipefail
+          POLICY=specs/016-af-02-adversarial-test-strength/surface-policy.json
+          SOURCE_SHA=$(python3 -c 'import json; print(json.load(open("specs/016-af-02-adversarial-test-strength/surface-policy.json"))["source_sha"])')
+          SOURCE_TREE=$(python3 -c 'import json; print(json.load(open("specs/016-af-02-adversarial-test-strength/surface-policy.json"))["source_tree"])')
+          test "$(git rev-parse "${SOURCE_SHA}^{tree}")" = "$SOURCE_TREE"
           rm -rf /tmp/af02-t013-source
-          git worktree add --detach /tmp/af02-t013-source 7b8a2507d7428f55b494cc134948afb7a7c65738
+          git worktree add --detach /tmp/af02-t013-source "$SOURCE_SHA"
           cargo run --quiet --locked --manifest-path tools/af02-verifier/Cargo.toml --bin prove_surface -- \
-            specs/016-af-02-adversarial-test-strength/surface-policy.json \
+            "$POLICY" \
             specs/016-af-02-adversarial-test-strength/exclusion-policy.json \
             /tmp/af02-t013-source \
             > specs/016-af-02-adversarial-test-strength/surface-proof.json
-          python3 -c 'import json,pathlib; p=pathlib.Path("specs/016-af-02-adversarial-test-strength/surface-proof.json"); b=p.read_bytes(); e=json.loads(b); assert not b.endswith(b"\n"); assert e["schema"]=="commandf.af02-surface-proof/v1"; assert e["source_sha"]=="7b8a2507d7428f55b494cc134948afb7a7c65738"; assert e["source_tree"]=="ad739dbe52cba8b7785327f39a820b8d97956333"; assert len(e["source_universe"])==59; assert len(e["raw_findings"])==105; assert len(e["discovery_inventory"])==105; assert e["classified_boundary_count"]==105; assert e["reviewed_exclusion_count"]==0; assert e["stale_entry_count"]==0; assert e["unclassified_boundary_count"]==0; print(e["source_universe_sha256"]); print(e["raw_findings_sha256"]); print(e["discovery_inventory_sha256"])'
+          SOURCE_SHA="$SOURCE_SHA" SOURCE_TREE="$SOURCE_TREE" python3 -c 'import json,os,pathlib; p=pathlib.Path("specs/016-af-02-adversarial-test-strength/surface-proof.json"); b=p.read_bytes(); e=json.loads(b); assert not b.endswith(b"\n"); assert e["schema"]=="commandf.af02-surface-proof/v1"; assert e["source_sha"]==os.environ["SOURCE_SHA"]; assert e["source_tree"]==os.environ["SOURCE_TREE"]; assert len(e["source_universe"])==59; assert len(e["raw_findings"])==105; assert len(e["discovery_inventory"])==105; assert e["classified_boundary_count"]==105; assert e["reviewed_exclusion_count"]==0; assert e["stale_entry_count"]==0; assert e["unclassified_boundary_count"]==0; print(e["source_universe_sha256"]); print(e["raw_findings_sha256"]); print(e["discovery_inventory_sha256"])'
           git worktree remove --force /tmp/af02-t013-source
       - name: Commit verified T013 implementation and evidence
         run: |
