@@ -22,8 +22,8 @@
       "registry": "crates.io",
       "default_features": true,
       "features": ["derive"],
-      "registry_checksum_sha256_or_null": null,
-      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+      "registry_checksum_sha256_or_null": "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1",
+      "checksum_freeze_rule": "FROZEN_FROM_CRATES_IO_SPARSE_INDEX_AND_ARCHIVE"
     },
     {
       "id": "cargo-fuzz",
@@ -78,8 +78,8 @@
       "registry": "crates.io",
       "default_features": true,
       "features": [],
-      "registry_checksum_sha256_or_null": null,
-      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+      "registry_checksum_sha256_or_null": "a9fd2f41a1cba099f79a0b6b6c35656cf7c03351a7bae8ff0f28f25270f929d2",
+      "checksum_freeze_rule": "FROZEN_FROM_CRATES_IO_SPARSE_INDEX_AND_ARCHIVE"
     },
     {
       "id": "proptest",
@@ -90,8 +90,8 @@
       "registry": "crates.io",
       "default_features": true,
       "features": [],
-      "registry_checksum_sha256_or_null": null,
-      "checksum_freeze_rule": "MUST_BE_CANONICAL_BEFORE_A1_EXECUTION"
+      "registry_checksum_sha256_or_null": "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744",
+      "checksum_freeze_rule": "FROZEN_FROM_CRATES_IO_SPARSE_INDEX_AND_ARCHIVE"
     },
     {
       "id": "syn-af02-scanner",
