@@ -9,6 +9,7 @@ use commandf_af02_verifier::retained::{
 use commandf_af02_verifier::surface::{
     discover_tracked_rust_sources, parse_surface_policy, scan_surface,
 };
+use commandf_af02_verifier::surface_proof::{canonical_surface_proof_bytes, prove_surface};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -153,6 +154,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "prove-surface" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing surface policy path")?);
+            let exclusion_policy_path =
+                PathBuf::from(args.next().ok_or("missing exclusion policy path")?);
+            let source_repo_root =
+                PathBuf::from(args.next().ok_or("missing source repository root")?);
+            if args.next().is_some() {
+                return Err(
+                    "prove-surface accepts exactly a surface policy path, exclusion policy path, and source repository root"
+                        .into(),
+                );
+            }
+            let evidence = prove_surface(
+                &fs::read(policy_path)?,
+                &fs::read(exclusion_policy_path)?,
+                &source_repo_root,
+            )?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_surface_proof_bytes(&evidence)?,
             )?;
         }
         "verify-pr" => {
