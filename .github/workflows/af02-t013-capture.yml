@@ -1,0 +1,180 @@
+name: af02-t013-capture
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/af02-t013-capture.yml"
+      - "specs/016-af-02-adversarial-test-strength/**"
+      - "tools/af02-verifier/**"
+      - "crates/**/src/**/*.rs"
+      - "tools/**/src/**/*.rs"
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+      - name: Materialize canonical PR base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/af02-t013-base "$BASE_SHA"
+          test "$(git -C /tmp/af02-t013-base rev-parse HEAD)" = "$BASE_SHA"
+      - name: Capture canonical scanner output and classify every finding
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base=/tmp/af02-t013-base
+          out=/tmp/af02-t013-evidence
+          mkdir -p "$out"
+          cargo run --quiet --locked --manifest-path "$base/tools/af02-verifier/Cargo.toml" -- \
+            scan-surface \
+            "$base/specs/016-af-02-adversarial-test-strength/surface-policy.json" \
+            "$base" > "$out/raw-findings.json"
+          BASE_ROOT="$base" OUTPUT_ROOT="$out" BASE_SHA="$BASE_SHA" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          base = Path(os.environ["BASE_ROOT"])
+          out = Path(os.environ["OUTPUT_ROOT"])
+          base_sha = os.environ["BASE_SHA"]
+          base_tree = subprocess.check_output(
+              ["git", "-C", str(base), "rev-parse", f"{base_sha}^{{tree}}"], text=True
+          ).strip()
+
+          policy_path = base / "specs/016-af-02-adversarial-test-strength/surface-policy.json"
+          exclusion_path = base / "specs/016-af-02-adversarial-test-strength/exclusion-policy.json"
+          policy = json.loads(policy_path.read_text(encoding="utf-8"))
+          findings = json.loads((out / "raw-findings.json").read_text(encoding="utf-8"))
+
+          tree_raw = subprocess.check_output(
+              ["git", "-C", str(base), "ls-tree", "-r", "-z", base_sha, "--", "crates", "tools"]
+          )
+          files = []
+          for record in tree_raw.split(b"\0"):
+              if not record:
+                  continue
+              meta, raw_path = record.split(b"\t", 1)
+              mode, kind, blob = meta.decode("ascii").split()
+              path = raw_path.decode("utf-8")
+              is_root = (
+                  (path.startswith("crates/") or path.startswith("tools/"))
+                  and "/src/" in path
+                  and path.endswith(".rs")
+              )
+              if not is_root:
+                  continue
+              if mode != "100644" or kind != "blob":
+                  raise SystemExit(f"non-regular source entry: {path} {mode} {kind}")
+              files.append({"path": path, "blob_sha": blob})
+          files.sort(key=lambda item: item["path"].encode("utf-8"))
+          if not files:
+              raise SystemExit("empty Rust source universe")
+
+          exclusion_sha256 = hashlib.sha256(exclusion_path.read_bytes()).hexdigest()
+          source_universe = {
+              "schema": "commandf.af02-source-universe/v1",
+              "source_sha": base_sha,
+              "source_tree": base_tree,
+              "exclusion_policy_sha256": exclusion_sha256,
+              "roots": ["crates/**/src/**/*.rs", "tools/**/src/**/*.rs"],
+              "files": files,
+          }
+
+          surfaces = policy["critical_surfaces"]
+          exclusions = policy["finding_exclusions"]
+          classified = []
+          surface_use = {item["surface_id"]: 0 for item in surfaces}
+          exclusion_use = {item["exclusion_id"]: 0 for item in exclusions}
+          for finding in findings:
+              matches = []
+              for surface in surfaces:
+                  if (
+                      finding["matcher_id"] in surface["matcher_ids"]
+                      and finding["source_path"] in surface["source_paths"]
+                  ):
+                      matches.append(f"CRITICAL_SURFACE:{surface['surface_id']}")
+              for exclusion in exclusions:
+                  if (
+                      finding["matcher_id"] == exclusion["matcher_id"]
+                      and finding["source_path"] == exclusion["source_path"]
+                  ):
+                      matches.append(f"REVIEWED_EXCLUSION:{exclusion['exclusion_id']}")
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"finding disposition cardinality is {len(matches)} for "
+                      f"{finding['source_path']}:{finding['syntax_ordinal']}:{finding['matcher_id']}: {matches}"
+                  )
+              disposition = matches[0]
+              if disposition.startswith("CRITICAL_SURFACE:"):
+                  surface_use[disposition.split(":", 1)[1]] += 1
+              else:
+                  exclusion_use[disposition.split(":", 1)[1]] += 1
+              classified.append({**finding, "disposition": disposition})
+
+          stale_surfaces = sorted(key for key, count in surface_use.items() if count == 0)
+          stale_exclusions = sorted(key for key, count in exclusion_use.items() if count == 0)
+          if stale_surfaces:
+              raise SystemExit(f"stale critical surfaces: {stale_surfaces}")
+          if stale_exclusions:
+              raise SystemExit(f"stale finding exclusions: {stale_exclusions}")
+
+          file_blobs = {item["path"]: item["blob_sha"] for item in files}
+          finding_keys = {(f["source_path"], f["matcher_id"]) for f in findings}
+          witness_errors = []
+          for witness in policy["known_boundary_witnesses"]:
+              path = witness["source_path"]
+              if file_blobs.get(path) != witness["source_blob_sha"]:
+                  witness_errors.append(f"blob:{witness['witness_id']}")
+              if (path, witness["matcher_id"]) not in finding_keys:
+                  witness_errors.append(f"finding:{witness['witness_id']}")
+          if witness_errors:
+              raise SystemExit(f"stale boundary witnesses: {witness_errors}")
+
+          def canonical(value):
+              return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+          (out / "source-universe.json").write_bytes(canonical(source_universe))
+          (out / "classified-findings.json").write_bytes(canonical(classified))
+          summary = {
+              "schema": "commandf.af02-t013-surface-evidence/v1",
+              "source_sha": base_sha,
+              "source_tree": base_tree,
+              "source_file_count": len(files),
+              "raw_finding_count": len(findings),
+              "classified_finding_count": len(classified),
+              "critical_surface_count": len(surfaces),
+              "finding_exclusion_count": len(exclusions),
+              "stale_critical_surfaces": [],
+              "stale_finding_exclusions": [],
+              "unclassified_findings": 0,
+              "multiply_classified_findings": 0,
+              "stale_boundary_witnesses": [],
+              "source_universe_sha256": hashlib.sha256(canonical(source_universe)).hexdigest(),
+              "raw_findings_sha256": hashlib.sha256((out / "raw-findings.json").read_bytes()).hexdigest(),
+              "classified_findings_sha256": hashlib.sha256(canonical(classified)).hexdigest(),
+              "surface_policy_sha256": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
+          }
+          (out / "summary.json").write_bytes(canonical(summary))
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+      - name: Retain T013 capture evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: af02-t013-capture
+          path: /tmp/af02-t013-evidence
+          if-no-files-found: error
+          retention-days: 1
