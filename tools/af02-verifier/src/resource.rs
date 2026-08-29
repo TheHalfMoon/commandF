@@ -589,12 +589,7 @@ fn verify_runtime_inspection(
         .and_then(|map| map.get(TMP_MOUNT))
         .and_then(Value::as_str)
         .ok_or_else(|| ResourceError::RuntimeInspection("missing /tmp tmpfs".to_owned()))?;
-    let expected_tmpfs = format!("size={}", mib_to_bytes(policy.tmpfs_mib));
-    if !tmpfs.contains(&expected_tmpfs) || !tmpfs.contains("noexec") || !tmpfs.contains("nosuid") {
-        return Err(ResourceError::RuntimeInspection(format!(
-            "unexpected /tmp options {tmpfs}"
-        )));
-    }
+    verify_tmpfs_options(tmpfs, policy.tmpfs_mib)?;
 
     let mounts = object
         .get("Mounts")
@@ -603,6 +598,50 @@ fn verify_runtime_inspection(
     verify_bind_mount(mounts, &plan.source_dir, SOURCE_MOUNT, true)?;
     verify_bind_mount(mounts, &plan.output_dir, OUTPUT_MOUNT, false)?;
     Ok(())
+}
+
+fn verify_tmpfs_options(options: &str, expected_mib: u64) -> Result<(), ResourceError> {
+    let mut rw = false;
+    let mut noexec = false;
+    let mut nosuid = false;
+    let mut nodev = false;
+    let mut size_bytes = None;
+
+    for option in options.split(',') {
+        match option {
+            "rw" if !rw => rw = true,
+            "noexec" if !noexec => noexec = true,
+            "nosuid" if !nosuid => nosuid = true,
+            "nodev" if !nodev => nodev = true,
+            value if value.starts_with("size=") && size_bytes.is_none() => {
+                size_bytes = Some(parse_tmpfs_size_bytes(&value["size=".len()..]).ok_or_else(|| {
+                    ResourceError::RuntimeInspection(format!(
+                        "invalid /tmp size option {value}"
+                    ))
+                })?);
+            }
+            _ => {
+                return Err(ResourceError::RuntimeInspection(format!(
+                    "unexpected /tmp option {option} in {options}"
+                )));
+            }
+        }
+    }
+
+    let expected_bytes = mib_to_bytes(expected_mib);
+    if !rw || !noexec || !nosuid || !nodev || size_bytes != Some(expected_bytes) {
+        return Err(ResourceError::RuntimeInspection(format!(
+            "unexpected /tmp options {options}; expected rw,noexec,nosuid,nodev and size={expected_bytes} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn parse_tmpfs_size_bytes(value: &str) -> Option<u64> {
+    if let Some(mib) = value.strip_suffix('m') {
+        return mib.parse::<u64>().ok()?.checked_mul(1024 * 1024);
+    }
+    value.parse::<u64>().ok()
 }
 
 fn verify_bind_mount(
@@ -1128,6 +1167,39 @@ mod tests {
         let plan = synthetic_plan();
         let inspect = synthetic_inspect(&policy, &plan);
         verify_runtime_inspection(&policy, &inspect, &plan).unwrap();
+    }
+
+    #[test]
+    fn runtime_inspection_accepts_real_docker_tmpfs_representation() {
+        let policy = policy();
+        let plan = synthetic_plan();
+        let mut inspect = synthetic_inspect(&policy, &plan);
+        inspect[0]["HostConfig"]["Tmpfs"]["/tmp"] = json!(format!(
+            "rw,noexec,nosuid,nodev,size={}m",
+            policy.tmpfs_mib
+        ));
+        verify_runtime_inspection(&policy, &inspect, &plan).unwrap();
+    }
+
+    #[test]
+    fn runtime_inspection_rejects_tmpfs_size_and_option_drift() {
+        let policy = policy();
+        let plan = synthetic_plan();
+
+        let mut size_drift = synthetic_inspect(&policy, &plan);
+        size_drift[0]["HostConfig"]["Tmpfs"]["/tmp"] =
+            json!("rw,noexec,nosuid,nodev,size=511m");
+        assert!(verify_runtime_inspection(&policy, &size_drift, &plan).is_err());
+
+        let mut option_drift = synthetic_inspect(&policy, &plan);
+        option_drift[0]["HostConfig"]["Tmpfs"]["/tmp"] =
+            json!("rw,noexec,nosuid,nodev,size=512m,exec");
+        assert!(verify_runtime_inspection(&policy, &option_drift, &plan).is_err());
+
+        let mut duplicate_option = synthetic_inspect(&policy, &plan);
+        duplicate_option[0]["HostConfig"]["Tmpfs"]["/tmp"] =
+            json!("rw,rw,noexec,nosuid,nodev,size=512m");
+        assert!(verify_runtime_inspection(&policy, &duplicate_option, &plan).is_err());
     }
 
     #[test]
