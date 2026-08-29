@@ -1,0 +1,113 @@
+name: af02-t014-resource-policy-rebase
+
+on:
+  push:
+    branches:
+      - chore/af02-a0-resource-policy-rebase
+    paths:
+      - ".github/workflows/af02-t014-resource-policy-rebase.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  rebase-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: chore/af02-a0-resource-policy-rebase
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Rebase resource policy lineage only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import copy
+          import hashlib
+          import json
+          import subprocess
+          from pathlib import Path
+
+          BASE_SHA = "ad384dfc0026ef46c210e35c83dba693d7707e2b"
+          BASE_TREE = "e47c817f311a08d9764781ffb9995b78ecb25abe"
+          POLICY = "specs/016-af-02-adversarial-test-strength/resource-policy.json"
+          PREDECESSOR_BLOB = "03818fbd466602e33e8188ffb754d8ea3b47e911"
+
+          def git(*args: str) -> bytes:
+              return subprocess.check_output(["git", *args])
+
+          if git("rev-parse", f"{BASE_SHA}^{{tree}}").decode().strip() != BASE_TREE:
+              raise SystemExit("canonical base tree mismatch")
+          if git("rev-parse", f"{BASE_SHA}:{POLICY}").decode().strip() != PREDECESSOR_BLOB:
+              raise SystemExit("canonical predecessor blob mismatch")
+          predecessor = git("show", f"{BASE_SHA}:{POLICY}")
+          if Path(POLICY).read_bytes() != predecessor:
+              raise SystemExit("working policy differs from canonical predecessor")
+          predecessor_sha256 = hashlib.sha256(predecessor).hexdigest()
+
+          before = json.loads(predecessor)
+          after = copy.deepcopy(before)
+          lineage = after["lineage"]
+          if lineage["mode"] != "BOOTSTRAP":
+              raise SystemExit("expected the one planning bootstrap resource policy")
+          if lineage["predecessor_blob_sha"] is not None or lineage["predecessor_sha256"] is not None:
+              raise SystemExit("bootstrap predecessor fields must be null")
+          if lineage["change_is_policy_only"] is not True or lineage["dependent_evidence_allowed_in_same_candidate"] is not False:
+              raise SystemExit("resource policy temporal invariants are not closed")
+
+          lineage["mode"] = "REBASE"
+          lineage["canonical_base_sha"] = BASE_SHA
+          lineage["canonical_base_tree"] = BASE_TREE
+          lineage["predecessor_blob_sha"] = PREDECESSOR_BLOB
+          lineage["predecessor_sha256"] = predecessor_sha256
+
+          normalized = copy.deepcopy(after)
+          normalized["lineage"] = copy.deepcopy(before["lineage"])
+          if normalized != before:
+              raise SystemExit("resource values changed outside lineage")
+
+          expected_values = {
+              "artifact_retention_days": 7,
+              "campaign_wall_seconds": 300,
+              "cpu_count": 2,
+              "machine": "x86_64",
+              "max_committed_corpus_bytes": 8388608,
+              "max_decompressed_or_generated_bytes": 67108864,
+              "max_executions_or_zero_if_time_bounded": 0,
+              "max_input_bytes": 262144,
+              "max_single_artifact_bytes": 16777216,
+              "max_temporary_files": 1024,
+              "max_total_artifact_bytes": 67108864,
+              "network_mode": "none",
+              "offline_required": True,
+              "per_input_timeout_seconds": 5,
+              "pids_limit": 256,
+              "process_memory_mib": 768,
+              "runner_image_digest": "sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f",
+              "schema": "commandf.af02-resource-policy/v1",
+              "subprocess_timeout_seconds": 120,
+              "tmpfs_mib": 512,
+          }
+          for key, value in expected_values.items():
+              if after.get(key) != value:
+                  raise SystemExit(f"closed resource value drift: {key}")
+          if lineage["policy_path"] != POLICY or lineage["comparison_rule"] != "BASE_CONTROLLED_PREDECESSOR_OR_SINGLE_BOOTSTRAP":
+              raise SystemExit("resource lineage fixed fields drifted")
+
+          canonical = json.dumps(after, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+          Path(POLICY).write_bytes(canonical)
+          print(f"predecessor_sha256={predecessor_sha256}")
+          print(f"candidate_sha256={hashlib.sha256(canonical).hexdigest()}")
+          PY
+          git diff --check
+      - name: Commit verified T014 policy-only rebase
+        run: |
+          set -euo pipefail
+          git config user.name "commandF AF-02 automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add specs/016-af-02-adversarial-test-strength/resource-policy.json
+          test "$(git diff --cached --name-only)" = "specs/016-af-02-adversarial-test-strength/resource-policy.json"
+          git commit -m "chore(af02): rebase resource policy"
+          git push origin HEAD:chore/af02-a0-resource-policy-rebase
