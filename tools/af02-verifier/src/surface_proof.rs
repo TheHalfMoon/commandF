@@ -197,15 +197,20 @@ fn classify_findings(
         let mut dispositions = Vec::new();
         for surface in &policy.critical_surfaces {
             if surface.category == finding.category
-                && surface.matcher_ids.iter().any(|id| id == &finding.matcher_id)
+                && surface
+                    .matcher_ids
+                    .iter()
+                    .any(|id| id == &finding.matcher_id)
                 && surface
                     .source_paths
                     .iter()
                     .any(|path| path == &finding.source_path)
             {
                 dispositions.push(format!("CRITICAL_SURFACE:{}", surface.surface_id));
-                used_surface_paths.insert((surface.surface_id.clone(), finding.source_path.clone()));
-                used_surface_matchers.insert((surface.surface_id.clone(), finding.matcher_id.clone()));
+                used_surface_paths
+                    .insert((surface.surface_id.clone(), finding.source_path.clone()));
+                used_surface_matchers
+                    .insert((surface.surface_id.clone(), finding.matcher_id.clone()));
             }
         }
         for exclusion in &policy.finding_exclusions {
@@ -343,9 +348,7 @@ fn derive_source_universe(
     Ok(entries)
 }
 
-fn parse_production_source_exclusions(
-    bytes: &[u8],
-) -> Result<BTreeSet<String>, SurfaceProofError> {
+fn parse_production_source_exclusions(bytes: &[u8]) -> Result<BTreeSet<String>, SurfaceProofError> {
     let value = parse_json_no_duplicates(bytes)
         .map_err(|error| SurfaceProofError::Violation(error.to_string()))?;
     let object = value
@@ -482,7 +485,8 @@ mod tests {
             &witness.category,
         )];
         let blobs = blob_map(&witness.source_path, &witness.source_blob_sha);
-        let result = classify_findings(&policy, &findings, &blobs).expect("classification must pass");
+        let result =
+            classify_findings(&policy, &findings, &blobs).expect("classification must pass");
         assert_eq!(result.findings.len(), 1);
         assert_eq!(
             result.findings[0].disposition,
@@ -571,7 +575,9 @@ mod tests {
             introduced_policy_sha: "0".repeat(40),
         }];
         let error = classify_findings(&policy, &[], &BTreeMap::new()).unwrap_err();
-        assert!(error.to_string().contains("stale reviewed finding exclusion"));
+        assert!(error
+            .to_string()
+            .contains("stale reviewed finding exclusion"));
     }
 
     #[test]
@@ -585,11 +591,7 @@ mod tests {
             matcher_ids: vec!["filesystem-read".to_owned()],
             source_paths: vec!["crates/example/src/lib.rs".to_owned()],
         }];
-        let mut uncertain = finding(
-            "crates/example/src/lib.rs",
-            "filesystem-read",
-            "FILESYSTEM",
-        );
+        let mut uncertain = finding("crates/example/src/lib.rs", "filesystem-read", "FILESYSTEM");
         uncertain.certainty = FindingCertainty::Uncertain;
         let result = classify_findings(&policy, &[uncertain], &BTreeMap::new())
             .expect("uncertain finding with exact disposition must remain classified evidence");
