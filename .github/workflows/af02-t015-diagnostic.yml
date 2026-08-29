@@ -23,43 +23,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
         with:
           components: rustfmt, clippy
-      - name: Repair canonical REBASE-aware lineage test fixture
+      - name: Repair canonical REBASE-aware lineage fixture
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("tools/af02-verifier/src/resource.rs")
-          text = path.read_text()
-          old = '''        let mut bootstrap_with_predecessor = policy().lineage;
-          bootstrap_with_predecessor.predecessor_blob_sha = Some("a".repeat(40));
-          bootstrap_with_predecessor.predecessor_sha256 = Some("b".repeat(64));
-          assert!(validate_lineage(&bootstrap_with_predecessor).is_err());
-
-          let mut rebase_without_predecessor = policy().lineage;
-          rebase_without_predecessor.mode = ResourceLineageMode::Rebase;
-          assert!(validate_lineage(&rebase_without_predecessor).is_err());
-'''
-          new = '''        let mut bootstrap_with_predecessor = policy().lineage;
-          bootstrap_with_predecessor.mode = ResourceLineageMode::Bootstrap;
-          bootstrap_with_predecessor.predecessor_blob_sha = Some("a".repeat(40));
-          bootstrap_with_predecessor.predecessor_sha256 = Some("b".repeat(64));
-          assert!(validate_lineage(&bootstrap_with_predecessor).is_err());
-
-          let mut rebase_without_predecessor = policy().lineage;
-          rebase_without_predecessor.mode = ResourceLineageMode::Rebase;
-          rebase_without_predecessor.predecessor_blob_sha = None;
-          rebase_without_predecessor.predecessor_sha256 = None;
-          assert!(validate_lineage(&rebase_without_predecessor).is_err());
-'''
-          if text.count(old) != 1:
-              raise SystemExit("expected lineage test fixture snippet exactly once")
-          path.write_text(text.replace(old, new))
-          PY
+          file=tools/af02-verifier/src/resource.rs
+          grep -F 'let mut bootstrap_with_predecessor = policy().lineage;' "$file"
+          grep -F 'let mut rebase_without_predecessor = policy().lineage;' "$file"
+          sed -i '/let mut bootstrap_with_predecessor = policy().lineage;/a\        bootstrap_with_predecessor.mode = ResourceLineageMode::Bootstrap;' "$file"
+          sed -i '/rebase_without_predecessor.mode = ResourceLineageMode::Rebase;/a\        rebase_without_predecessor.predecessor_blob_sha = None;\
+        rebase_without_predecessor.predecessor_sha256 = None;' "$file"
+          test "$(git diff --name-only)" = "tools/af02-verifier/src/resource.rs"
+          git diff --check
           cargo fmt --all -- --check
           cargo test --locked --manifest-path tools/af02-verifier/Cargo.toml resource_lineage_rejects_temporal_misclassification
           cargo test --locked --manifest-path tools/af02-verifier/Cargo.toml
-          git diff --check
       - name: Commit verified fixture repair
         run: |
           set -euo pipefail
