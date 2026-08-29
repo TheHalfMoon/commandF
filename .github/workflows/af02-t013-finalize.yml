@@ -1,0 +1,132 @@
+name: af02-t013-finalize
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-t013-surface-proof
+    paths:
+      - ".github/workflows/af02-t013-finalize.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
+        with:
+          ref: feat/af02-a0-t013-surface-proof
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
+        with:
+          components: rustfmt, clippy
+      - name: Add proof CLI and qualify verifier
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/af02-verifier/src/main.rs")
+          text = path.read_text(encoding="utf-8")
+          import_anchor = "use commandf_af02_verifier::surface::{\n    discover_tracked_rust_sources, parse_surface_policy, scan_surface,\n};\n"
+          import_replacement = import_anchor + "use commandf_af02_verifier::surface_proof::{canonical_surface_proof_bytes, prove_surface};\n"
+          if text.count(import_anchor) != 1:
+              raise SystemExit("surface import anchor mismatch")
+          text = text.replace(import_anchor, import_replacement, 1)
+
+          command_anchor = '''        "verify-pr" => {
+            return Err(
+'''
+          command = '''        "prove-surface" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing surface policy path")?);
+            let exclusion_policy_path =
+                PathBuf::from(args.next().ok_or("missing exclusion policy path")?);
+            let source_repo_root =
+                PathBuf::from(args.next().ok_or("missing source repository root")?);
+            if args.next().is_some() {
+                return Err(
+                    "prove-surface accepts exactly a surface policy path, exclusion policy path, and source repository root"
+                        .into(),
+                );
+            }
+            let evidence = prove_surface(
+                &fs::read(policy_path)?,
+                &fs::read(exclusion_policy_path)?,
+                &source_repo_root,
+            )?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_surface_proof_bytes(&evidence)?,
+            )?;
+        }
+'''
+          if text.count(command_anchor) != 1:
+              raise SystemExit("verify-pr command anchor mismatch")
+          text = text.replace(command_anchor, command + command_anchor, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          cargo fmt --manifest-path tools/af02-verifier/Cargo.toml
+          cargo clippy --locked --manifest-path tools/af02-verifier/Cargo.toml --all-targets -- -D warnings
+          cargo test --locked --manifest-path tools/af02-verifier/Cargo.toml
+          git diff --check
+      - name: Derive exact canonical T013 evidence
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/af02-t013-source
+          git worktree add --detach /tmp/af02-t013-source 7b8a2507d7428f55b494cc134948afb7a7c65738
+          cargo run --quiet --locked --manifest-path tools/af02-verifier/Cargo.toml -- \
+            prove-surface \
+            specs/016-af-02-adversarial-test-strength/surface-policy.json \
+            specs/016-af-02-adversarial-test-strength/exclusion-policy.json \
+            /tmp/af02-t013-source \
+            > specs/016-af-02-adversarial-test-strength/surface-proof.json
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path("specs/016-af-02-adversarial-test-strength/surface-proof.json")
+          raw = path.read_bytes()
+          if raw.endswith(b"\n"):
+              raise SystemExit("surface proof must not have a trailing newline")
+          evidence = json.loads(raw)
+          expected = {
+              "schema": "commandf.af02-surface-proof/v1",
+              "source_sha": "7b8a2507d7428f55b494cc134948afb7a7c65738",
+              "source_tree": "ad739dbe52cba8b7785327f39a820b8d97956333",
+              "classified_boundary_count": 105,
+              "reviewed_exclusion_count": 0,
+              "stale_entry_count": 0,
+              "unclassified_boundary_count": 0,
+          }
+          for key, value in expected.items():
+              if evidence.get(key) != value:
+                  raise SystemExit(f"{key}: expected {value!r}, got {evidence.get(key)!r}")
+          if len(evidence["source_universe"]) != 59:
+              raise SystemExit(f"expected 59 source-universe entries, got {len(evidence['source_universe'])}")
+          if len(evidence["raw_findings"]) != 105:
+              raise SystemExit(f"expected 105 raw findings, got {len(evidence['raw_findings'])}")
+          if len(evidence["discovery_inventory"]) != 105:
+              raise SystemExit(f"expected 105 classified findings, got {len(evidence['discovery_inventory'])}")
+          if any(not item["disposition"].startswith(("CRITICAL_SURFACE:", "REVIEWED_EXCLUSION:")) for item in evidence["discovery_inventory"]):
+              raise SystemExit("invalid disposition prefix")
+          print(f"surface_proof_sha256={hashlib.sha256(raw).hexdigest()}")
+          print(f"source_universe_sha256={evidence['source_universe_sha256']}")
+          print(f"raw_findings_sha256={evidence['raw_findings_sha256']}")
+          print(f"discovery_inventory_sha256={evidence['discovery_inventory_sha256']}")
+          PY
+          git worktree remove --force /tmp/af02-t013-source
+      - name: Commit verified T013 implementation and evidence
+        run: |
+          set -euo pipefail
+          git config user.name "commandF AF-02 automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tools/af02-verifier/src/main.rs \
+            specs/016-af-02-adversarial-test-strength/surface-proof.json
+          git diff --cached --check
+          git commit -m "feat(af02): prove exact surface dispositions"
+          git push origin HEAD:feat/af02-a0-t013-surface-proof
