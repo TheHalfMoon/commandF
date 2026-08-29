@@ -1,0 +1,25 @@
+name: af02-t015-diagnostic
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-resource-runner
+    paths:
+      - ".github/workflows/af02-t015-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-resource-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+      - name: Run AF-02 OCI integration with output
+        env:
+          RUST_BACKTRACE: "1"
+        run: |
+          set -o pipefail
+          cargo test --locked -p commandf-pkg --test af02_resource_runner -- --nocapture 2>&1 | tee /tmp/af02-t015-diagnostic.log
