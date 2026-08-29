@@ -1,0 +1,159 @@
+name: af02-t016-tool-lock-build
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-tool-lock
+    paths:
+      - ".github/workflows/af02-t016-tool-lock-build.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: feat/af02-a0-tool-lock
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+          targets: x86_64-unknown-linux-gnu
+      - name: Build exact executable identities and generate tool lock
+        shell: bash
+        env:
+          AF02_SOURCE_SHA: 7ec61251aa1553e13bf843f8f699894afa96c05d
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$AF02_SOURCE_SHA"
+          spec=specs/016-af-02-adversarial-test-strength
+          policy="$spec/tool-policy.json"
+          out="$spec/tool-lock.json"
+          tool_policy_sha256="$(sha256sum "$policy" | awk '{print $1}')"
+          build_rustc="$(rustc --version)"
+          build_cargo="$(cargo --version)"
+          target=x86_64-unknown-linux-gnu
+          root=/tmp/af02-t016
+          install=/tmp/af02-tools/bin
+          rm -rf "$root" /tmp/af02-tools
+          mkdir -p "$root" "$install"
+
+          build_tool() {
+            id="$1"
+            repo="$2"
+            rev="$3"
+            package="$4"
+            binary="$5"
+            dir="$root/$id"
+            git init -q "$dir"
+            git -C "$dir" remote add origin "$repo"
+            git -C "$dir" fetch -q --depth=1 origin "$rev"
+            git -C "$dir" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$rev"
+            test -f "$dir/Cargo.lock"
+            source_lock_sha256="$(sha256sum "$dir/Cargo.lock" | awk '{print $1}')"
+            cargo build --locked --release --target "$target" --manifest-path "$dir/Cargo.toml" -p "$package"
+            built="$dir/target/$target/release/$binary"
+            test -x "$built"
+            cp "$built" "$install/$binary"
+            installed_executable_sha256="$(sha256sum "$install/$binary" | awk '{print $1}')"
+            "$install/$binary" --version > "$root/$id.version" 2>&1
+            version_output_sha256="$(sha256sum "$root/$id.version" | awk '{print $1}')"
+            printf '%s\t%s\t%s\t%s\n' "$id" "$source_lock_sha256" "$installed_executable_sha256" "$version_output_sha256" >> "$root/executables.tsv"
+            printf 'AF02_TOOL %s source_lock=%s executable=%s version_output=%s\n' "$id" "$source_lock_sha256" "$installed_executable_sha256" "$version_output_sha256"
+            cat "$root/$id.version"
+          }
+
+          build_tool cargo-fuzz https://github.com/rust-fuzz/cargo-fuzz 984c861c8dfea28055254c5f1d2659ab2cd63f76 cargo-fuzz cargo-fuzz
+          build_tool cargo-llvm-cov https://github.com/taiki-e/cargo-llvm-cov be59056988acd54c7f984b7c85643daea3711b29 cargo-llvm-cov cargo-llvm-cov
+          build_tool cargo-mutants https://github.com/sourcefrog/cargo-mutants 8ab1dc786a1f61a4e370416cc6c68b81a704e917 cargo-mutants cargo-mutants
+          build_tool cargo-nextest https://github.com/nextest-rs/nextest 60fa45f638ffc3f35e74afa65737f45fcd32db2a cargo-nextest cargo-nextest
+
+          python3 - "$policy" "$root/executables.tsv" "$out" "$tool_policy_sha256" "$AF02_SOURCE_SHA" "$build_rustc" "$build_cargo" <<'PY'
+          import json, pathlib, sys
+          policy_path, tsv_path, out_path, policy_sha, source_sha, rustc, cargo = sys.argv[1:]
+          policy = json.loads(pathlib.Path(policy_path).read_text())
+          exec_rows = {}
+          for line in pathlib.Path(tsv_path).read_text().splitlines():
+              tool_id, source_lock, exe_sha, version_sha = line.split("\t")
+              exec_rows[tool_id] = (source_lock, exe_sha, version_sha)
+          entries = []
+          for item in policy["entries"]:
+              if item["kind"] == "registry_package":
+                  checksum = item["registry_checksum_sha256_or_null"]
+                  if not isinstance(checksum, str) or len(checksum) != 64:
+                      raise SystemExit(f"null or invalid registry checksum for {item['id']}")
+                  entries.append({
+                      "kind": "registry_package",
+                      "id": item["id"],
+                      "package": item["package"],
+                      "version": item["version"],
+                      "registry": item["registry"],
+                      "registry_checksum_sha256": checksum,
+                      "default_features": item["default_features"],
+                      "features": item["features"],
+                  })
+              else:
+                  source_lock, exe_sha, version_sha = exec_rows[item["id"]]
+                  entries.append({
+                      "kind": "executable",
+                      "id": item["id"],
+                      "version": item["version"],
+                      "upstream_repository": item["upstream_repository"],
+                      "upstream_commit": item["upstream_commit"],
+                      "acquisition_mode": item["acquisition_mode"],
+                      "source_lock_sha256": source_lock,
+                      "installed_executable": f"/tmp/af02-tools/bin/{item['id']}",
+                      "installed_executable_sha256": exe_sha,
+                      "version_output_sha256": version_sha,
+                      "build_rustc": rustc,
+                      "build_cargo": cargo,
+                      "build_target": item["build_target"],
+                      "features": item["features"],
+                  })
+          expected = policy["required_final_entry_ids"]
+          actual = [e["id"] for e in entries]
+          if actual != expected or len(entries) != 8:
+              raise SystemExit(f"tool entry order mismatch: {actual!r}")
+          document = {
+              "schema": "commandf.af02-tool-lock/v1",
+              "tool_policy_sha256": policy_sha,
+              "source_sha": source_sha,
+              "entries": entries,
+          }
+          pathlib.Path(out_path).write_text(json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n")
+          PY
+
+          python3 - "$out" <<'PY'
+          import json, pathlib, re, sys
+          p = pathlib.Path(sys.argv[1])
+          obj = json.loads(p.read_text())
+          assert obj["schema"] == "commandf.af02-tool-lock/v1"
+          assert re.fullmatch(r"[0-9a-f]{64}", obj["tool_policy_sha256"])
+          assert re.fullmatch(r"[0-9a-f]{40}", obj["source_sha"])
+          assert len(obj["entries"]) == 8
+          for entry in obj["entries"]:
+              if entry["kind"] == "registry_package":
+                  assert re.fullmatch(r"[0-9a-f]{64}", entry["registry_checksum_sha256"])
+              else:
+                  for key in ("source_lock_sha256", "installed_executable_sha256", "version_output_sha256"):
+                      assert re.fullmatch(r"[0-9a-f]{64}", entry[key])
+                  assert entry["build_target"] == "x86_64-unknown-linux-gnu"
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "$out"
+      - name: Commit verified T016 tool lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "commandF AF-02 automation"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add specs/016-af-02-adversarial-test-strength/tool-lock.json
+          test "$(git diff --cached --name-only)" = "specs/016-af-02-adversarial-test-strength/tool-lock.json"
+          git commit -m "evidence(af02): freeze immutable tool lock"
+          git push origin HEAD:feat/af02-a0-tool-lock
