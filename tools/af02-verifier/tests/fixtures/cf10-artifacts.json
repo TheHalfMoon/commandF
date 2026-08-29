@@ -1,0 +1,16 @@
+{
+  "total_count": 1,
+  "artifacts": [
+    {
+      "id": 9255732702,
+      "name": "cf10-real-corpus-evidence",
+      "expired": true,
+      "digest": "sha256:9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612",
+      "workflow_run": {
+        "id": 31916124080,
+        "head_branch": "feat/cf-10-real-ig-delta-corpus",
+        "head_sha": "5fe10d9859407272acf6649fc3e868d3eb2fbd12"
+      }
+    }
+  ]
+}

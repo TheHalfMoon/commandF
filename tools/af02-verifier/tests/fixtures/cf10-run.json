@@ -1,0 +1,25 @@
+{
+  "id": 31916124080,
+  "name": "cf10-real-corpus",
+  "path": ".github/workflows/cf10-real-corpus.yml",
+  "event": "pull_request",
+  "workflow_id": 335093310,
+  "run_number": 45,
+  "run_attempt": 1,
+  "check_suite_id": 86559814682,
+  "head_sha": "5fe10d9859407272acf6649fc3e868d3eb2fbd12",
+  "conclusion": "failure",
+  "pull_requests": [
+    {
+      "number": 11,
+      "head": {
+        "ref": "feat/cf-10-real-ig-delta-corpus",
+        "sha": "5fe10d9859407272acf6649fc3e868d3eb2fbd12"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "5cb1a4c3445c0ebd86654cfb467a5e008e801c3e"
+      }
+    }
+  ]
+}
