@@ -1,0 +1,119 @@
+name: af02-t018-static
+
+on:
+  push:
+    branches:
+      - feat/af02-a0-corpus-assertion-contract
+    paths:
+      - ".github/workflows/af02-t018-static.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: 1.97.1
+          components: rustfmt
+      - name: Compile and test T018 corpus contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path tools/af02-verifier/Cargo.toml -- --check
+          cargo test --manifest-path tools/af02-verifier/Cargo.toml --locked
+      - name: Validate exact T018 design seed and parser outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          SPEC=specs/016-af-02-adversarial-test-strength
+          MANIFEST=tools/af02-verifier/Cargo.toml
+          cargo run --quiet --manifest-path "$MANIFEST" --locked -- parse-corpus \
+            "$SPEC/corpus-manifest.json" \
+            "$SPEC/schemas/af02-corpus-v1.schema.json" > /tmp/corpus.out
+          cmp "$SPEC/corpus-manifest.json" /tmp/corpus.out
+          cargo run --quiet --manifest-path "$MANIFEST" --locked -- validate-corpus-assertions \
+            "$SPEC/corpus-manifest.json" \
+            "$SPEC/schemas/af02-corpus-v1.schema.json" \
+            "$SPEC/assertion-registry.json" \
+            "$SPEC/surface-policy.json" > /tmp/validation.out
+          test "$(cat /tmp/validation.out)" = '{"assertion_count":0,"scenario_count":0,"schema":"commandf.af02-corpus-assertion-validation/v1"}'
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          spec = pathlib.Path('specs/016-af-02-adversarial-test-strength')
+          base = '94bf4f1a9987f474613e67ddbc182ece8dff5a8d'
+          corpus_path = spec / 'corpus-manifest.json'
+          assertion_path = spec / 'assertion-registry.json'
+          surface_path = spec / 'surface-policy.json'
+          for path in (corpus_path, assertion_path):
+              raw = path.read_bytes()
+              if raw.endswith(b'\n'):
+                  raise SystemExit(f'{path} must not have a trailing newline')
+              value = json.loads(raw)
+              canonical = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+              if raw != canonical:
+                  raise SystemExit(f'{path} is not canonical JSON')
+          corpus = json.loads(corpus_path.read_bytes())
+          assertions = json.loads(assertion_path.read_bytes())
+          if corpus != {
+              'entries': [],
+              'max_fixture_bytes': 262144,
+              'max_total_bytes': 8388608,
+              'schema': 'commandf.af02-corpus/v1',
+              'source_sha': base,
+          }:
+              raise SystemExit('unexpected empty corpus design seed')
+          if assertions['entries'] != [] or assertions['source_sha'] != base:
+              raise SystemExit('unexpected empty assertion design seed')
+          corpus_sha = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
+          surface_sha = hashlib.sha256(surface_path.read_bytes()).hexdigest()
+          if assertions['corpus_manifest_sha256'] != corpus_sha:
+              raise SystemExit(f'corpus digest mismatch: retained={assertions["corpus_manifest_sha256"]} actual={corpus_sha}')
+          if assertions['surface_policy_sha256'] != surface_sha:
+              raise SystemExit('surface policy digest mismatch')
+          changed = subprocess.check_output(['git','diff','--name-only',f'{base}...HEAD'], text=True).splitlines()
+          expected = sorted([
+              '.github/workflows/af02-t018-static.yml',
+              'specs/016-af-02-adversarial-test-strength/assertion-registry.json',
+              'specs/016-af-02-adversarial-test-strength/corpus-manifest.json',
+              'tools/af02-verifier/src/corpus.rs',
+              'tools/af02-verifier/src/lib.rs',
+              'tools/af02-verifier/src/main.rs',
+          ])
+          if sorted(changed) != expected:
+              raise SystemExit(f'unexpected T018 paths: {changed!r}')
+          print(f'AF02_T018_CORPUS_SHA256={corpus_sha}')
+          print(f'AF02_T018_ASSERTION_REGISTRY_SHA256={hashlib.sha256(assertion_path.read_bytes()).hexdigest()}')
+          print('AF02_T018_SCENARIO_COUNT=0')
+          print('AF02_T018_ASSERTION_COUNT=0')
+          print('AF02_T018_STATIC_VALIDATION=PASS')
+          PY
+      - name: Prove new scanner findings remain classified
+        shell: bash
+        run: |
+          set -euo pipefail
+          SPEC=specs/016-af-02-adversarial-test-strength
+          MANIFEST=tools/af02-verifier/Cargo.toml
+          cargo run --quiet --manifest-path "$MANIFEST" --locked -- scan-surface "$SPEC/surface-policy.json" . > /tmp/findings.json
+          python3 - <<'PY'
+          import json
+          policy = json.load(open('specs/016-af-02-adversarial-test-strength/surface-policy.json'))
+          findings = json.load(open('/tmp/findings.json'))
+          surfaces = policy['critical_surfaces']
+          errors = []
+          for finding in findings:
+              matches = [s['surface_id'] for s in surfaces if finding['matcher_id'] in s['matcher_ids'] and finding['source_path'] in s['source_paths']]
+              if len(matches) != 1:
+                  errors.append((finding['source_path'], finding['matcher_id'], matches))
+          if errors:
+              raise SystemExit(f'unclassified or multiply classified findings: {errors!r}')
+          print(f'AF02_T018_SURFACE_FINDING_COUNT={len(findings)}')
+          print('AF02_T018_SURFACE_CLASSIFICATION=PASS')
+          PY
