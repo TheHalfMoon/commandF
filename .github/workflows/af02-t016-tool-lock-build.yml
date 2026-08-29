@@ -45,12 +45,39 @@ jobs:
           rm -rf "$root" /tmp/af02-tools
           mkdir -p "$root" "$install" "$derived_dir"
 
+          capture_version() {
+            id="$1"
+            binary="$2"
+            version="$3"
+            version_file="$root/$id.version"
+            case "$id" in
+              cargo-fuzz)
+                if ! "$install/$binary" --version > "$version_file" 2>&1; then cat "$version_file"; return 1; fi
+                ;;
+              cargo-llvm-cov)
+                if ! "$install/$binary" llvm-cov --version > "$version_file" 2>&1; then cat "$version_file"; return 1; fi
+                ;;
+              cargo-mutants)
+                if ! "$install/$binary" mutants --version > "$version_file" 2>&1; then cat "$version_file"; return 1; fi
+                ;;
+              cargo-nextest)
+                if ! "$install/$binary" nextest --version > "$version_file" 2>&1; then cat "$version_file"; return 1; fi
+                ;;
+              *)
+                printf 'unknown executable id: %s\n' "$id" >&2
+                return 1
+                ;;
+            esac
+            grep -F -- "$version" "$version_file"
+          }
+
           build_tool() {
             id="$1"
             repo="$2"
             rev="$3"
             package="$4"
             binary="$5"
+            version="$6"
             dir="$root/$id"
             target_dir="$root/targets/$id"
             messages="$root/$id.cargo.jsonl"
@@ -70,17 +97,16 @@ jobs:
             test -x "$built"
             cp "$built" "$install/$binary"
             installed_executable_sha256="$(sha256sum "$install/$binary" | awk '{print $1}')"
-            "$install/$binary" --version > "$root/$id.version" 2>&1
+            capture_version "$id" "$binary" "$version"
             version_output_sha256="$(sha256sum "$root/$id.version" | awk '{print $1}')"
             printf '%s\t%s\t%s\t%s\n' "$id" "$source_lock_sha256" "$installed_executable_sha256" "$version_output_sha256" >> "$root/executables.tsv"
             printf 'AF02_TOOL %s source_lock=%s executable=%s version_output=%s\n' "$id" "$source_lock_sha256" "$installed_executable_sha256" "$version_output_sha256"
-            cat "$root/$id.version"
           }
 
-          build_tool cargo-fuzz https://github.com/rust-fuzz/cargo-fuzz 984c861c8dfea28055254c5f1d2659ab2cd63f76 cargo-fuzz cargo-fuzz
-          build_tool cargo-llvm-cov https://github.com/taiki-e/cargo-llvm-cov be59056988acd54c7f984b7c85643daea3711b29 cargo-llvm-cov cargo-llvm-cov
-          build_tool cargo-mutants https://github.com/sourcefrog/cargo-mutants 8ab1dc786a1f61a4e370416cc6c68b81a704e917 cargo-mutants cargo-mutants
-          build_tool cargo-nextest https://github.com/nextest-rs/nextest 60fa45f638ffc3f35e74afa65737f45fcd32db2a cargo-nextest cargo-nextest
+          build_tool cargo-fuzz https://github.com/rust-fuzz/cargo-fuzz 984c861c8dfea28055254c5f1d2659ab2cd63f76 cargo-fuzz cargo-fuzz 0.13.2
+          build_tool cargo-llvm-cov https://github.com/taiki-e/cargo-llvm-cov be59056988acd54c7f984b7c85643daea3711b29 cargo-llvm-cov cargo-llvm-cov 0.9.0
+          build_tool cargo-mutants https://github.com/sourcefrog/cargo-mutants 8ab1dc786a1f61a4e370416cc6c68b81a704e917 cargo-mutants cargo-mutants 27.1.0
+          build_tool cargo-nextest https://github.com/nextest-rs/nextest 60fa45f638ffc3f35e74afa65737f45fcd32db2a cargo-nextest cargo-nextest 0.9.143
 
           python3 - "$policy" "$root/executables.tsv" "$out" "$tool_policy_sha256" "$AF02_SOURCE_SHA" "$build_rustc" "$build_cargo" <<'PY'
           import json, pathlib, sys
