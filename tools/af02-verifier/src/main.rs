@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use commandf_af02_verifier::authority::{project_authority, Cf06Source};
 use commandf_af02_verifier::canonical::{canonical_json_bytes, parse_json_no_duplicates};
+use commandf_af02_verifier::resource::{parse_resource_policy, run_bounded};
 use commandf_af02_verifier::retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
 };
@@ -176,6 +177,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_surface_proof_bytes(&evidence)?,
+            )?;
+        }
+        "parse-resource-policy" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing resource policy path")?);
+            if args.next().is_some() {
+                return Err("parse-resource-policy accepts exactly one path".into());
+            }
+            let policy = parse_resource_policy(&fs::read(policy_path)?)?;
+            let value = serde_json::to_value(policy)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "run-bounded" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing resource policy path")?);
+            let source_dir = PathBuf::from(args.next().ok_or("missing source directory")?);
+            let output_dir = PathBuf::from(args.next().ok_or("missing output directory")?);
+            if args.next().as_deref() != Some("--") {
+                return Err("run-bounded requires `--` before the bounded command".into());
+            }
+            let bounded_command = args.collect::<Vec<_>>();
+            if bounded_command.is_empty() {
+                return Err("run-bounded requires a bounded command".into());
+            }
+            let policy = parse_resource_policy(&fs::read(policy_path)?)?;
+            let outcome = run_bounded(&policy, &source_dir, &output_dir, &bounded_command)?;
+            let value = serde_json::to_value(outcome)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
             )?;
         }
         "verify-pr" => {
