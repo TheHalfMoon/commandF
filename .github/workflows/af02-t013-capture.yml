@@ -29,7 +29,7 @@ jobs:
           set -euo pipefail
           git worktree add --detach /tmp/af02-t013-base "$BASE_SHA"
           test "$(git -C /tmp/af02-t013-base rev-parse HEAD)" = "$BASE_SHA"
-      - name: Capture canonical scanner output and classify every finding
+      - name: Capture canonical scanner output and enumerate every disposition gap
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -97,6 +97,7 @@ jobs:
           surfaces = policy["critical_surfaces"]
           exclusions = policy["finding_exclusions"]
           classified = []
+          disposition_gaps = []
           surface_use = {item["surface_id"]: 0 for item in surfaces}
           exclusion_use = {item["exclusion_id"]: 0 for item in exclusions}
           for finding in findings:
@@ -114,10 +115,14 @@ jobs:
                   ):
                       matches.append(f"REVIEWED_EXCLUSION:{exclusion['exclusion_id']}")
               if len(matches) != 1:
-                  raise SystemExit(
-                      f"finding disposition cardinality is {len(matches)} for "
-                      f"{finding['source_path']}:{finding['syntax_ordinal']}:{finding['matcher_id']}: {matches}"
-                  )
+                  disposition_gaps.append({
+                      "source_path": finding["source_path"],
+                      "syntax_ordinal": finding["syntax_ordinal"],
+                      "matcher_id": finding["matcher_id"],
+                      "certainty": finding["certainty"],
+                      "matches": matches,
+                  })
+                  continue
               disposition = matches[0]
               if disposition.startswith("CRITICAL_SURFACE:"):
                   surface_use[disposition.split(":", 1)[1]] += 1
@@ -127,10 +132,6 @@ jobs:
 
           stale_surfaces = sorted(key for key, count in surface_use.items() if count == 0)
           stale_exclusions = sorted(key for key, count in exclusion_use.items() if count == 0)
-          if stale_surfaces:
-              raise SystemExit(f"stale critical surfaces: {stale_surfaces}")
-          if stale_exclusions:
-              raise SystemExit(f"stale finding exclusions: {stale_exclusions}")
 
           file_blobs = {item["path"]: item["blob_sha"] for item in files}
           finding_keys = {(f["source_path"], f["matcher_id"]) for f in findings}
@@ -138,17 +139,32 @@ jobs:
           for witness in policy["known_boundary_witnesses"]:
               path = witness["source_path"]
               if file_blobs.get(path) != witness["source_blob_sha"]:
-                  witness_errors.append(f"blob:{witness['witness_id']}")
+                  witness_errors.append({"witness_id": witness["witness_id"], "reason": "BLOB_DRIFT"})
               if (path, witness["matcher_id"]) not in finding_keys:
-                  witness_errors.append(f"finding:{witness['witness_id']}")
-          if witness_errors:
-              raise SystemExit(f"stale boundary witnesses: {witness_errors}")
+                  witness_errors.append({"witness_id": witness["witness_id"], "reason": "FINDING_MISSING"})
 
           def canonical(value):
               return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
           (out / "source-universe.json").write_bytes(canonical(source_universe))
           (out / "classified-findings.json").write_bytes(canonical(classified))
+          diagnostics = {
+              "schema": "commandf.af02-t013-diagnostics/v1",
+              "source_sha": base_sha,
+              "source_tree": base_tree,
+              "source_file_count": len(files),
+              "raw_finding_count": len(findings),
+              "uniquely_classified_finding_count": len(classified),
+              "disposition_gaps": disposition_gaps,
+              "stale_critical_surfaces": stale_surfaces,
+              "stale_finding_exclusions": stale_exclusions,
+              "stale_boundary_witnesses": witness_errors,
+          }
+          (out / "diagnostics.json").write_bytes(canonical(diagnostics))
+          print(json.dumps(diagnostics, indent=2, sort_keys=True))
+          if disposition_gaps or stale_surfaces or stale_exclusions or witness_errors:
+              raise SystemExit("AF02_T013_DIAGNOSTIC_GAPS_PRESENT")
+
           summary = {
               "schema": "commandf.af02-t013-surface-evidence/v1",
               "source_sha": base_sha,
@@ -172,6 +188,7 @@ jobs:
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
       - name: Retain T013 capture evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: af02-t013-capture
