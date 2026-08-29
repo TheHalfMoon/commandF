@@ -96,7 +96,11 @@ fn af02_resource_runner_uses_real_pinned_oci_isolation_and_bounds() {
         &root,
         &source,
         &success_output,
-        &["bash", "-ceu", "printf 'bounded-ok\\n' > /output/result.txt"],
+        &[
+            "bash",
+            "-ceu",
+            "printf 'bounded-ok\\n' > /output/result.txt",
+        ],
     );
     assert_success(&success, "real bounded OCI success probe");
     assert_eq!(success.stdout.first().copied(), Some(b'{'));
