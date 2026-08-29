@@ -6,8 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const VERIFIER_MANIFEST: &str = "tools/af02-verifier/Cargo.toml";
 const RESOURCE_POLICY: &str = "specs/016-af-02-adversarial-test-strength/resource-policy.json";
-const RUNNER_IMAGE: &str =
-    "docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -15,6 +13,17 @@ fn repo_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("commandf-pkg must live under crates/ in the repository")
         .to_path_buf()
+}
+
+fn runner_image(root: &Path) -> String {
+    let policy_bytes = fs::read(root.join(RESOURCE_POLICY)).expect("read AF-02 resource policy");
+    let policy: serde_json::Value =
+        serde_json::from_slice(&policy_bytes).expect("parse AF-02 resource policy");
+    let digest = policy
+        .get("runner_image_digest")
+        .and_then(serde_json::Value::as_str)
+        .expect("AF-02 resource policy must define runner_image_digest");
+    format!("docker.io/library/rust@{digest}")
 }
 
 fn run(root: &Path, program: &str, args: &[&str]) -> Output {
@@ -75,7 +84,8 @@ fn af02_resource_runner_uses_real_pinned_oci_isolation_and_bounds() {
     }
 
     let root = repo_root();
-    let pull = run(&root, "docker", &["pull", RUNNER_IMAGE]);
+    let runner_image = runner_image(&root);
+    let pull = run(&root, "docker", &["pull", runner_image.as_str()]);
     assert_success(&pull, "pre-acquire pinned AF-02 runner image");
 
     let nonce = SystemTime::now()
