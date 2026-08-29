@@ -506,6 +506,7 @@ fn scan_module_items(
     findings: &mut Vec<Finding>,
 ) {
     let imports = collect_imports(items, module_path);
+    let local_items = collect_local_items(items);
     for item in items {
         if let Item::Mod(module) = item {
             if let Some((_, nested)) = &module.content {
@@ -520,6 +521,7 @@ fn scan_module_items(
             source_path,
             module_path,
             imports: &imports,
+            local_items: &local_items,
             ordinal,
             findings,
             bindings: vec![BTreeMap::new()],
@@ -544,6 +546,25 @@ fn collect_imports(items: &[Item], module_path: &[String]) -> ImportTable {
     table.globs.sort();
     table.globs.dedup();
     table
+}
+
+fn collect_local_items(items: &[Item]) -> BTreeSet<String> {
+    items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Const(item) => Some(item.ident.to_string()),
+            Item::Enum(item) => Some(item.ident.to_string()),
+            Item::Fn(item) => Some(item.sig.ident.to_string()),
+            Item::Mod(item) => Some(item.ident.to_string()),
+            Item::Static(item) => Some(item.ident.to_string()),
+            Item::Struct(item) => Some(item.ident.to_string()),
+            Item::Trait(item) => Some(item.ident.to_string()),
+            Item::TraitAlias(item) => Some(item.ident.to_string()),
+            Item::Type(item) => Some(item.ident.to_string()),
+            Item::Union(item) => Some(item.ident.to_string()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn expand_use_tree(
@@ -607,6 +628,7 @@ struct ScannerVisitor<'a> {
     source_path: &'a str,
     module_path: &'a [String],
     imports: &'a ImportTable,
+    local_items: &'a BTreeSet<String>,
     ordinal: &'a mut u64,
     findings: &'a mut Vec<Finding>,
     bindings: Vec<BTreeMap<String, Binding>>,
@@ -621,7 +643,8 @@ impl ScannerVisitor<'_> {
 
     fn classify_path(&mut self, ordinal: u64, path: &SynPath, allowed_kinds: &[MatcherKind]) {
         let raw = syn_path_segments(path);
-        let resolved = resolve_segments(&raw, self.module_path, self.imports);
+        let resolved =
+            resolve_segments_with_locals(&raw, self.module_path, self.imports, self.local_items);
         for matcher in &self.policy.matchers {
             if !allowed_kinds.contains(&matcher.kind) {
                 continue;
@@ -658,7 +681,12 @@ impl ScannerVisitor<'_> {
                 .and_then(|init| direct_call_path(&init.expr))
                 .and_then(|path| {
                     let raw = syn_path_segments(path);
-                    let resolved = resolve_segments(&raw, self.module_path, self.imports);
+                    let resolved = resolve_segments_with_locals(
+                        &raw,
+                        self.module_path,
+                        self.imports,
+                        self.local_items,
+                    );
                     if path_has_glob_ambiguity(&raw, self.imports) {
                         None
                     } else {
@@ -711,6 +739,7 @@ impl ScannerVisitor<'_> {
                 &expected,
                 self.module_path,
                 self.imports,
+                self.local_items,
                 &self.bindings,
             ) {
                 Ownership::Expected => self.findings.push(Finding {
@@ -795,11 +824,12 @@ fn receiver_ownership(
     expected: &[Vec<String>],
     module_path: &[String],
     imports: &ImportTable,
+    local_items: &BTreeSet<String>,
     bindings: &[BTreeMap<String, Binding>],
 ) -> Ownership {
     if let Some(path) = direct_call_path(receiver) {
         let raw = syn_path_segments(path);
-        let resolved = resolve_segments(&raw, module_path, imports);
+        let resolved = resolve_segments_with_locals(&raw, module_path, imports, local_items);
         if expected.contains(&resolved) {
             return Ownership::Expected;
         }
@@ -917,6 +947,28 @@ fn resolve_segments(raw: &[String], module_path: &[String], imports: &ImportTabl
         current = normalize_special_segments(&expanded, module_path);
     }
     current
+}
+
+fn resolve_segments_with_locals(
+    raw: &[String],
+    module_path: &[String],
+    imports: &ImportTable,
+    local_items: &BTreeSet<String>,
+) -> Vec<String> {
+    let resolved = resolve_segments(raw, module_path, imports);
+    if resolved != raw {
+        return resolved;
+    }
+    let Some(first) = raw.first() else {
+        return resolved;
+    };
+    if !local_items.contains(first) {
+        return resolved;
+    }
+    let mut canonical = vec!["crate".to_owned()];
+    canonical.extend(module_path.iter().cloned());
+    canonical.extend(raw.iter().cloned());
+    canonical
 }
 
 fn normalize_special_segments(raw: &[String], module_path: &[String]) -> Vec<String> {
@@ -1222,6 +1274,58 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn bare_local_function_resolves_to_module_canonical_path() {
+        let findings = scan_surface(
+            &policy(),
+            &[SourceFile {
+                path: "crates/example/src/source_map.rs".to_owned(),
+                bytes: br#"fn portable_relative_path(_: &str, _: &str, _: bool) {}
+fn f() { portable_relative_path("fixture", "fixture", true); }"#
+                    .to_vec(),
+            }],
+        )
+        .expect("scan must succeed");
+        assert!(findings.iter().any(|finding| {
+            finding.matcher_id == "filesystem-portable-relative-path"
+                && finding.certainty == FindingCertainty::Definite
+        }));
+    }
+
+    #[test]
+    fn bare_local_type_resolves_to_crate_root_canonical_path() {
+        let findings = scan_surface(
+            &policy(),
+            &[SourceFile {
+                path: "crates/example/src/main.rs".to_owned(),
+                bytes:
+                    b"struct Cli; impl Cli { fn try_parse() {} } fn main() { Cli::try_parse(); }"
+                        .to_vec(),
+            }],
+        )
+        .expect("scan must succeed");
+        assert!(findings.iter().any(|finding| {
+            finding.matcher_id == "parser-cli-try-parse"
+                && finding.certainty == FindingCertainty::Definite
+        }));
+    }
+
+    #[test]
+    fn undeclared_bare_name_is_not_promoted_to_local_canonical_path() {
+        let findings = scan_surface(
+            &policy(),
+            &[SourceFile {
+                path: "crates/example/src/source_map.rs".to_owned(),
+                bytes: b"fn f() { portable_relative_path(\"fixture\", \"fixture\", true); }"
+                    .to_vec(),
+            }],
+        )
+        .expect("scan must succeed");
+        assert!(!findings
+            .iter()
+            .any(|finding| finding.matcher_id == "filesystem-portable-relative-path"));
     }
 
     #[test]
