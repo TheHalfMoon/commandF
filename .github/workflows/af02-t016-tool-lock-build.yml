@@ -52,6 +52,7 @@ jobs:
             package="$4"
             binary="$5"
             dir="$root/$id"
+            target_dir="$root/targets/$id"
             git init -q "$dir"
             git -C "$dir" remote add origin "$repo"
             git -C "$dir" fetch -q --depth=1 origin "$rev"
@@ -63,8 +64,8 @@ jobs:
               printf 'AF02_DERIVED_SOURCE_LOCK %s %s\n' "$id" "$derived_dir/$id.Cargo.lock"
             fi
             source_lock_sha256="$(sha256sum "$dir/Cargo.lock" | awk '{print $1}')"
-            cargo build --locked --release --target "$target" --manifest-path "$dir/Cargo.toml" -p "$package"
-            built="$dir/target/$target/release/$binary"
+            CARGO_TARGET_DIR="$target_dir" cargo build --locked --release --target "$target" --manifest-path "$dir/Cargo.toml" -p "$package"
+            built="$target_dir/$target/release/$binary"
             test -x "$built"
             cp "$built" "$install/$binary"
             installed_executable_sha256="$(sha256sum "$install/$binary" | awk '{print $1}')"
