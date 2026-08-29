@@ -1059,12 +1059,15 @@ mod tests {
     #[test]
     fn resource_lineage_rejects_temporal_misclassification() {
         let mut bootstrap_with_predecessor = policy().lineage;
+        bootstrap_with_predecessor.mode = ResourceLineageMode::Bootstrap;
         bootstrap_with_predecessor.predecessor_blob_sha = Some("a".repeat(40));
         bootstrap_with_predecessor.predecessor_sha256 = Some("b".repeat(64));
         assert!(validate_lineage(&bootstrap_with_predecessor).is_err());
 
         let mut rebase_without_predecessor = policy().lineage;
         rebase_without_predecessor.mode = ResourceLineageMode::Rebase;
+        rebase_without_predecessor.predecessor_blob_sha = None;
+        rebase_without_predecessor.predecessor_sha256 = None;
         assert!(validate_lineage(&rebase_without_predecessor).is_err());
     }
 
