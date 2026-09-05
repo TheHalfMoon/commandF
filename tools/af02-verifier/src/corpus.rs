@@ -427,11 +427,11 @@ fn validate_registry(registry: &AssertionRegistry) -> Result<(), CorpusError> {
                 let cargo_target_missing = entry
                     .cargo_target_or_null
                     .as_deref()
-                    .map_or(true, str::is_empty);
+                    .is_none_or(str::is_empty);
                 let test_name_missing = entry
                     .test_name_or_null
                     .as_deref()
-                    .map_or(true, str::is_empty);
+                    .is_none_or(str::is_empty);
                 if cargo_target_missing || test_name_missing {
                     return Err(CorpusError::Contract(format!(
                         "CARGO_TEST assertion {} requires cargo target and test name",
