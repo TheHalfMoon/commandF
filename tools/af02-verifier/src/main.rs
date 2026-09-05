@@ -3,6 +3,10 @@ use std::path::PathBuf;
 
 use commandf_af02_verifier::authority::{project_authority, Cf06Source};
 use commandf_af02_verifier::canonical::{canonical_json_bytes, parse_json_no_duplicates};
+use commandf_af02_verifier::corpus::{
+    parse_assertion_registry, parse_corpus_manifest, validate_corpus_and_assertions,
+    verify_fixture_bytes,
+};
 use commandf_af02_verifier::resource::{parse_resource_policy, run_bounded};
 use commandf_af02_verifier::retained::{
     locator_plan, project_retained, validate_and_parse, verify_artifacts, verify_workflow_run,
@@ -205,6 +209,70 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let policy = parse_resource_policy(&fs::read(policy_path)?)?;
             let outcome = run_bounded(&policy, &source_dir, &output_dir, &bounded_command)?;
             let value = serde_json::to_value(outcome)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "parse-corpus" => {
+            let corpus_path = PathBuf::from(args.next().ok_or("missing corpus manifest path")?);
+            let schema_path = PathBuf::from(args.next().ok_or("missing corpus schema path")?);
+            if args.next().is_some() {
+                return Err("parse-corpus accepts exactly a corpus path and schema path".into());
+            }
+            let corpus = parse_corpus_manifest(&fs::read(corpus_path)?, &fs::read(schema_path)?)?;
+            let value = serde_json::to_value(corpus)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "parse-assertions" => {
+            let assertion_path =
+                PathBuf::from(args.next().ok_or("missing assertion registry path")?);
+            if args.next().is_some() {
+                return Err("parse-assertions accepts exactly one assertion registry path".into());
+            }
+            let assertions = parse_assertion_registry(&fs::read(assertion_path)?)?;
+            let value = serde_json::to_value(assertions)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "validate-corpus-assertions" => {
+            let corpus_path = PathBuf::from(args.next().ok_or("missing corpus manifest path")?);
+            let schema_path = PathBuf::from(args.next().ok_or("missing corpus schema path")?);
+            let assertion_path =
+                PathBuf::from(args.next().ok_or("missing assertion registry path")?);
+            let surface_policy_path =
+                PathBuf::from(args.next().ok_or("missing surface policy path")?);
+            let repo_root = PathBuf::from(args.next().ok_or("missing repository root")?);
+            if args.next().is_some() {
+                return Err(
+                    "validate-corpus-assertions accepts exactly corpus, corpus schema, assertion registry, surface policy, and repository root paths"
+                        .into(),
+                );
+            }
+            let corpus_bytes = fs::read(corpus_path)?;
+            let schema_bytes = fs::read(schema_path)?;
+            let assertion_bytes = fs::read(assertion_path)?;
+            let surface_policy_bytes = fs::read(surface_policy_path)?;
+            let (corpus, assertions) = validate_corpus_and_assertions(
+                &corpus_bytes,
+                &schema_bytes,
+                &assertion_bytes,
+                &surface_policy_bytes,
+            )?;
+            for entry in &corpus.entries {
+                let fixture_bytes = fs::read(repo_root.join(&entry.fixture_path))?;
+                verify_fixture_bytes(entry, &fixture_bytes)?;
+            }
+            let value = serde_json::json!({
+                "assertion_count": assertions.entries.len(),
+                "scenario_count": corpus.entries.len(),
+                "schema": "commandf.af02-corpus-assertion-validation/v1"
+            });
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
