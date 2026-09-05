@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@032958afbdc797a916606bdc6ffcbf961 # 1.97.1
+      - uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5 # 1.97.1
       - name: Capture AF-02 verifier test output
         shell: bash
         run: |
