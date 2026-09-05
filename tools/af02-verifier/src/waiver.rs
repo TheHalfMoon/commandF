@@ -228,7 +228,7 @@ fn is_lower_hex(byte: u8) -> bool {
 }
 
 fn valid_waiver_id(value: &str) -> bool {
-    value.len() == 8
+    value.len() == 10
         && value.starts_with("AF02-W")
         && value.as_bytes()[6..].iter().all(u8::is_ascii_digit)
 }
