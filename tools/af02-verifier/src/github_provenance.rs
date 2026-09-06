@@ -730,7 +730,6 @@ mod tests {
         let policy = valid_policy();
         let provenance = valid_provenance(&policy);
         let resolver = resolver(&policy, &provenance);
-        let bytes = serde_json::to_vec(&provenance).unwrap();
 
         let verified = verify_required_checks_parsed(
             &policy,
