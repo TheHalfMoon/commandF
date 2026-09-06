@@ -347,6 +347,7 @@ pub struct CandidateInputStats {
     pub yaml_merge_key_present: bool,
     pub yaml_custom_tag_present: bool,
 }
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProcessEvidence {
     pub binary_sha256: String,
@@ -1146,6 +1147,7 @@ fn unique_bijection_set(
     }
     Ok(complete)
 }
+
 fn validate_stream_limit(label: &str, observed: u64, limit: u64, exceeded: bool) -> Result<(), SemanticError> {
     let expected_flag = observed > limit;
     if exceeded != expected_flag {
