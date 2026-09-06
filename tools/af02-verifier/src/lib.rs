@@ -5,3 +5,4 @@ pub mod resource;
 pub mod retained;
 pub mod surface;
 pub mod surface_proof;
+pub mod waiver;

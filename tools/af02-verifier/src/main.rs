@@ -15,6 +15,7 @@ use commandf_af02_verifier::surface::{
     discover_tracked_rust_sources, parse_surface_policy, scan_surface,
 };
 use commandf_af02_verifier::surface_proof::{canonical_surface_proof_bytes, prove_surface};
+use commandf_af02_verifier::waiver::parse_waiver_policy;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -273,6 +274,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "scenario_count": corpus.entries.len(),
                 "schema": "commandf.af02-corpus-assertion-validation/v1"
             });
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "parse-waiver-policy" => {
+            let policy_path = PathBuf::from(args.next().ok_or("missing waiver policy path")?);
+            if args.next().is_some() {
+                return Err("parse-waiver-policy accepts exactly one path".into());
+            }
+            let policy = parse_waiver_policy(&fs::read(policy_path)?)?;
+            let value = serde_json::to_value(policy)?;
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
