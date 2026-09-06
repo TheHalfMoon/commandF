@@ -214,19 +214,6 @@ pub fn parse_required_check_provenance(
     Ok(provenance)
 }
 
-pub fn verify_required_checks<R: GitHubProvenanceResolver>(
-    policy_bytes: &[u8],
-    policy_schema_bytes: &[u8],
-    provenance_bytes: &[u8],
-    provenance_schema_bytes: &[u8],
-    resolver: &R,
-) -> Result<VerifiedRequiredChecks, GitHubProvenanceError> {
-    let policy = parse_required_check_policy(policy_bytes, policy_schema_bytes)?;
-    let provenance =
-        parse_required_check_provenance(provenance_bytes, provenance_schema_bytes)?;
-    verify_required_checks_parsed(&policy, policy_bytes, &provenance, resolver)
-}
-
 pub fn verify_required_checks_parsed<R: GitHubProvenanceResolver>(
     policy: &RequiredCheckPolicy,
     policy_bytes: &[u8],
@@ -745,11 +732,10 @@ mod tests {
         let resolver = resolver(&policy, &provenance);
         let bytes = serde_json::to_vec(&provenance).unwrap();
 
-        let verified = verify_required_checks(
+        let verified = verify_required_checks_parsed(
+            &policy,
             POLICY_BYTES,
-            POLICY_SCHEMA_BYTES,
-            &bytes,
-            PROVENANCE_SCHEMA_BYTES,
+            &provenance,
             &resolver,
         )
         .unwrap();
