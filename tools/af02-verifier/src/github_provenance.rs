@@ -580,9 +580,6 @@ mod tests {
     const POLICY_SCHEMA_BYTES: &[u8] = include_bytes!(
         "../../../specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-policy-v1.schema.json"
     );
-    const PROVENANCE_SCHEMA_BYTES: &[u8] = include_bytes!(
-        "../../../specs/016-af-02-adversarial-test-strength/schemas/af02-required-check-provenance-v1.schema.json"
-    );
     const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const BASE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
