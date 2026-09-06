@@ -1,6 +1,7 @@
 pub mod authority;
 pub mod canonical;
 pub mod corpus;
+pub mod github_provenance;
 pub mod resource;
 pub mod retained;
 pub mod surface;
