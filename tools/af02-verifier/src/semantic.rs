@@ -347,7 +347,6 @@ pub struct CandidateInputStats {
     pub yaml_merge_key_present: bool,
     pub yaml_custom_tag_present: bool,
 }
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProcessEvidence {
     pub binary_sha256: String,
@@ -1078,10 +1077,10 @@ pub fn validate_enforcement_inventory_closure(
             return contract_error(format!("duplicate enforcement planned_path {}", entry.planned_path));
         }
         let required_rank = stack_rank(&entry.required_from_stack)?;
-        if required_rank <= current_rank {
-            if entry.planned_path.is_empty() || entry.entrypoint.is_empty() || !entry.resolved_on_base {
-                return contract_error(format!("active enforcement role {} is unresolved", entry.role));
-            }
+        if required_rank <= current_rank
+            && (entry.planned_path.is_empty() || entry.entrypoint.is_empty() || !entry.resolved_on_base)
+        {
+            return contract_error(format!("active enforcement role {} is unresolved", entry.role));
         }
     }
     if observed != expected {
@@ -1147,7 +1146,6 @@ fn unique_bijection_set(
     }
     Ok(complete)
 }
-
 fn validate_stream_limit(label: &str, observed: u64, limit: u64, exceeded: bool) -> Result<(), SemanticError> {
     let expected_flag = observed > limit;
     if exceeded != expected_flag {
