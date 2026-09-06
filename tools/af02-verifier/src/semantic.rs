@@ -18,6 +18,16 @@ const REQUIRED_SURFACE_CATEGORIES: [&str; 6] = [
     "SERDE_OR_TEXT_PARSE",
     "SUBPROCESS",
 ];
+const TOOL_LOCK_IDS: [&str; 8] = [
+    "arbitrary",
+    "cargo-fuzz",
+    "cargo-llvm-cov",
+    "cargo-mutants",
+    "cargo-nextest",
+    "libfuzzer-sys",
+    "proptest",
+    "syn-af02-scanner",
+];
 const ALLOWED_TERMINATIONS: [&str; 5] = [
     "SUCCESS",
     "CLASSIFIED_REJECT",
@@ -365,7 +375,7 @@ pub struct EnforcementRole {
     pub role: String,
     pub planned_path: String,
     pub entrypoint: String,
-    pub required_from_rank: u8,
+    pub required_from_stack: String,
     pub resolved_on_base: bool,
 }
 
@@ -390,24 +400,20 @@ pub fn algorithm_implementation(id: &str) -> Option<&'static str> {
         "EXTENSION_AUTHORITY_DIGEST_BINDING" => Some("semantic::validate_extension_authority_digest_binding"),
         "PATH_NOFOLLOW_CONTAINMENT" => Some("semantic::validate_path_nofollow_containment"),
         "COUNTER_EQUALITIES" => Some("semantic::validate_counter_equalities"),
-        "POLICY_INVENTORY_BINDING" => Some("semantic::validate_policy_inventory_binding"),
+        "POLICY_INVENTORY_BINDING" => Some("semantic::validate_policy_inventory_binding + semantic::validate_tool_lock"),
         "INVENTORY_KEY_MEMBERSHIP" => Some("semantic::validate_inventory_key_membership"),
         "CANDIDATE_INPUT_LIMITS" => Some("semantic::validate_candidate_input_limits"),
         "INPUT_PROCESS_ENFORCEMENT" => Some("semantic::validate_input_process_enforcement"),
         "ENFORCEMENT_INVENTORY_CLOSURE" => Some("semantic::validate_enforcement_inventory_closure"),
-        "FINAL_ENVELOPE_HASH" => Some("semantic::validate_final_envelope_hash"),
+        "FINAL_ENVELOPE_HASH" => Some("semantic::build_final_envelope_preimage + semantic::validate_final_envelope_hash"),
         _ => None,
     }
 }
 
 pub fn negative_fixture_algorithm(id: &str) -> Option<&'static str> {
     match id {
-        "CORE_SCHEMA_ALIAS_COLLISION" | "CORE_EMPTY_DETERMINISTIC" => {
-            Some("CORE_SCHEMA_VALIDATION")
-        }
-        "EXTENSION_DUPLICATE_ROLE" | "EXTENSION_DUPLICATE_PATH" => {
-            Some("PROOF_ENVELOPE_CLOSURE")
-        }
+        "CORE_SCHEMA_ALIAS_COLLISION" | "CORE_EMPTY_DETERMINISTIC" => Some("CORE_SCHEMA_VALIDATION"),
+        "EXTENSION_DUPLICATE_ROLE" | "EXTENSION_DUPLICATE_PATH" => Some("PROOF_ENVELOPE_CLOSURE"),
         "EXTENSION_AUTHORITY_DIGEST_MISMATCH" => Some("EXTENSION_AUTHORITY_DIGEST_BINDING"),
         "POLICY_BOOTSTRAP_WHEN_PREDECESSOR_EXISTS"
         | "POLICY_REBASE_MISSING_PREDECESSOR"
@@ -427,9 +433,7 @@ pub fn negative_fixture_algorithm(id: &str) -> Option<&'static str> {
         | "SUBSTITUTED_TOOL_ID"
         | "WRONG_EXECUTABLE_DIGEST"
         | "POLICY_INVENTORY_DIGEST_MISMATCH" => Some("POLICY_INVENTORY_BINDING"),
-        "FABRICATED_WAIVER_ID" | "WAIVER_WRONG_MUTANT" | "WAIVER_NOT_PRECANONICAL" => {
-            Some("WAIVER_CANONICAL_ANCESTRY")
-        }
+        "FABRICATED_WAIVER_ID" | "WAIVER_WRONG_MUTANT" | "WAIVER_NOT_PRECANONICAL" => Some("WAIVER_CANONICAL_ANCESTRY"),
         "CHECK_WRONG_APP"
         | "CHECK_WRONG_REPOSITORY"
         | "CHECK_WRONG_WORKFLOW_ID"
@@ -446,21 +450,11 @@ pub fn negative_fixture_algorithm(id: &str) -> Option<&'static str> {
         | "RETAINED_WRONG_PR_ASSOCIATION"
         | "RETAINED_WRONG_RUN_HEAD"
         | "RETAINED_WRONG_ARTIFACT" => Some("RETAINED_PR_RUN_BINDING"),
-        "UNSORTED_SOURCE_UNIVERSE" | "DUPLICATE_SOURCE_PATH" => {
-            Some("SOURCE_BLOB_RECONSTRUCTION")
-        }
-        "ASSERTION_REPLAY_MISSING"
-        | "ASSERTION_REPLAY_DUPLICATE"
-        | "CORPUS_DUPLICATE_FIXTURE_PATH" => Some("ASSERTION_REPLAY_BIJECTION"),
-        "COVERAGE_MISSING_PATH" | "COVERAGE_DUPLICATE_PATH" | "COVERAGE_SURFACE_OVERLAP" => {
-            Some("COVERAGE_ACCOUNTING")
-        }
+        "UNSORTED_SOURCE_UNIVERSE" | "DUPLICATE_SOURCE_PATH" => Some("SOURCE_BLOB_RECONSTRUCTION"),
+        "ASSERTION_REPLAY_MISSING" | "ASSERTION_REPLAY_DUPLICATE" | "CORPUS_DUPLICATE_FIXTURE_PATH" => Some("ASSERTION_REPLAY_BIJECTION"),
+        "COVERAGE_MISSING_PATH" | "COVERAGE_DUPLICATE_PATH" | "COVERAGE_SURFACE_OVERLAP" => Some("COVERAGE_ACCOUNTING"),
         "MUTATION_RESULT_MISSING" | "MUTATION_EXTRA_RESULT" => Some("MUTATION_MEMBERSHIP"),
-        "INPUT_OVERSIZE"
-        | "INPUT_TOO_DEEP"
-        | "INPUT_TOO_MANY_RECORDS"
-        | "YAML_ALIAS"
-        | "YAML_CUSTOM_TAG" => Some("CANDIDATE_INPUT_LIMITS"),
+        "INPUT_OVERSIZE" | "INPUT_TOO_DEEP" | "INPUT_TOO_MANY_RECORDS" | "YAML_ALIAS" | "YAML_CUSTOM_TAG" => Some("CANDIDATE_INPUT_LIMITS"),
         "INPUT_PARSER_WRONG_BINARY"
         | "INPUT_PARSER_WRONG_LOCK_BLOB"
         | "INPUT_PARSER_NO_CGROUP"
@@ -480,6 +474,10 @@ pub fn negative_fixture_algorithm(id: &str) -> Option<&'static str> {
     }
 }
 
+pub fn negative_fixture_implementation(id: &str) -> Option<&'static str> {
+    negative_fixture_algorithm(id).and_then(algorithm_implementation)
+}
+
 pub fn validate_semantic_contract(
     contract_bytes: &[u8],
     schema_bytes: &[u8],
@@ -493,12 +491,7 @@ pub fn validate_semantic_contract(
         .as_object()
         .ok_or_else(|| SemanticError::Contract("semantic contract must be an object".to_owned()))?;
     let observed_keys: BTreeSet<&str> = object.keys().map(String::as_str).collect();
-    let expected_keys = BTreeSet::from([
-        "algorithms",
-        "negative_fixture_ids",
-        "schema",
-        "verifier",
-    ]);
+    let expected_keys = BTreeSet::from(["algorithms", "negative_fixture_ids", "schema", "verifier"]);
     if observed_keys != expected_keys {
         return contract_error("semantic contract has missing or unknown top-level fields");
     }
@@ -542,10 +535,7 @@ pub fn validate_semantic_contract(
         let observed_id = entry.as_str().ok_or_else(|| {
             SemanticError::Contract("negative fixture id is not a string".to_owned())
         })?;
-        let algorithm = negative_fixture_algorithm(observed_id).ok_or_else(|| {
-            SemanticError::Contract(format!("negative fixture {observed_id} has no verifier mapping"))
-        })?;
-        if observed_id != expected_id || algorithm_implementation(algorithm).is_none() {
+        if observed_id != expected_id || negative_fixture_implementation(observed_id).is_none() {
             return contract_error(format!("negative fixture {observed_id} is not mapped exactly"));
         }
     }
@@ -584,10 +574,7 @@ pub fn validate_proof_envelope_closure(
     let mut paths = BTreeSet::new();
     for (observed, expected) in extension_files.iter().zip(EXTENSION_ROLES_AND_PATHS) {
         if observed.role != expected.0 || observed.path != expected.1 {
-            return contract_error(format!(
-                "extension role/path order mismatch at {}",
-                observed.role
-            ));
+            return contract_error(format!("extension role/path order mismatch at {}", observed.role));
         }
         if !roles.insert(observed.role.as_str()) {
             return contract_error(format!("duplicate extension role {}", observed.role));
@@ -628,6 +615,8 @@ pub fn validate_policy_predecessor_comparison(
                 .canonical_base_sha256
                 .as_deref()
                 .ok_or_else(|| SemanticError::Contract("REBASE missing canonical-base digest".to_owned()))?;
+            validate_lower_hex(base_blob, 40, "canonical-base blob")?;
+            validate_lower_hex(base_digest, 64, "canonical-base digest")?;
             if evidence.declared_predecessor_blob.as_deref() != Some(base_blob) {
                 return contract_error("REBASE predecessor blob differs from canonical base");
             }
@@ -680,6 +669,8 @@ pub fn validate_surface_category_witness_closure(
         if !witnesses.insert(entry.witness_id.as_str()) {
             return contract_error(format!("duplicate witness id {}", entry.witness_id));
         }
+        validate_lower_hex(&entry.witness_blob_sha, 40, "surface witness blob")?;
+        validate_lower_hex(&entry.live_blob_sha, 40, "surface live blob")?;
         if entry.witness_blob_sha != entry.live_blob_sha {
             return contract_error(format!("stale witness {}", entry.witness_id));
         }
@@ -713,6 +704,7 @@ pub fn validate_source_blob_reconstruction(
     let expected: BTreeSet<&str> = tracked_paths.iter().map(String::as_str).collect();
     let mut observed = BTreeSet::new();
     for entry in entries {
+        validate_repo_path(&entry.path)?;
         if !entry.regular_file {
             return contract_error(format!("source path {} is not a regular file", entry.path));
         }
@@ -743,6 +735,7 @@ pub fn validate_coverage_accounting(
     let mut observed_paths = BTreeSet::new();
     let mut observed_surfaces = BTreeSet::new();
     for entry in entries {
+        validate_repo_path(&entry.path)?;
         if !observed_paths.insert(entry.path.as_str()) {
             return contract_error(format!("duplicate coverage path {}", entry.path));
         }
@@ -806,14 +799,9 @@ pub fn validate_required_check_cross_binding(provenance: &Value) -> Result<(), S
         let entry = checks.get(context).ok_or_else(|| {
             SemanticError::Contract(format!("required-check context {context} is missing"))
         })?;
-        for (index, field) in [
-            "check_run_ref",
-            "check_suite_ref",
-            "workflow_run_ref",
-            "job_ref",
-        ]
-        .iter()
-        .enumerate()
+        for (index, field) in ["check_run_ref", "check_suite_ref", "workflow_run_ref", "job_ref"]
+            .iter()
+            .enumerate()
         {
             let value = required_string(entry, field)?;
             let id = parse_context_ref(context, value, field)?;
@@ -836,6 +824,7 @@ pub fn validate_contract_digest_reconstruction(
     let mut roles = BTreeSet::new();
     let mut paths = BTreeSet::new();
     for file in files {
+        validate_repo_path(file.path)?;
         if !roles.insert(file.role) {
             return contract_error(format!("duplicate contract role {}", file.role));
         }
@@ -888,6 +877,8 @@ pub fn validate_extension_authority_digest_binding(
         let expected = contract_role_sha256.get(role).ok_or_else(|| {
             SemanticError::Contract(format!("contract digest role {role} is missing"))
         })?;
+        validate_lower_hex(observed, 64, field)?;
+        validate_lower_hex(expected, 64, role)?;
         if observed != expected {
             return contract_error(format!("extension authority field {field} does not bind role {role}"));
         }
@@ -946,6 +937,62 @@ pub fn validate_policy_inventory_binding(bindings: &[DigestBinding]) -> Result<(
     Ok(())
 }
 
+pub fn validate_tool_lock(
+    tool_lock_bytes: &[u8],
+    observed_executable_digests: &BTreeMap<String, String>,
+) -> Result<(), SemanticError> {
+    let value = parse_json_no_duplicates(tool_lock_bytes)?;
+    if required_string(&value, "schema")? != "commandf.af02-tool-lock/v1" {
+        return contract_error("unexpected tool-lock schema");
+    }
+    validate_lower_hex(required_string(&value, "tool_policy_sha256")?, 64, "tool_policy_sha256")?;
+    validate_lower_hex(required_string(&value, "source_sha")?, 40, "source_sha")?;
+    let entries = value
+        .get("entries")
+        .and_then(Value::as_array)
+        .ok_or_else(|| SemanticError::Contract("tool lock entries are missing".to_owned()))?;
+    if entries.len() != TOOL_LOCK_IDS.len() {
+        return contract_error("tool lock must contain exactly eight required entries");
+    }
+    let mut seen = BTreeSet::new();
+    for (entry, expected_id) in entries.iter().zip(TOOL_LOCK_IDS) {
+        let id = required_string(entry, "id")?;
+        if id != expected_id {
+            return contract_error(format!("tool lock id {id} does not match required id {expected_id}"));
+        }
+        if !seen.insert(id) {
+            return contract_error(format!("duplicate tool lock id {id}"));
+        }
+        match required_string(entry, "kind")? {
+            "registry_package" => {
+                validate_lower_hex(
+                    required_string(entry, "registry_checksum_sha256")?,
+                    64,
+                    "registry checksum",
+                )?;
+            }
+            "executable" => {
+                let expected_digest = required_string(entry, "installed_executable_sha256")?;
+                validate_lower_hex(expected_digest, 64, "installed executable digest")?;
+                let observed = observed_executable_digests.get(id).ok_or_else(|| {
+                    SemanticError::Contract(format!("missing observed executable digest for {id}"))
+                })?;
+                validate_lower_hex(observed, 64, "observed executable digest")?;
+                if observed != expected_digest {
+                    return contract_error(format!("installed executable digest mismatch for {id}"));
+                }
+            }
+            other => return contract_error(format!("unsupported tool-lock kind {other}")),
+        }
+    }
+    for id in observed_executable_digests.keys() {
+        if !TOOL_LOCK_IDS.contains(&id.as_str()) {
+            return contract_error(format!("unexpected observed executable identity {id}"));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_inventory_key_membership(inventories: &[InventoryKeySet]) -> Result<(), SemanticError> {
     let mut labels = BTreeSet::new();
     for inventory in inventories {
@@ -980,6 +1027,10 @@ pub fn validate_candidate_input_limits(
 }
 
 pub fn validate_input_process_enforcement(evidence: &ProcessEvidence) -> Result<(), SemanticError> {
+    validate_lower_hex(&evidence.binary_sha256, 64, "verifier binary digest")?;
+    validate_lower_hex(&evidence.expected_binary_sha256, 64, "expected verifier binary digest")?;
+    validate_lower_hex(&evidence.cargo_lock_blob, 40, "Cargo.lock blob")?;
+    validate_lower_hex(&evidence.expected_cargo_lock_blob, 40, "expected Cargo.lock blob")?;
     if evidence.binary_sha256 != evidence.expected_binary_sha256 {
         return contract_error("verifier subprocess binary digest mismatch");
     }
@@ -996,18 +1047,8 @@ pub fn validate_input_process_enforcement(evidence: &ProcessEvidence) -> Result<
     {
         return contract_error("verifier subprocess enforcement envelope is incomplete");
     }
-    validate_stream_limit(
-        "stdout",
-        evidence.stdout_observed,
-        evidence.stdout_limit,
-        evidence.stdout_exceeded,
-    )?;
-    validate_stream_limit(
-        "stderr",
-        evidence.stderr_observed,
-        evidence.stderr_limit,
-        evidence.stderr_exceeded,
-    )?;
+    validate_stream_limit("stdout", evidence.stdout_observed, evidence.stdout_limit, evidence.stdout_exceeded)?;
+    validate_stream_limit("stderr", evidence.stderr_observed, evidence.stderr_limit, evidence.stderr_exceeded)?;
     if !ALLOWED_TERMINATIONS.contains(&evidence.termination.as_str()) {
         return contract_error(format!("unclassified verifier termination {}", evidence.termination));
     }
@@ -1017,13 +1058,15 @@ pub fn validate_input_process_enforcement(evidence: &ProcessEvidence) -> Result<
 pub fn validate_enforcement_inventory_closure(
     expected_roles: &[String],
     inventory: &[EnforcementRole],
-    current_stack_rank: u8,
+    current_stack: &str,
 ) -> Result<(), SemanticError> {
+    let current_rank = stack_rank(current_stack)?;
     let expected: BTreeSet<&str> = expected_roles.iter().map(String::as_str).collect();
     if expected.len() != expected_roles.len() {
         return contract_error("schema-frozen enforcement roles contain duplicates");
     }
     let mut observed = BTreeSet::new();
+    let mut paths = BTreeSet::new();
     for entry in inventory {
         if !expected.contains(entry.role.as_str()) {
             return contract_error(format!("unclassified enforcement role {}", entry.role));
@@ -1031,16 +1074,34 @@ pub fn validate_enforcement_inventory_closure(
         if !observed.insert(entry.role.as_str()) {
             return contract_error(format!("duplicate enforcement role {}", entry.role));
         }
-        if entry.required_from_rank <= current_stack_rank
-            && (!entry.resolved_on_base || entry.planned_path.is_empty() || entry.entrypoint.is_empty())
-        {
-            return contract_error(format!("active enforcement role {} is unresolved", entry.role));
+        if !paths.insert(entry.planned_path.as_str()) {
+            return contract_error(format!("duplicate enforcement planned_path {}", entry.planned_path));
+        }
+        let required_rank = stack_rank(&entry.required_from_stack)?;
+        if required_rank <= current_rank {
+            if entry.planned_path.is_empty() || entry.entrypoint.is_empty() || !entry.resolved_on_base {
+                return contract_error(format!("active enforcement role {} is unresolved", entry.role));
+            }
         }
     }
     if observed != expected {
         return contract_error("enforcement inventory is missing a schema-frozen role");
     }
     Ok(())
+}
+
+pub fn build_final_envelope_preimage(
+    core_deterministic: &Value,
+    extension_contract_files: &Value,
+    extension_authority: &Value,
+    required_check_provenance: &Value,
+) -> Value {
+    serde_json::json!({
+        "core": {"deterministic": core_deterministic},
+        "extension_contract_files": extension_contract_files,
+        "extension_authority": extension_authority,
+        "required_check_provenance": required_check_provenance,
+    })
 }
 
 pub fn validate_final_envelope_hash(
@@ -1051,12 +1112,12 @@ pub fn validate_final_envelope_hash(
     expected_sha256: &str,
 ) -> Result<(), SemanticError> {
     validate_lower_hex(expected_sha256, 64, "af02_adversarial_sha256")?;
-    let envelope = serde_json::json!({
-        "core_deterministic": core_deterministic,
-        "extension_contract_files": extension_contract_files,
-        "extension_authority": extension_authority,
-        "required_check_provenance": required_check_provenance,
-    });
+    let envelope = build_final_envelope_preimage(
+        core_deterministic,
+        extension_contract_files,
+        extension_authority,
+        required_check_provenance,
+    );
     let observed = canonical_sha256(&envelope)?;
     if observed != expected_sha256 {
         return contract_error("final deterministic envelope hash mismatch");
@@ -1087,12 +1148,7 @@ fn unique_bijection_set(
     Ok(complete)
 }
 
-fn validate_stream_limit(
-    label: &str,
-    observed: u64,
-    limit: u64,
-    exceeded: bool,
-) -> Result<(), SemanticError> {
+fn validate_stream_limit(label: &str, observed: u64, limit: u64, exceeded: bool) -> Result<(), SemanticError> {
     let expected_flag = observed > limit;
     if exceeded != expected_flag {
         return contract_error(format!("{label} exceeded flag does not match observed byte count"));
@@ -1108,12 +1164,19 @@ fn parse_context_ref(context: &str, value: &str, field: &str) -> Result<u64, Sem
     let numeric = value.strip_prefix(&prefix).ok_or_else(|| {
         SemanticError::Contract(format!("{context} {field} lacks the context prefix"))
     })?;
-    if numeric.is_empty() || numeric.starts_with('0') || !numeric.bytes().all(|byte| byte.is_ascii_digit()) {
+    if numeric.is_empty()
+        || (numeric.len() > 1 && numeric.starts_with('0'))
+        || !numeric.bytes().all(|byte| byte.is_ascii_digit())
+    {
         return contract_error(format!("{context} {field} has invalid numeric identity"));
     }
-    numeric
+    let id = numeric
         .parse::<u64>()
-        .map_err(|_| SemanticError::Contract(format!("{context} {field} overflows u64")))
+        .map_err(|_| SemanticError::Contract(format!("{context} {field} overflows u64")))?;
+    if id == 0 {
+        return contract_error(format!("{context} {field} must be positive"));
+    }
+    Ok(id)
 }
 
 fn required_string<'a>(value: &'a Value, field: &str) -> Result<&'a str, SemanticError> {
@@ -1123,12 +1186,20 @@ fn required_string<'a>(value: &'a Value, field: &str) -> Result<&'a str, Semanti
         .ok_or_else(|| SemanticError::Contract(format!("{field} is missing or not a string")))
 }
 
+fn stack_rank(value: &str) -> Result<u8, SemanticError> {
+    match value {
+        "A0" => Ok(0),
+        "A1" => Ok(1),
+        "B0" => Ok(2),
+        "B1" => Ok(3),
+        "C0" => Ok(4),
+        "C1" => Ok(5),
+        other => contract_error(format!("unknown AF-02 stack {other}")),
+    }
+}
+
 fn validate_lower_hex(value: &str, len: usize, label: &str) -> Result<(), SemanticError> {
-    if value.len() != len
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
+    if value.len() != len || !value.bytes().all(is_lower_hex) {
         return contract_error(format!("{label} must be {len} lowercase hexadecimal characters"));
     }
     Ok(())
@@ -1153,6 +1224,13 @@ fn validate_schema_node(
     root: &Value,
     path: &str,
 ) -> Result<(), SemanticError> {
+    match schema {
+        Value::Bool(true) => return Ok(()),
+        Value::Bool(false) => return contract_error(format!("{path}: schema is false")),
+        Value::Object(_) => {}
+        _ => return contract_error(format!("{path}: schema node is not an object or boolean")),
+    }
+
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
         let pointer = reference.strip_prefix('#').ok_or_else(|| {
             SemanticError::Contract(format!("{path}: external schema ref is unsupported in proof core"))
@@ -1203,7 +1281,7 @@ fn validate_schema_node(
             "object" => instance.is_object(),
             "array" => instance.is_array(),
             "string" => instance.is_string(),
-            "integer" => instance.as_i64().is_some() || instance.as_u64().is_some(),
+            "integer" => integer_value(instance).is_some(),
             "boolean" => instance.is_boolean(),
             "null" => instance.is_null(),
             other => return contract_error(format!("{path}: unsupported schema type {other}")),
@@ -1271,12 +1349,14 @@ fn validate_schema_node(
                 return contract_error(format!("{path}: array contains items beyond prefixItems"));
             }
         } else if let Some(items) = schema.get("items") {
-            if items != &Value::Bool(false) {
+            if items == &Value::Bool(false) {
+                if !array.is_empty() {
+                    return contract_error(format!("{path}: schema prohibits array items"));
+                }
+            } else {
                 for (index, child) in array.iter().enumerate() {
                     validate_schema_node(child, items, root, &format!("{path}[{index}]"))?;
                 }
-            } else if !array.is_empty() {
-                return contract_error(format!("{path}: schema prohibits array items"));
             }
         }
     }
@@ -1297,15 +1377,25 @@ fn validate_schema_node(
                 return contract_error(format!("{path}: string does not match schema pattern"));
             }
         }
+        if let Some(format) = schema.get("format").and_then(Value::as_str) {
+            match format {
+                "date-time" => {
+                    if !is_rfc3339_datetime(text) {
+                        return contract_error(format!("{path}: string is not an RFC3339 date-time"));
+                    }
+                }
+                other => return contract_error(format!("{path}: unsupported trusted schema format {other}")),
+            }
+        }
     }
-    if instance.as_i64().is_some() || instance.as_u64().is_some() {
-        if let Some(minimum) = schema.get("minimum").and_then(Value::as_i64) {
-            if instance.as_i64().is_some_and(|value| value < minimum) {
+    if let Some(value) = integer_value(instance) {
+        if let Some(minimum) = schema.get("minimum").and_then(integer_value) {
+            if value < minimum {
                 return contract_error(format!("{path}: integer is below minimum"));
             }
         }
-        if let Some(maximum) = schema.get("maximum").and_then(Value::as_u64) {
-            if instance.as_u64().is_some_and(|value| value > maximum) {
+        if let Some(maximum) = schema.get("maximum").and_then(integer_value) {
+            if value > maximum {
                 return contract_error(format!("{path}: integer exceeds maximum"));
             }
         }
@@ -1313,10 +1403,20 @@ fn validate_schema_node(
     Ok(())
 }
 
+fn integer_value(value: &Value) -> Option<i128> {
+    value
+        .as_i64()
+        .map(i128::from)
+        .or_else(|| value.as_u64().map(i128::from))
+}
+
 fn known_pattern_matches(pattern: &str, value: &str) -> Result<bool, SemanticError> {
     match pattern {
         "^[0-9a-f]{40}$" => Ok(value.len() == 40 && value.bytes().all(is_lower_hex)),
         "^[0-9a-f]{64}$" => Ok(value.len() == 64 && value.bytes().all(is_lower_hex)),
+        "^sha256:[0-9a-f]{64}$" => Ok(value
+            .strip_prefix("sha256:")
+            .is_some_and(|tail| tail.len() == 64 && tail.bytes().all(is_lower_hex))),
         "^/af02-output(?:/[^/]+)*$" => Ok(value == "/af02-output"
             || value
                 .strip_prefix("/af02-output/")
@@ -1332,6 +1432,79 @@ fn known_pattern_matches(pattern: &str, value: &str) -> Result<bool, SemanticErr
         }
         other => contract_error(format!("unsupported trusted schema pattern {other}")),
     }
+}
+
+fn is_rfc3339_datetime(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 20 || bytes.get(4) != Some(&b'-') || bytes.get(7) != Some(&b'-') {
+        return false;
+    }
+    if !matches!(bytes.get(10), Some(b'T' | b't'))
+        || bytes.get(13) != Some(&b':')
+        || bytes.get(16) != Some(&b':')
+    {
+        return false;
+    }
+    let year = parse_digits(bytes, 0, 4);
+    let month = parse_digits(bytes, 5, 2);
+    let day = parse_digits(bytes, 8, 2);
+    let hour = parse_digits(bytes, 11, 2);
+    let minute = parse_digits(bytes, 14, 2);
+    let second = parse_digits(bytes, 17, 2);
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) =
+        (year, month, day, hour, minute, second)
+    else {
+        return false;
+    };
+    if year == 0 || !(1..=12).contains(&month) || hour > 23 || minute > 59 || second > 60 {
+        return false;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    if day == 0 || day > days {
+        return false;
+    }
+    let mut index = 19;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index == start {
+            return false;
+        }
+    }
+    match bytes.get(index) {
+        Some(b'Z' | b'z') => index + 1 == bytes.len(),
+        Some(b'+' | b'-') => {
+            if index + 6 != bytes.len() || bytes.get(index + 3) != Some(&b':') {
+                return false;
+            }
+            let zone_hour = parse_digits(bytes, index + 1, 2);
+            let zone_minute = parse_digits(bytes, index + 4, 2);
+            matches!((zone_hour, zone_minute), (Some(h), Some(m)) if h <= 23 && m <= 59)
+        }
+        _ => false,
+    }
+}
+
+fn parse_digits(bytes: &[u8], start: usize, len: usize) -> Option<u32> {
+    let slice = bytes.get(start..start + len)?;
+    if !slice.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let mut value = 0u32;
+    for digit in slice {
+        value = value.checked_mul(10)?.checked_add(u32::from(*digit - b'0'))?;
+    }
+    Some(value)
 }
 
 fn is_lower_hex(byte: u8) -> bool {
@@ -1352,18 +1525,21 @@ mod tests {
     const CONTRACT_SCHEMA_BYTES: &[u8] = include_bytes!(
         "../../../specs/016-af-02-adversarial-test-strength/schemas/af02-semantic-contract-v1.schema.json"
     );
+    const TOOL_LOCK_BYTES: &[u8] = include_bytes!(
+        "../../../specs/016-af-02-adversarial-test-strength/tool-lock.json"
+    );
 
     #[test]
-    fn semantic_contract_maps_every_algorithm_and_negative_fixture() {
+    fn semantic_contract_maps_every_algorithm_and_negative_fixture_to_verifier_code() {
         let coverage = validate_semantic_contract(CONTRACT_BYTES, CONTRACT_SCHEMA_BYTES).unwrap();
         assert_eq!(coverage.algorithm_count, 25);
         assert_eq!(coverage.negative_fixture_count, 72);
-        assert!(ALGORITHM_IDS
-            .iter()
-            .all(|id| algorithm_implementation(id).is_some()));
+        assert!(ALGORITHM_IDS.iter().all(|id| algorithm_implementation(id).is_some()));
         assert!(NEGATIVE_FIXTURE_IDS
             .iter()
-            .all(|id| negative_fixture_algorithm(id).is_some()));
+            .all(|id| negative_fixture_algorithm(id).is_some() && negative_fixture_implementation(id).is_some()));
+        assert_eq!(ALGORITHM_IDS.iter().copied().collect::<BTreeSet<_>>().len(), 25);
+        assert_eq!(NEGATIVE_FIXTURE_IDS.iter().copied().collect::<BTreeSet<_>>().len(), 72);
     }
 
     #[test]
@@ -1376,80 +1552,113 @@ mod tests {
     }
 
     #[test]
-    fn core_schema_rejects_duplicate_json_keys_before_semantic_validation() {
-        let schema = br#"{"$id":"https://commandf.dev/schemas/af02-adversarial-proof-v1.schema.json","type":"object","required":["deterministic"],"properties":{"deterministic":{"type":"object"}}}"#;
-        let error = validate_core_schema(br#"{"deterministic":{"x":1,"x":2}}"#, schema).unwrap_err();
-        assert!(error.to_string().contains("duplicate JSON object key"));
-    }
-
-    #[test]
-    fn core_schema_rejects_empty_deterministic_object() {
-        let schema = br#"{"$id":"https://commandf.dev/schemas/af02-adversarial-proof-v1.schema.json","type":"object","additionalProperties":false,"required":["deterministic"],"properties":{"deterministic":{"type":"object","additionalProperties":true}}}"#;
-        let error = validate_core_schema(br#"{"deterministic":{}}"#, schema).unwrap_err();
-        assert!(error.to_string().contains("must not be empty"));
-    }
-
-    #[test]
-    fn envelope_rejects_duplicate_extension_role_and_core_path_overlap() {
-        let mut files = EXTENSION_ROLES_AND_PATHS
-            .iter()
-            .map(|(role, path)| ContractDescriptor {
-                role: (*role).to_owned(),
-                path: (*path).to_owned(),
-            })
-            .collect::<Vec<_>>();
-        files[1].role = files[0].role.clone();
-        assert!(validate_proof_envelope_closure(&[], &files).is_err());
-        let files = EXTENSION_ROLES_AND_PATHS
-            .iter()
-            .map(|(role, path)| ContractDescriptor {
-                role: (*role).to_owned(),
-                path: (*path).to_owned(),
-            })
-            .collect::<Vec<_>>();
-        let overlap = vec![files[0].path.clone()];
-        assert!(validate_proof_envelope_closure(&overlap, &files).is_err());
-    }
-
-    #[test]
-    fn policy_predecessor_rejects_bootstrap_and_rebase_counterexamples() {
-        let bootstrap = PolicyPredecessorEvidence {
-            mode: PolicyMode::Bootstrap,
-            policy_path: "policy.json".to_owned(),
-            canonical_base_blob: Some("a".repeat(40)),
-            canonical_base_sha256: None,
-            declared_predecessor_blob: None,
-            declared_predecessor_sha256: None,
-            changed_paths: vec!["policy.json".to_owned()],
-            dependent_evidence_paths: Vec::new(),
-        };
-        assert!(validate_policy_predecessor_comparison(&bootstrap).is_err());
-        let rebase = PolicyPredecessorEvidence {
-            mode: PolicyMode::Rebase,
-            policy_path: "policy.json".to_owned(),
-            canonical_base_blob: Some("a".repeat(40)),
-            canonical_base_sha256: Some("b".repeat(64)),
-            declared_predecessor_blob: Some("c".repeat(40)),
-            declared_predecessor_sha256: Some("b".repeat(64)),
-            changed_paths: vec!["policy.json".to_owned()],
-            dependent_evidence_paths: Vec::new(),
-        };
-        assert!(validate_policy_predecessor_comparison(&rebase).is_err());
-    }
-
-    #[test]
-    fn source_coverage_mutation_and_bijection_reject_membership_drift() {
-        assert!(validate_source_blob_reconstruction(
-            &["b.rs".to_owned(), "a.rs".to_owned()],
-            &[]
+    fn core_schema_rejects_duplicate_keys_empty_deterministic_and_bad_datetime() {
+        let schema = br#"{"$id":"https://commandf.dev/schemas/af02-adversarial-proof-v1.schema.json","type":"object","additionalProperties":false,"required":["deterministic","when"],"properties":{"deterministic":{"type":"object"},"when":{"type":"string","format":"date-time"}}}"#;
+        let duplicate = validate_core_schema(
+            br#"{"deterministic":{"x":1,"x":2},"when":"2026-09-06T22:00:00Z"}"#,
+            schema,
         )
-        .is_err());
-        assert!(validate_coverage_accounting(
-            &["a.rs".to_owned()],
-            &[],
-            &[]
+        .unwrap_err();
+        assert!(duplicate.to_string().contains("duplicate JSON object key"));
+        let empty = validate_core_schema(
+            br#"{"deterministic":{},"when":"2026-09-06T22:00:00Z"}"#,
+            schema,
         )
-        .is_err());
+        .unwrap_err();
+        assert!(empty.to_string().contains("must not be empty"));
+        let bad_date = validate_core_schema(
+            br#"{"deterministic":{"x":1},"when":"2026-13-06T22:00:00Z"}"#,
+            schema,
+        )
+        .unwrap_err();
+        assert!(bad_date.to_string().contains("RFC3339"));
+        validate_core_schema(
+            br#"{"deterministic":{"x":1},"when":"2026-09-06T22:00:00.125+03:00"}"#,
+            schema,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn tool_lock_negative_fixture_family_is_non_vacuous() {
+        let lock = parse_json_no_duplicates(TOOL_LOCK_BYTES).unwrap();
+        let entries = lock["entries"].as_array().unwrap();
+        let mut observed = BTreeMap::new();
+        for entry in entries {
+            if entry["kind"] == "executable" {
+                observed.insert(
+                    entry["id"].as_str().unwrap().to_owned(),
+                    entry["installed_executable_sha256"].as_str().unwrap().to_owned(),
+                );
+            }
+        }
+        validate_tool_lock(TOOL_LOCK_BYTES, &observed).unwrap();
+
+        let mut empty = lock.clone();
+        empty["entries"] = Value::Array(Vec::new());
+        assert!(validate_tool_lock(&serde_json::to_vec(&empty).unwrap(), &observed).is_err());
+
+        let mut omitted = lock.clone();
+        omitted["entries"].as_array_mut().unwrap().pop();
+        assert!(validate_tool_lock(&serde_json::to_vec(&omitted).unwrap(), &observed).is_err());
+
+        let mut substituted = lock.clone();
+        substituted["entries"][0]["id"] = Value::String("not-arbitrary".to_owned());
+        assert!(validate_tool_lock(&serde_json::to_vec(&substituted).unwrap(), &observed).is_err());
+
+        let mut wrong_digest = observed.clone();
+        wrong_digest.insert("cargo-fuzz".to_owned(), "0".repeat(64));
+        assert!(validate_tool_lock(TOOL_LOCK_BYTES, &wrong_digest).is_err());
+
+        let mut unexpected = observed.clone();
+        unexpected.insert("unexpected-tool".to_owned(), "0".repeat(64));
+        assert!(validate_tool_lock(TOOL_LOCK_BYTES, &unexpected).is_err());
+    }
+
+    #[test]
+    fn final_hash_preserves_core_dot_deterministic_shape_and_excludes_stochastic_data() {
+        let deterministic = serde_json::json!({"value": 1});
+        let extension = serde_json::json!([]);
+        let authority = serde_json::json!({});
+        let checks = serde_json::json!({});
+        let preimage = build_final_envelope_preimage(&deterministic, &extension, &authority, &checks);
+        assert_eq!(preimage["core"]["deterministic"], deterministic);
+        assert!(preimage["core"].get("stochastic_observations").is_none());
+        assert!(preimage.get("core_deterministic").is_none());
+        let digest = canonical_sha256(&preimage).unwrap();
+        validate_final_envelope_hash(&deterministic, &extension, &authority, &checks, &digest).unwrap();
+    }
+
+    #[test]
+    fn enforcement_inventory_uses_canonical_stack_names() {
+        let expected = vec!["SEMANTIC_CONTRACT_VERIFIER".to_owned(), "PROOF_VERIFIER".to_owned()];
+        let inventory = vec![
+            EnforcementRole {
+                role: "SEMANTIC_CONTRACT_VERIFIER".to_owned(),
+                planned_path: "tools/af02-verifier/src/semantic.rs".to_owned(),
+                entrypoint: "verify-semantic-contract".to_owned(),
+                required_from_stack: "A0".to_owned(),
+                resolved_on_base: true,
+            },
+            EnforcementRole {
+                role: "PROOF_VERIFIER".to_owned(),
+                planned_path: "tools/af02-verifier/src/proof.rs".to_owned(),
+                entrypoint: "verify-proof".to_owned(),
+                required_from_stack: "C0".to_owned(),
+                resolved_on_base: false,
+            },
+        ];
+        validate_enforcement_inventory_closure(&expected, &inventory, "A0").unwrap();
+        assert!(validate_enforcement_inventory_closure(&expected, &inventory, "UNKNOWN").is_err());
+        let mut active_missing = inventory.clone();
+        active_missing[0].resolved_on_base = false;
+        assert!(validate_enforcement_inventory_closure(&expected, &active_missing, "A0").is_err());
+    }
+
+    #[test]
+    fn representative_membership_and_process_counterexamples_fail_closed() {
+        assert!(validate_source_blob_reconstruction(&["b.rs".to_owned(), "a.rs".to_owned()], &[]).is_err());
+        assert!(validate_coverage_accounting(&["a.rs".to_owned()], &[], &[]).is_err());
         assert!(validate_mutation_membership(
             &[MutationEntry {
                 mutant_id: "m1".to_owned(),
@@ -1470,10 +1679,7 @@ mod tests {
             &[]
         )
         .is_err());
-    }
 
-    #[test]
-    fn input_process_path_and_enforcement_counterexamples_fail_closed() {
         let limits = CandidateInputLimits {
             max_files: 1,
             max_aggregate_bytes: 10,
@@ -1490,6 +1696,7 @@ mod tests {
             yaml_custom_tag_present: false,
         };
         assert!(validate_candidate_input_limits(&limits, &stats).is_err());
+
         let path = PathObservation {
             repo_relative_path: "safe/file".to_owned(),
             has_symlink_component: true,
@@ -1499,6 +1706,7 @@ mod tests {
             contained: true,
         };
         assert!(validate_path_nofollow_containment(&path).is_err());
+
         let process = ProcessEvidence {
             binary_sha256: "a".repeat(64),
             expected_binary_sha256: "a".repeat(64),
@@ -1520,48 +1728,5 @@ mod tests {
             termination: "SUCCESS".to_owned(),
         };
         assert!(validate_input_process_enforcement(&process).is_err());
-        let roles = vec!["parser".to_owned()];
-        assert!(validate_enforcement_inventory_closure(&roles, &[], 1).is_err());
-    }
-
-    #[test]
-    fn contract_digest_authority_counter_and_final_hash_checks_are_exact() {
-        let bytes = b"contract";
-        let role = "semantic_contract".to_owned();
-        let roles = vec![role.clone()];
-        let file = ContractBytes {
-            role: &role,
-            path: "contract.json",
-            blob_sha: &git_blob_sha1_hex(bytes),
-            sha256: &sha256_hex(bytes),
-            bytes,
-        };
-        validate_contract_digest_reconstruction(&roles, &[file]).unwrap();
-        assert!(validate_counter_equalities(&[CounterEquality {
-            label: "count".to_owned(),
-            observed: 1,
-            expected: 2,
-            denominator: None,
-        }])
-        .is_err());
-        let core = serde_json::json!({"value": 1});
-        let extension = serde_json::json!([]);
-        let authority = serde_json::json!({});
-        let checks = serde_json::json!({});
-        let envelope = serde_json::json!({
-            "core_deterministic": core,
-            "extension_contract_files": extension,
-            "extension_authority": authority,
-            "required_check_provenance": checks,
-        });
-        let digest = canonical_sha256(&envelope).unwrap();
-        validate_final_envelope_hash(
-            &envelope["core_deterministic"],
-            &envelope["extension_contract_files"],
-            &envelope["extension_authority"],
-            &envelope["required_check_provenance"],
-            &digest,
-        )
-        .unwrap();
     }
 }
