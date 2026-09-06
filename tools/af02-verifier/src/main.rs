@@ -1,3 +1,5 @@
+pub mod semantic;
+
 use std::fs;
 use std::path::PathBuf;
 
