@@ -222,6 +222,7 @@ pub fn verify_required_checks_parsed<R: GitHubProvenanceResolver>(
 ) -> Result<VerifiedRequiredChecks, GitHubProvenanceError> {
     validate_policy(policy)?;
     validate_provenance_shape(provenance)?;
+    crate::verify_required_check_ref_uniqueness(provenance)?;
 
     if provenance.repository != policy.repository {
         return contract_error(format!(
@@ -807,10 +808,10 @@ mod tests {
         let policy = valid_policy();
         let mut provenance = valid_provenance(&policy);
         provenance.checks.scorecard.workflow_run_ref = "scorecard:203".to_owned();
-        let resolver = resolver(&policy, &provenance);
+        let resolver = TestResolver::default();
         let error = verify_required_checks_parsed(&policy, POLICY_BYTES, &provenance, &resolver)
             .unwrap_err();
-        assert!(error.to_string().contains("workflow-run API identity mismatch") || error.to_string().contains("duplicate workflow-run id"));
+        assert!(error.to_string().contains("duplicate workflow-run id"));
     }
 
     #[test]
