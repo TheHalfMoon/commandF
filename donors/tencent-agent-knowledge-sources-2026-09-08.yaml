@@ -1,0 +1,124 @@
+schema: commandf.donor-manifest/v1
+updated: 2026-09-08
+
+sources:
+  - id: tencent-weknora
+    repository: https://github.com/Tencent/WeKnora
+    ref: 647848f3954dae34473b8a8d0e0eef5e0fb3a58e
+    license: MIT_WITH_THIRD_PARTY_COMPONENTS
+    mode: [STUDY]
+    source_paths:
+      - README.md
+      - LICENSE
+      - internal/sandbox/session_manager.go
+      - internal/application/service/memory/scope.go
+      - internal/application/service/memory/service.go
+      - internal/application/service/memory/search.go
+      - internal/application/service/memory/recall_trace.go
+      - internal/agent/tools/search_memory.go
+      - internal/tracing/langfuse/memory_obs.go
+      - cli/README.md
+      - cli/AGENTS.md
+    scope:
+      - sandbox capability boundaries and per-configuration network policy
+      - explicit human approval as a non-transient tool state
+      - principal/workspace-scoped durable memory
+      - auditable recall and tool/model observability
+      - curated minimum tool surfaces
+    exclusions:
+      - no commandF core or shipped-command runtime dependency
+      - no RAG or knowledge-base product adoption from this study
+      - no model or memory result becomes semantic authority
+      - no code copying without file-scoped license and third-party review
+      - no host Docker socket exposure pattern without commandF-specific threat-model qualification
+
+  - id: tencent-romem
+    repository: https://github.com/Tencent/RoMem
+    ref: 39ac1417b4db41ea729e5c3be71ac20de54da993
+    license: UNVERIFIED_NO_ROOT_LICENSE_AT_PIN
+    mode: [STUDY]
+    source_paths:
+      - README.md
+      - romem/romem_reranker.py
+    scope:
+      - temporal contradiction research patterns
+      - temporal preservation and temporal-ranking benchmark ideas for commandF Bench research
+    exclusions:
+      - no source code copying or porting while license rights are unverified
+      - no checkpoint model-weight dataset or baseline adoption
+      - no runtime memory dependency
+      - no publication claim becomes commandF evidence without independent bibliographic and experimental qualification
+      - no learned temporal ranking becomes semantic authority
+
+  - id: tencent-loopforge
+    repository: https://github.com/Tencent/LoopForge
+    ref: 09c765286f549624dd95434e1e6ef2249657cbeb
+    license: MIT_WITH_THIRD_PARTY_ATTRIBUTION
+    mode: [STUDY]
+    source_paths:
+      - README.md
+      - LICENSE
+      - .claude/commands/resume-devflow.md
+      - .codebuddy/commands/abort-devflow.md
+    scope:
+      - persisted explicit workflow state
+      - resumable staged execution
+      - separation of design implementation review and test roles
+      - durable evidence artifacts for handoff and audit
+    exclusions:
+      - no replacement of Spec Kit or commandF AGENTS governance
+      - no host-specific agent bundle as commandF execution authority
+      - no weakening of exact-head CI or independent-review gates
+      - no commandF runtime dependency
+
+  - id: tencent-skillhone
+    repository: https://github.com/Tencent/SkillHone
+    ref: 7d565839fb4dc74f9c77f09ace660e1c0484e048
+    license: MIT
+    mode: [STUDY]
+    source_paths:
+      - README.md
+      - LICENSE
+      - skills/skillhone-evaluation/SKILL.md
+      - skills/skillhone-optimization/SKILL.md
+    scope:
+      - evaluator and candidate authority separation
+      - held-out test isolation and anti-leakage
+      - per-run score provenance
+      - isolated execution workdirs and failure-layer diagnosis
+      - one focused PR per optimization cycle
+      - durable issue PR and observation history
+    exclusions:
+      - no private evaluation data or gold-answer leakage
+      - no self-modifying commandF core authority
+      - no Forgejo or agent-runtime dependency
+      - no changes to planning-frozen AF-02 contracts from this study
+      - no model-selected optimization becomes correctness authority
+
+adoption_decisions:
+  commandf_core:
+    use: none
+    rationale: deterministic FHIR package diff and check paths remain independent of agent memory workflow and optimization runtimes
+
+  af_02_current:
+    use: comparative-study-only
+    rationale: current AF-02 contracts are planning-frozen; these sources may inform later retrospective work but cannot alter T022-T028 authority without a separately authorized governance change
+
+  future_agent_plane:
+    use:
+      - WeKnora sandbox approval and minimum-tool-surface patterns
+      - LoopForge role-bounded resumable workflow-state patterns
+      - SkillHone evaluator/candidate isolation and score-provenance patterns
+    rationale: these patterns align with replaceable capability seams explicit guard stages replayable evidence and non-authoritative model output
+
+  research:
+    use:
+      - RoMem temporal-preservation and temporal-contradiction concepts as study material only
+    rationale: temporal preservation is already a commandF research measurement but RoMem code and data rights are unverified at the pinned repository state
+
+review_before_adoption:
+  - re-pin the upstream ref and exact source blob before source adoption
+  - perform file-scoped license and third-party notice review
+  - keep product semantics deterministic and independent of agent or model output
+  - preserve hidden-evaluation isolation and provenance boundaries
+  - require an authorized CF AF or research unit before activation
