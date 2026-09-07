@@ -165,7 +165,7 @@ const O_CLOEXEC: c_int = 0o2000000;
 const AT_FDCWD: c_int = -100;
 
 #[cfg(target_os = "linux")]
-extern "C" {
+unsafe extern "C" {
     fn openat(dirfd: c_int, pathname: *const c_char, flags: c_int) -> c_int;
 }
 
