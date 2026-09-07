@@ -1,14 +1,18 @@
 schema: commandf.donor-manifest/v1
 updated: 2026-09-08
+updated_date_basis: Asia/Riyadh
 
 authorization_context:
   founder_statement_date: 2026-09-08
+  founder_statement_date_basis: Asia/Riyadh
+  effective: true
   status: PROJECT_AUTHORIZATION_NOT_UPSTREAM_RIGHTS_EVIDENCE
   scope:
     - founder authorizes commandF to study, port, copy, or otherwise reuse source material supplied to the project when the applicable provenance and upstream-rights gates are satisfied
   constraints:
     - this project authorization does not supersede upstream licenses third-party rights data rights model-weight rights or redistribution restrictions
     - permission-only adoption still requires the evidence fields required by docs/PROVENANCE_AND_DONOR_POLICY.md
+    - the local project-authorization date must not be interpreted through UTC as an upstream rights-effective date
 
 sources:
   - id: tencent-weknora
@@ -28,6 +32,18 @@ sources:
       - internal/tracing/langfuse/memory_obs.go
       - cli/README.md
       - cli/AGENTS.md
+    source_blobs:
+      README.md: a69a210e8dc2457fe4970a33b6db7f996d556834
+      LICENSE: 50db81eb37751853f22b6d4f5bba52f29206bebc
+      internal/sandbox/session_manager.go: d261fb32b9e1cef43b90a02916b32e716817c234
+      internal/application/service/memory/scope.go: 3d655d7afca898cf4aa5e83bc5de2d4a58358363
+      internal/application/service/memory/service.go: d8b89e92c001e97b34a1fe2daab1f4e70af939be
+      internal/application/service/memory/search.go: 309843fe0e5cbdec150c850d04d364f22291a71f
+      internal/application/service/memory/recall_trace.go: dd27efd40d0b46512838da3f59f3fa67c6aaf19c
+      internal/agent/tools/search_memory.go: d58109a1dde6090689b6af7b961aef622d8848db
+      internal/tracing/langfuse/memory_obs.go: 304741364e7e752c40d0f30c16a9de78b183a8ef
+      cli/README.md: 247937a9a111c4b4392b266c59d42312d7ea0b12
+      cli/AGENTS.md: 6aef3641b79ec9a0c4b446722e91d2c668bdf73b
     scope:
       - provider-neutral sandbox lifecycle and task workspace boundaries
       - script validation and failure-preserving execution behavior
@@ -57,6 +73,9 @@ sources:
     source_paths:
       - README.md
       - romem/romem_reranker.py
+    source_blobs:
+      README.md: 1707c3f9486ac20d940a53ff91e2d4d61fb2d92f
+      romem/romem_reranker.py: 5aa81d46d66564accf6b8b34d8b8b160a2ae0f61
     scope:
       - temporal contradiction research patterns
       - non-destructive history preservation for changing facts
@@ -81,6 +100,13 @@ sources:
       - .codebuddy/commands/abort-devflow.md
       - .claude/rules/global.md
       - .codex/README.md
+    source_blobs:
+      README.md: 36d22ead3b548c3cf2812fe478e17398d2614e7a
+      LICENSE: 3d01ea41d01fdd803fe769d71cdcafe086bc243a
+      .claude/commands/resume-devflow.md: 5e911e71b0bcabac0c48a1e914dc1642481a4a4b
+      .codebuddy/commands/abort-devflow.md: 9a75995b499b94ad0c97442213446f83043203b0
+      .claude/rules/global.md: 4aa233e452b5e8f1482ecc4a46b0749a5c50071a
+      .codex/README.md: 1c5d64fffadda439005b09c0fd42be6995d83859
     scope:
       - persisted explicit task-scoped workflow state
       - resumable staged execution from the first unfinished stage
@@ -106,6 +132,11 @@ sources:
       - LICENSE
       - skills/skillhone-evaluation/SKILL.md
       - skills/skillhone-optimization/SKILL.md
+    source_blobs:
+      README.md: 8c027d500bb2f29d7e39bfb6473e69c648787fa7
+      LICENSE: 3c70e98339da04c92792e0afe906f684b1f14cd7
+      skills/skillhone-evaluation/SKILL.md: 7335c0fbd41be5f3a46988ce92a27082cd5b1fa9
+      skills/skillhone-optimization/SKILL.md: 02eb751d42e632f6b06cb527563b29fbf1ffd0fd
     scope:
       - evaluator and candidate authority separation
       - probe PR-validation and final held-out split discipline
@@ -181,10 +212,18 @@ adoption_decisions:
       - map every retained donor family to a commandF capability gap preferred adoption mode activation unit rights evidence and requalification trigger before code adoption
     rationale: candidate inventory must not become uncontrolled source accumulation or architecture-by-copying
 
+requalification_triggers:
+  - any upstream repository ref change
+  - any retained source path addition removal or rename
+  - any mismatch between a retained source path and its recorded Git blob SHA
+  - any license notice third-party-rights data-rights model-rights or redistribution-term change
+  - any change to the destination trust boundary or intended adoption mode
+  - any source-changing commandF commit after exact-head adoption qualification
+
 review_before_adoption:
   - identify the exact commandF gap capability and activation unit served by the donor
   - prove the donor is not redundant with a selected implementation or authoritative oracle
-  - re-pin the upstream ref and exact source blob before source adoption
+  - re-pin the upstream ref and verify every retained source path against its recorded Git blob SHA before source adoption
   - perform file-scoped license permission third-party notice data and model-rights review as applicable
   - treat Founder project authorization as authorization to pursue reuse not as a substitute for upstream rights evidence
   - prefer DEPEND IMPORT or ORACLE before PORT and prefer narrow PORT before broad COPY
