@@ -4,6 +4,10 @@ mod legacy {
 }
 
 #[cfg(unix)]
+#[path = "secure_snapshot.rs"]
+mod secure_snapshot;
+
+#[cfg(unix)]
 pub use legacy::{
     canonical_policy_sha256, CandidateFormat, CandidateInput, GuardReport, InputGuardError,
 };
@@ -74,13 +78,9 @@ pub use unsupported::{
     canonical_policy_sha256, CandidateFormat, CandidateInput, GuardReport, InputGuardError,
 };
 
-#[cfg(unix)]
-use std::fs::{self, File};
-#[cfg(unix)]
-use std::io::Read;
 use std::path::Path;
 #[cfg(unix)]
-use std::path::{Component, PathBuf};
+use std::fs;
 
 #[cfg(unix)]
 use commandf_af02_verifier::canonical::parse_json_no_duplicates;
@@ -100,18 +100,29 @@ pub fn guard_inputs(
     {
         let _ = (candidate_root, inputs);
         Err(InputGuardError::Violation(
-            "secure opened-file identity verification is unavailable on this platform".to_owned(),
+            "secure descriptor-relative no-follow input binding is unavailable on this platform"
+                .to_owned(),
         ))
     }
 
     #[cfg(unix)]
     {
         let policy = load_hardening_policy()?;
-        let hardening = hardened_yaml_preflight(candidate_root, inputs, &policy)?;
-        let mut report = legacy::guard_inputs(candidate_root, inputs)?;
-        report.records = report.records.checked_add(hardening.flow_records).ok_or_else(|| {
-            InputGuardError::Violation("candidate input record count overflow".to_owned())
-        })?;
+        let snapshot = secure_snapshot::CandidateSnapshot::capture(
+            candidate_root,
+            inputs,
+            policy.preparse.max_single_file_bytes,
+            policy.aggregate.max_candidate_authority_bytes,
+            policy.aggregate.max_candidate_authority_files,
+        )?;
+        let hardening = hardened_yaml_preflight(snapshot.root(), inputs, &policy)?;
+        let mut report = legacy::guard_inputs(snapshot.root(), inputs)?;
+        report.records = report
+            .records
+            .checked_add(hardening.flow_records)
+            .ok_or_else(|| {
+                InputGuardError::Violation("candidate input record count overflow".to_owned())
+            })?;
         if report.records > policy.aggregate.max_total_records {
             return Err(InputGuardError::Violation(
                 "candidate input record count exceeds policy".to_owned(),
@@ -146,6 +157,8 @@ struct HardeningYamlPolicy {
 #[cfg(unix)]
 #[derive(Debug, Deserialize)]
 struct HardeningAggregatePolicy {
+    max_candidate_authority_bytes: u64,
+    max_candidate_authority_files: u64,
     max_total_records: u64,
 }
 
@@ -168,41 +181,24 @@ fn load_hardening_policy() -> Result<HardeningPolicy, InputGuardError> {
 
 #[cfg(unix)]
 fn hardened_yaml_preflight(
-    candidate_root: &Path,
+    snapshot_root: &Path,
     inputs: &[CandidateInput],
     policy: &HardeningPolicy,
 ) -> Result<HardenedYamlStats, InputGuardError> {
-    if !inputs
-        .iter()
-        .any(|input| input.format == CandidateFormat::Yaml)
-    {
-        return Ok(HardenedYamlStats::default());
-    }
-
-    let root_metadata = fs::symlink_metadata(candidate_root)
-        .map_err(|error| io_error(candidate_root, error))?;
-    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
-        return violation("candidate root must be a non-symlink directory");
-    }
-    let canonical_root = fs::canonicalize(candidate_root)
-        .map_err(|error| io_error(candidate_root, error))?;
-
     let mut aggregate = HardenedYamlStats::default();
-    for input in inputs
-        .iter()
-        .filter(|input| input.format == CandidateFormat::Yaml)
-    {
-        let bytes = read_guarded_yaml(
-            candidate_root,
-            &canonical_root,
-            input,
-            policy.preparse.max_single_file_bytes,
-        )?;
-        let stats = preflight_yaml_flow(
-            &bytes,
-            &policy.yaml,
-            &input.relative_path,
-        )?;
+    for input in inputs {
+        if input.format != CandidateFormat::Yaml {
+            continue;
+        }
+        let path = snapshot_root.join(&input.relative_path);
+        let bytes = fs::read(&path).map_err(|error| io_error(&path, error))?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > policy.preparse.max_single_file_bytes {
+            return violation(format!(
+                "candidate path {} exceeds single-file byte policy before parse",
+                input.relative_path.display()
+            ));
+        }
+        let stats = preflight_yaml_flow(&bytes, &policy.yaml, &input.relative_path)?;
         aggregate.flow_records = aggregate
             .flow_records
             .checked_add(stats.flow_records)
@@ -215,115 +211,6 @@ fn hardened_yaml_preflight(
         aggregate.max_depth = aggregate.max_depth.max(stats.max_depth);
     }
     Ok(aggregate)
-}
-
-#[cfg(unix)]
-fn read_guarded_yaml(
-    candidate_root: &Path,
-    canonical_root: &Path,
-    input: &CandidateInput,
-    max_single_file_bytes: u64,
-) -> Result<Vec<u8>, InputGuardError> {
-    validate_relative_path(&input.relative_path)?;
-    let joined = candidate_root.join(&input.relative_path);
-    verify_no_symlink_components(candidate_root, &input.relative_path)?;
-    let metadata = fs::symlink_metadata(&joined).map_err(|error| io_error(&joined, error))?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return violation(format!(
-            "candidate path {} is not a regular non-symlink file",
-            input.relative_path.display()
-        ));
-    }
-    if metadata.len() > max_single_file_bytes {
-        return violation(format!(
-            "candidate path {} exceeds single-file byte policy before parse",
-            input.relative_path.display()
-        ));
-    }
-
-    let canonical_before = fs::canonicalize(&joined).map_err(|error| io_error(&joined, error))?;
-    if !canonical_before.starts_with(canonical_root) {
-        return violation(format!(
-            "candidate path {} escapes candidate root",
-            input.relative_path.display()
-        ));
-    }
-
-    let file = File::open(&joined).map_err(|error| io_error(&joined, error))?;
-    let opened_metadata = file.metadata().map_err(|error| io_error(&joined, error))?;
-    if !opened_metadata.is_file() {
-        return violation(format!(
-            "candidate path {} changed away from a regular file before read",
-            input.relative_path.display()
-        ));
-    }
-
-    let mut bytes = Vec::new();
-    file.take(max_single_file_bytes + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| io_error(&joined, error))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_single_file_bytes {
-        return violation(format!(
-            "candidate path {} exceeds single-file byte policy before parse",
-            input.relative_path.display()
-        ));
-    }
-
-    verify_no_symlink_components(candidate_root, &input.relative_path)?;
-    let canonical_after = fs::canonicalize(&joined).map_err(|error| io_error(&joined, error))?;
-    let path_metadata = fs::metadata(&joined).map_err(|error| io_error(&joined, error))?;
-    use std::os::unix::fs::MetadataExt;
-    if canonical_after != canonical_before
-        || !canonical_after.starts_with(canonical_root)
-        || opened_metadata.dev() != path_metadata.dev()
-        || opened_metadata.ino() != path_metadata.ino()
-    {
-        return violation(format!(
-            "candidate path {} changed identity during guarded read",
-            input.relative_path.display()
-        ));
-    }
-    Ok(bytes)
-}
-
-#[cfg(unix)]
-fn validate_relative_path(path: &Path) -> Result<(), InputGuardError> {
-    let text = path
-        .to_str()
-        .ok_or_else(|| InputGuardError::Violation("candidate path must be UTF-8".to_owned()))?;
-    if text.is_empty()
-        || text.starts_with('/')
-        || text.contains('\\')
-        || text.contains('\0')
-        || text
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
-        || path
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        return violation(format!("candidate path {text:?} is not portable and relative"));
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn verify_no_symlink_components(root: &Path, relative: &Path) -> Result<(), InputGuardError> {
-    let mut current = root.to_path_buf();
-    for component in relative.components() {
-        let Component::Normal(part) = component else {
-            return violation("candidate path contains a non-normal component");
-        };
-        current.push(part);
-        let metadata = fs::symlink_metadata(&current).map_err(|error| io_error(&current, error))?;
-        if metadata.file_type().is_symlink() {
-            return violation(format!(
-                "candidate path {} contains a symlink component",
-                relative.display()
-            ));
-        }
-    }
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -527,16 +414,15 @@ fn scan_flow_line(
                 }
             }
             b':' => {
-                if let Some(frame) = stack.last_mut()
-                    && frame.kind == FlowKind::Mapping
-                    && frame.mapping_expects_key_separator
-                {
-                    stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
-                        InputGuardError::Violation(
-                            "candidate YAML flow record count overflow".to_owned(),
-                        )
-                    })?;
-                    frame.mapping_expects_key_separator = false;
+                if let Some(frame) = stack.last_mut() {
+                    if frame.kind == FlowKind::Mapping && frame.mapping_expects_key_separator {
+                        stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
+                            InputGuardError::Violation(
+                                "candidate YAML flow record count overflow".to_owned(),
+                            )
+                        })?;
+                        frame.mapping_expects_key_separator = false;
+                    }
                 }
             }
             byte if byte.is_ascii_whitespace() => {}
@@ -602,10 +488,10 @@ fn finish_sequence_item(
 
 #[cfg(unix)]
 fn mark_sequence_content(stack: &mut [FlowFrame]) {
-    if let Some(frame) = stack.last_mut()
-        && frame.kind == FlowKind::Sequence
-    {
-        frame.sequence_has_item = true;
+    if let Some(frame) = stack.last_mut() {
+        if frame.kind == FlowKind::Sequence {
+            frame.sequence_has_item = true;
+        }
     }
 }
 
@@ -617,6 +503,18 @@ fn reject_explicit_node_properties(
 ) -> Result<(), InputGuardError> {
     let bytes = text.as_bytes();
     let mut starts = vec![0_usize];
+    if let Some(rest) = text.strip_prefix('-') {
+        let has_sequence_boundary = rest.is_empty()
+            || rest
+                .as_bytes()
+                .first()
+                .is_some_and(|byte| byte.is_ascii_whitespace());
+        if has_sequence_boundary {
+            let node = rest.trim_start();
+            starts.push(text.len().saturating_sub(node.len()));
+        }
+    }
+
     let mut single = false;
     let mut double = false;
     let mut escaped = false;
@@ -754,6 +652,7 @@ fn violation<T>(message: impl Into<String>) -> Result<T, InputGuardError> {
 
 #[cfg(all(test, unix))]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
@@ -838,6 +737,21 @@ mod tests {
     }
 
     #[test]
+    fn rejects_prohibited_node_properties_after_block_sequence_indicator() {
+        for (name, text, expected) in [
+            ("alias-seq.yml", "- ? *shared\n  : value\n", "alias"),
+            ("anchor-seq.yml", "- ? &shared key\n  : value\n", "anchor"),
+            ("tag-seq.yml", "- ? !custom key\n  : value\n", "custom tag"),
+            ("merge-seq.yml", "- ? <<\n  : value\n", "merge key"),
+        ] {
+            let root = TempRoot::new();
+            root.write(name, text);
+            let error = guard_inputs(&root.path, &[yaml(name)]).unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
     fn accepts_bounded_flow_yaml_and_reports_flow_records() {
         let root = TempRoot::new();
         root.write("flow.yml", "value: [{a: 1}, {b: [2, 3]}]\n");
@@ -856,6 +770,6 @@ mod non_unix_tests {
         let error = guard_inputs(Path::new("."), &[]).unwrap_err();
         assert!(error
             .to_string()
-            .contains("secure opened-file identity verification is unavailable"));
+            .contains("secure descriptor-relative no-follow input binding is unavailable"));
     }
 }
