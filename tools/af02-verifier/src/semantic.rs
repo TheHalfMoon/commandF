@@ -28,12 +28,14 @@ const TOOL_LOCK_IDS: [&str; 8] = [
     "proptest",
     "syn-af02-scanner",
 ];
-const ALLOWED_TERMINATIONS: [&str; 5] = [
-    "SUCCESS",
-    "CLASSIFIED_REJECT",
+const ALLOWED_TERMINATIONS: [&str; 7] = [
+    "CLEAN_EXIT",
+    "SCHEMA_REJECT",
+    "SEMANTIC_REJECT",
     "WALL_TIMEOUT_KILL",
     "MEMORY_LIMIT_KILL",
     "PID_LIMIT_KILL",
+    "PARSER_CRASH",
 ];
 
 pub const ALGORITHM_IDS: [&str; 25] = [
@@ -904,6 +906,9 @@ pub fn validate_path_nofollow_containment(observation: &PathObservation) -> Resu
 }
 
 pub fn validate_counter_equalities(counters: &[CounterEquality]) -> Result<(), SemanticError> {
+    if counters.is_empty() {
+        return contract_error("counter equalities must not be empty");
+    }
     let mut labels = BTreeSet::new();
     for counter in counters {
         if !labels.insert(counter.label.as_str()) {
@@ -923,6 +928,9 @@ pub fn validate_counter_equalities(counters: &[CounterEquality]) -> Result<(), S
 }
 
 pub fn validate_policy_inventory_binding(bindings: &[DigestBinding]) -> Result<(), SemanticError> {
+    if bindings.is_empty() {
+        return contract_error("policy/inventory bindings must not be empty");
+    }
     let mut labels = BTreeSet::new();
     for binding in bindings {
         if !labels.insert(binding.label.as_str()) {
@@ -994,6 +1002,9 @@ pub fn validate_tool_lock(
 }
 
 pub fn validate_inventory_key_membership(inventories: &[InventoryKeySet]) -> Result<(), SemanticError> {
+    if inventories.is_empty() {
+        return contract_error("inventory key membership must not be empty");
+    }
     let mut labels = BTreeSet::new();
     for inventory in inventories {
         if !labels.insert(inventory.label.as_str()) {
@@ -1012,7 +1023,7 @@ pub fn validate_candidate_input_limits(
         return contract_error("candidate input file count exceeds policy");
     }
     if stats.aggregate_bytes > limits.max_aggregate_bytes {
-        return contract_error("candidate input aggregate bytes exceed policy");
+        return contract_error("candidate input aggregate bytes exceeds policy");
     }
     if stats.depth > limits.max_depth {
         return contract_error("candidate input nesting depth exceeds policy");
@@ -1656,6 +1667,45 @@ mod tests {
     }
 
     #[test]
+    fn required_proof_sections_reject_empty_collections() {
+        assert!(validate_counter_equalities(&[]).is_err());
+        assert!(validate_policy_inventory_binding(&[]).is_err());
+        assert!(validate_inventory_key_membership(&[]).is_err());
+    }
+
+    #[test]
+    fn process_termination_classes_match_frozen_input_policy() {
+        let mut process = ProcessEvidence {
+            binary_sha256: "a".repeat(64),
+            expected_binary_sha256: "a".repeat(64),
+            cargo_lock_blob: "b".repeat(40),
+            expected_cargo_lock_blob: "b".repeat(40),
+            unprivileged: true,
+            cgroup_v2: true,
+            wall_timeout_enforced: true,
+            memory_limit_enforced: true,
+            pid_limit_enforced: true,
+            network_none: true,
+            root_read_only: true,
+            stdout_observed: 0,
+            stdout_limit: 1,
+            stdout_exceeded: false,
+            stderr_observed: 0,
+            stderr_limit: 1,
+            stderr_exceeded: false,
+            termination: "CLEAN_EXIT".to_owned(),
+        };
+        for termination in ALLOWED_TERMINATIONS {
+            process.termination = termination.to_owned();
+            validate_input_process_enforcement(&process).unwrap();
+        }
+        for termination in ["SUCCESS", "CLASSIFIED_REJECT", "UNKNOWN"] {
+            process.termination = termination.to_owned();
+            assert!(validate_input_process_enforcement(&process).is_err());
+        }
+    }
+
+    #[test]
     fn representative_membership_and_process_counterexamples_fail_closed() {
         assert!(validate_source_blob_reconstruction(&["b.rs".to_owned(), "a.rs".to_owned()], &[]).is_err());
         assert!(validate_coverage_accounting(&["a.rs".to_owned()], &[], &[]).is_err());
@@ -1725,7 +1775,7 @@ mod tests {
             stderr_observed: 0,
             stderr_limit: 1,
             stderr_exceeded: false,
-            termination: "SUCCESS".to_owned(),
+            termination: "CLEAN_EXIT".to_owned(),
         };
         assert!(validate_input_process_enforcement(&process).is_err());
     }
