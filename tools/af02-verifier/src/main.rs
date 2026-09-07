@@ -1,3 +1,4 @@
+pub mod input_guard;
 pub mod semantic;
 
 use std::fs;
@@ -288,6 +289,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let policy = parse_waiver_policy(&fs::read(policy_path)?)?;
             let value = serde_json::to_value(policy)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "guard-inputs" => {
+            let candidate_root = PathBuf::from(args.next().ok_or("missing candidate root")?);
+            let remaining = args.collect::<Vec<_>>();
+            if remaining.is_empty() || remaining.len() % 2 != 0 {
+                return Err(
+                    "guard-inputs requires candidate root followed by one or more <json|yaml> <relative-path> pairs"
+                        .into(),
+                );
+            }
+            let mut inputs = Vec::with_capacity(remaining.len() / 2);
+            for pair in remaining.chunks_exact(2) {
+                inputs.push(input_guard::CandidateInput {
+                    format: input_guard::CandidateFormat::parse(&pair[0])?,
+                    relative_path: PathBuf::from(&pair[1]),
+                });
+            }
+            let report = input_guard::guard_inputs(&candidate_root, &inputs)?;
+            let value = serde_json::to_value(report)?;
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
