@@ -293,6 +293,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 &canonical_json_bytes(&value)?,
             )?;
         }
+        "verify-semantic-contract" => {
+            let contract_path = PathBuf::from(args.next().ok_or("missing semantic contract path")?);
+            let schema_path =
+                PathBuf::from(args.next().ok_or("missing semantic contract schema path")?);
+            if args.next().is_some() {
+                return Err(
+                    "verify-semantic-contract accepts exactly a contract path and schema path".into(),
+                );
+            }
+            let coverage = semantic::validate_semantic_contract(
+                &fs::read(contract_path)?,
+                &fs::read(schema_path)?,
+            )?;
+            let value = serde_json::json!({
+                "algorithm_count": coverage.algorithm_count,
+                "negative_fixture_count": coverage.negative_fixture_count,
+                "schema": "commandf.af02-semantic-contract-validation/v1"
+            });
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
         "verify-pr" => {
             return Err(
                 "verify-pr is fail-closed until AF-02 T021-T025 semantic/input/base-gate enforcement is canonical"
