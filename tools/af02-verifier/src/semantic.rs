@@ -37,6 +37,33 @@ const ALLOWED_TERMINATIONS: [&str; 7] = [
     "PID_LIMIT_KILL",
     "PARSER_CRASH",
 ];
+const INVENTORY_KEY_DOMAINS: [(&str, &[&str]); 7] = [
+    ("sourceUniverse", &["files.path"]),
+    (
+        "assertionRegistry",
+        &["entries.assertion_id", "entries.scenario_id"],
+    ),
+    (
+        "replayResults",
+        &["entries.assertion_id", "entries.scenario_id"],
+    ),
+    (
+        "coverageInventory",
+        &["critical_surfaces.surface_id", "files.path"],
+    ),
+    (
+        "mutationInventory",
+        &["entries.mutant_id", "results.mutant_id"],
+    ),
+    (
+        "corpusFixtureInventory",
+        &["entries.assertion_id", "entries.path", "entries.scenario_id"],
+    ),
+    (
+        "enforcementInventory",
+        &["entries.path", "entries.role"],
+    ),
+];
 
 pub const ALGORITHM_IDS: [&str; 25] = [
     "CORE_SCHEMA_VALIDATION",
@@ -1002,15 +1029,40 @@ pub fn validate_tool_lock(
 }
 
 pub fn validate_inventory_key_membership(inventories: &[InventoryKeySet]) -> Result<(), SemanticError> {
-    if inventories.is_empty() {
-        return contract_error("inventory key membership must not be empty");
+    if inventories.len() != INVENTORY_KEY_DOMAINS.len() {
+        return contract_error("inventory key membership must contain exactly seven proof-critical inventories");
     }
+    let expected_labels: BTreeSet<&str> = INVENTORY_KEY_DOMAINS
+        .iter()
+        .map(|(label, _)| *label)
+        .collect();
     let mut labels = BTreeSet::new();
     for inventory in inventories {
         if !labels.insert(inventory.label.as_str()) {
             return contract_error(format!("duplicate inventory label {}", inventory.label));
         }
+        let expected_keys = INVENTORY_KEY_DOMAINS
+            .iter()
+            .find_map(|(label, keys)| (*label == inventory.label.as_str()).then_some(*keys))
+            .ok_or_else(|| {
+                SemanticError::Contract(format!("unknown proof-critical inventory {}", inventory.label))
+            })?;
+        if inventory.keys.is_empty() {
+            return contract_error(format!("inventory {} key domain must not be empty", inventory.label));
+        }
         validate_sorted_unique(&inventory.keys, &inventory.label)?;
+        if inventory.keys.len() != expected_keys.len()
+            || !inventory
+                .keys
+                .iter()
+                .map(String::as_str)
+                .eq(expected_keys.iter().copied())
+        {
+            return contract_error(format!("inventory {} semantic key domain mismatch", inventory.label));
+        }
+    }
+    if labels != expected_labels {
+        return contract_error("inventory key membership is missing a proof-critical inventory");
     }
     Ok(())
 }
@@ -1023,7 +1075,7 @@ pub fn validate_candidate_input_limits(
         return contract_error("candidate input file count exceeds policy");
     }
     if stats.aggregate_bytes > limits.max_aggregate_bytes {
-        return contract_error("candidate input aggregate bytes exceeds policy");
+        return contract_error("candidate input aggregate bytes exceed policy");
     }
     if stats.depth > limits.max_depth {
         return contract_error("candidate input nesting depth exceeds policy");
@@ -1540,6 +1592,16 @@ mod tests {
         "../../../specs/016-af-02-adversarial-test-strength/tool-lock.json"
     );
 
+    fn valid_inventory_key_domains() -> Vec<InventoryKeySet> {
+        INVENTORY_KEY_DOMAINS
+            .iter()
+            .map(|(label, keys)| InventoryKeySet {
+                label: (*label).to_owned(),
+                keys: keys.iter().map(|key| (*key).to_owned()).collect(),
+            })
+            .collect()
+    }
+
     #[test]
     fn semantic_contract_maps_every_algorithm_and_negative_fixture_to_verifier_code() {
         let coverage = validate_semantic_contract(CONTRACT_BYTES, CONTRACT_SCHEMA_BYTES).unwrap();
@@ -1664,6 +1726,36 @@ mod tests {
         let mut active_missing = inventory.clone();
         active_missing[0].resolved_on_base = false;
         assert!(validate_enforcement_inventory_closure(&expected, &active_missing, "A0").is_err());
+    }
+
+    #[test]
+    fn inventory_key_membership_enforces_frozen_domains() {
+        let valid = valid_inventory_key_domains();
+        validate_inventory_key_membership(&valid).unwrap();
+
+        let mut unknown = valid.clone();
+        unknown[0].label = "fabricatedInventory".to_owned();
+        assert!(validate_inventory_key_membership(&unknown).is_err());
+
+        let mut missing = valid.clone();
+        missing.pop();
+        assert!(validate_inventory_key_membership(&missing).is_err());
+
+        let mut empty = valid.clone();
+        empty[1].keys.clear();
+        assert!(validate_inventory_key_membership(&empty).is_err());
+
+        let mut incomplete = valid.clone();
+        incomplete[4].keys.pop();
+        assert!(validate_inventory_key_membership(&incomplete).is_err());
+
+        let mut extra = valid.clone();
+        extra[3].keys.push("z.extra".to_owned());
+        assert!(validate_inventory_key_membership(&extra).is_err());
+
+        let mut duplicate = valid.clone();
+        duplicate[1].label = duplicate[0].label.clone();
+        assert!(validate_inventory_key_membership(&duplicate).is_err());
     }
 
     #[test]
