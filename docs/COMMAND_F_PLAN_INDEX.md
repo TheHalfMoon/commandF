@@ -50,18 +50,21 @@ These are capability groupings, not authorization to create separate services or
 
 Preserves the 35 interoperability gap hypotheses that motivate the product and research program, and maps them to the commandF response.
 
+Future agent/evidence/source-adoption control gaps are retained separately in `docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md` so they do not silently become healthcare-interoperability claims.
+
 ## E. Donor/provenance authority
 
 `docs/PROVENANCE_AND_DONOR_POLICY.md`
 
 Defines adoption modes and the pin/license/permission/source-path requirements that must be satisfied before candidate prior art becomes adopted commandF code/data/mappings.
 
-Current slice-specific donor records remain under `donors/`, including:
+Current slice-specific and architecture-study donor records remain under `donors/`, including:
 
 - `donors/cf-01-package-resolution.yaml`
 - `donors/agent-harness-2026-08-13.yaml`
+- `donors/tencent-agent-knowledge-sources-2026-09-08.yaml`
 
-Future slice plans must add or update donor records rather than relying on conversation memory.
+Future slice plans must add or update donor records rather than relying on conversation memory. A broad Founder authorization to pursue source reuse does not replace the file/artifact-level upstream rights evidence required by the donor policy.
 
 ## F. Research authority
 
@@ -133,6 +136,28 @@ Ordering rule:
 - AF-01 must close before a new post-CF-13 product implementation is merged.
 - CF-14 planning may proceed in parallel under its own Spec Kit authority.
 - AF-02/03/04 remain retained program units and require their own planning packages before implementation.
+
+## I. Future agent, evidence, and source-adoption planning coverage
+
+`docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md`
+
+Refines the optional future agent/Copilot plane without changing current execution authority. It separates six future trust domains:
+
+1. deterministic evidence substrate;
+2. capability/sandbox execution;
+3. resumable workflow orchestration;
+4. bounded durable memory;
+5. protected evaluation/optimization authority;
+6. Copilot/model experience.
+
+The plan also adds a donor-portfolio decision strategy across the repository's existing source inventory and records future-agent/source-adoption gaps discovered through the Tencent source study.
+
+Important ordering rule:
+
+- this future planning coverage does **not** alter the active AF-02 contracts or dependency order;
+- no new canonical CF/AF identity is created by this document;
+- implementation still requires a separately authorized Spec Kit unit and provenance/adoption gate;
+- the deterministic commandF core remains independent of all agent/memory/evaluation runtimes.
 
 ## Coverage rule
 
