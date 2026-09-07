@@ -1,6 +1,15 @@
 schema: commandf.donor-manifest/v1
 updated: 2026-09-08
 
+authorization_context:
+  founder_statement_date: 2026-09-08
+  status: PROJECT_AUTHORIZATION_NOT_UPSTREAM_RIGHTS_EVIDENCE
+  scope:
+    - founder authorizes commandF to study, port, copy, or otherwise reuse source material supplied to the project when the applicable provenance and upstream-rights gates are satisfied
+  constraints:
+    - this project authorization does not supersede upstream licenses third-party rights data rights model-weight rights or redistribution restrictions
+    - permission-only adoption still requires the evidence fields required by docs/PROVENANCE_AND_DONOR_POLICY.md
+
 sources:
   - id: tencent-weknora
     repository: https://github.com/Tencent/WeKnora
@@ -20,17 +29,25 @@ sources:
       - cli/README.md
       - cli/AGENTS.md
     scope:
-      - sandbox capability boundaries and per-configuration network policy
-      - explicit human approval as a non-transient tool state
+      - provider-neutral sandbox lifecycle and task workspace boundaries
+      - script validation and failure-preserving execution behavior
+      - per-configuration network and capability policy patterns
+      - explicit human approval as a durable non-transient tool state
       - principal/workspace-scoped durable memory
+      - workspace agent and user memory enablement boundaries
+      - user deletion tombstones and re-derivation prevention
+      - sensitive-content redaction before durable memory storage
+      - bounded recall with lexical vector and skip-mode diagnostics
+      - distinction between injected memory and memory reported as relevant
       - auditable recall and tool/model observability
       - curated minimum tool surfaces
     exclusions:
       - no commandF core or shipped-command runtime dependency
       - no RAG or knowledge-base product adoption from this study
       - no model or memory result becomes semantic authority
-      - no code copying without file-scoped license and third-party review
-      - no host Docker socket exposure pattern without commandF-specific threat-model qualification
+      - no code copying without exact-path license third-party and provenance review
+      - no host Docker socket or equivalent privileged host-control pattern without commandF-specific threat-model qualification
+      - no secret credential or sensitive memory content in generic prompts logs or replay artifacts
 
   - id: tencent-romem
     repository: https://github.com/Tencent/RoMem
@@ -42,13 +59,15 @@ sources:
       - romem/romem_reranker.py
     scope:
       - temporal contradiction research patterns
+      - non-destructive history preservation for changing facts
+      - relation-dependent temporal volatility as a research hypothesis
       - temporal preservation and temporal-ranking benchmark ideas for commandF Bench research
     exclusions:
-      - no source code copying or porting while license rights are unverified
+      - no source code copying or porting while external rights evidence remains unverified
       - no checkpoint model-weight dataset or baseline adoption
       - no runtime memory dependency
       - no publication claim becomes commandF evidence without independent bibliographic and experimental qualification
-      - no learned temporal ranking becomes semantic authority
+      - no learned temporal ranking becomes semantic policy or interoperability authority
 
   - id: tencent-loopforge
     repository: https://github.com/Tencent/LoopForge
@@ -60,15 +79,21 @@ sources:
       - LICENSE
       - .claude/commands/resume-devflow.md
       - .codebuddy/commands/abort-devflow.md
+      - .claude/rules/global.md
+      - .codex/README.md
     scope:
-      - persisted explicit workflow state
-      - resumable staged execution
-      - separation of design implementation review and test roles
-      - durable evidence artifacts for handoff and audit
+      - persisted explicit task-scoped workflow state
+      - resumable staged execution from the first unfinished stage
+      - separation of requirement design implementation review test and delivery responsibilities
+      - durable evidence artifacts for handoff audit and retrospective use
+      - preserve completed artifacts during interruption or abort
+      - never mark failed stages complete
+      - do not recover unrelated task state
+      - stage state as navigation evidence rather than repository truth
     exclusions:
       - no replacement of Spec Kit or commandF AGENTS governance
       - no host-specific agent bundle as commandF execution authority
-      - no weakening of exact-head CI or independent-review gates
+      - no weakening of exact-head CI independent-review or source-change invalidation gates
       - no commandF runtime dependency
 
   - id: tencent-skillhone
@@ -83,10 +108,14 @@ sources:
       - skills/skillhone-optimization/SKILL.md
     scope:
       - evaluator and candidate authority separation
-      - held-out test isolation and anti-leakage
-      - per-run score provenance
-      - isolated execution workdirs and failure-layer diagnosis
-      - one focused PR per optimization cycle
+      - probe PR-validation and final held-out split discipline
+      - private final-test and gold-answer anti-leakage
+      - per-run score provenance bound to exact candidate and evaluator identities
+      - isolated execution workdirs
+      - redacted observation surfaces for diagnosis
+      - infrastructure tool compiler validator verifier and candidate failure-layer separation
+      - standard compiler validator feedback rather than duplicate ad-hoc validators
+      - one focused source change per optimization cycle where attribution matters
       - durable issue PR and observation history
     exclusions:
       - no private evaluation data or gold-answer leakage
@@ -94,31 +123,76 @@ sources:
       - no Forgejo or agent-runtime dependency
       - no changes to planning-frozen AF-02 contracts from this study
       - no model-selected optimization becomes correctness authority
+      - no final held-out result is reused after a source-changing commit
 
 adoption_decisions:
   commandf_core:
     use: none
-    rationale: deterministic FHIR package diff and check paths remain independent of agent memory workflow and optimization runtimes
+    rationale: deterministic FHIR package diff check graph and impact paths remain independent of agent memory workflow and optimization runtimes
 
   af_02_current:
     use: comparative-study-only
     rationale: current AF-02 contracts are planning-frozen; these sources may inform later retrospective work but cannot alter T022-T028 authority without a separately authorized governance change
 
-  future_agent_plane:
+  future_agent_evidence_substrate:
     use:
-      - WeKnora sandbox approval and minimum-tool-surface patterns
-      - LoopForge role-bounded resumable workflow-state patterns
-      - SkillHone evaluator/candidate isolation and score-provenance patterns
-    rationale: these patterns align with replaceable capability seams explicit guard stages replayable evidence and non-authoritative model output
+      - DeepSeek Harness model-visible-means-logged and typed capability-seam patterns from the existing agent-harness donor record
+      - WeKnora scoped observability and memory-recall diagnostics
+      - LoopForge durable task state and artifact history
+      - SkillHone exact run score provenance and redacted observation surfaces
+    rationale: execution evidence must exist independently of model authority and remain replayable across interruption and review
+
+  future_capability_sandbox_plane:
+    use:
+      - DeepSeek Harness guarded tool lifecycle and replaceable capability seams
+      - WeKnora provider-neutral session sandbox workspace validation and approval-boundary patterns
+    rationale: optional agent tools require deny-by-default capabilities bounded execution explicit approval and reconstructable results
+
+  future_workflow_orchestration:
+    use:
+      - GitHub Spec Kit as process authority from the existing agent-harness donor record
+      - LoopForge resumable role-bounded workflow-state patterns
+    rationale: conversation state must not be the durable execution state and implementation review test responsibilities must remain separable
+
+  future_bounded_memory:
+    use:
+      - WeKnora scope deletion tombstone redaction budget and recall-observability patterns
+      - RoMem temporal-history and volatility concepts as research material only
+    rationale: durable memory may improve continuity but must remain contextual erasable provenance-bearing temporally qualified and non-authoritative
+
+  future_evaluation_optimization:
+    use:
+      - SkillHone evaluator-candidate isolation held-out visibility split score provenance and failure-layer diagnosis
+      - AF-02 anti-forgery and exact-head principles once canonical
+    rationale: the behavior being optimized must not be able to modify inspect or learn the protected authority used to judge final quality
+
+  future_copilot:
+    use:
+      - proposal explanation retrieval triage and isolated drafting only after the evidence capability workflow memory and evaluation foundations are independently qualified
+    rationale: models may accelerate interoperability work but deterministic commandF evidence remains the acceptance authority
 
   research:
     use:
       - RoMem temporal-preservation and temporal-contradiction concepts as study material only
-    rationale: temporal preservation is already a commandF research measurement but RoMem code and data rights are unverified at the pinned repository state
+    rationale: temporal preservation is already a commandF research measurement but RoMem code data model and redistribution rights are unverified at the pinned repository state
+
+  source_portfolio:
+    use:
+      - map every retained donor family to a commandF capability gap preferred adoption mode activation unit rights evidence and requalification trigger before code adoption
+    rationale: candidate inventory must not become uncontrolled source accumulation or architecture-by-copying
 
 review_before_adoption:
+  - identify the exact commandF gap capability and activation unit served by the donor
+  - prove the donor is not redundant with a selected implementation or authoritative oracle
   - re-pin the upstream ref and exact source blob before source adoption
-  - perform file-scoped license and third-party notice review
+  - perform file-scoped license permission third-party notice data and model-rights review as applicable
+  - treat Founder project authorization as authorization to pursue reuse not as a substitute for upstream rights evidence
+  - prefer DEPEND IMPORT or ORACLE before PORT and prefer narrow PORT before broad COPY
+  - define the destination trust boundary before copying source
   - keep product semantics deterministic and independent of agent or model output
-  - preserve hidden-evaluation isolation and provenance boundaries
+  - preserve hidden-evaluation isolation exact-head invalidation and provenance boundaries
+  - retain donor-origin metadata notices and modification history
+  - add positive negative conflict and failure-path tests for adopted behavior
+  - assess dependency security release and SBOM impact
+  - record source-selection rationale alternatives and requalification triggers
   - require an authorized CF AF or research unit before activation
