@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
@@ -32,13 +32,6 @@ impl CandidateFormat {
             "json" => Ok(Self::Json),
             "yaml" | "yml" => Ok(Self::Yaml),
             other => violation(format!("unsupported candidate input format {other}")),
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Json => "json",
-            Self::Yaml => "yaml",
         }
     }
 }
@@ -137,9 +130,9 @@ pub fn guard_inputs(
     if inputs.is_empty() {
         return violation("candidate authority input set must not be empty");
     }
-    let file_count = u64::try_from(inputs.len())
+    let files = u64::try_from(inputs.len())
         .map_err(|_| InputGuardError::Violation("candidate input file count overflows u64".to_owned()))?;
-    if file_count > policy.aggregate.max_candidate_authority_files {
+    if files > policy.aggregate.max_candidate_authority_files {
         return violation("candidate input file count exceeds policy");
     }
 
@@ -192,7 +185,7 @@ pub fn guard_inputs(
     Ok(GuardReport {
         schema: "commandf.af02-input-guard-report/v1",
         policy_sha256: canonical_policy_sha256(),
-        files: file_count,
+        files,
         aggregate_bytes,
         records,
         max_depth,
@@ -277,8 +270,8 @@ fn guard_one(
             input.relative_path.display()
         ));
     }
-    let canonical_path = fs::canonicalize(&joined).map_err(|error| io_error(&joined, error))?;
-    if !canonical_path.starts_with(canonical_root) {
+    let canonical_before = fs::canonicalize(&joined).map_err(|error| io_error(&joined, error))?;
+    if !canonical_before.starts_with(canonical_root) {
         return violation(format!(
             "candidate path {} escapes candidate root",
             input.relative_path.display()
@@ -297,15 +290,21 @@ fn guard_one(
     file.take(policy.preparse.max_single_file_bytes + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| io_error(&joined, error))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > policy.preparse.max_single_file_bytes {
+    let byte_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if byte_len > policy.preparse.max_single_file_bytes {
         return violation(format!(
             "candidate path {} exceeds single-file byte policy before parse",
             input.relative_path.display()
         ));
     }
+
     verify_no_symlink_components(candidate_root, &input.relative_path)?;
     let canonical_after = fs::canonicalize(&joined).map_err(|error| io_error(&joined, error))?;
-    if canonical_after != canonical_path || !canonical_after.starts_with(canonical_root) {
+    let path_metadata = fs::metadata(&joined).map_err(|error| io_error(&joined, error))?;
+    if canonical_after != canonical_before
+        || !canonical_after.starts_with(canonical_root)
+        || !same_file_identity(&opened_metadata, &path_metadata)
+    {
         return violation(format!(
             "candidate path {} changed identity during guarded read",
             input.relative_path.display()
@@ -316,8 +315,20 @@ fn guard_one(
         CandidateFormat::Json => guard_json(&bytes, &policy.json, remaining_records, &input.relative_path)?,
         CandidateFormat::Yaml => guard_yaml(&bytes, &policy.yaml, remaining_records, &input.relative_path)?,
     };
-    stats.bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    stats.bytes = byte_len;
     Ok(stats)
+}
+
+#[cfg(unix)]
+fn same_file_identity(left: &Metadata, right: &Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file_identity(left: &Metadata, right: &Metadata) -> bool {
+    left.len() == right.len() && left.modified().ok() == right.modified().ok()
 }
 
 fn validate_relative_path(path: &Path) -> Result<(), InputGuardError> {
@@ -328,7 +339,9 @@ fn validate_relative_path(path: &Path) -> Result<(), InputGuardError> {
         || text.starts_with('/')
         || text.contains('\\')
         || text.contains('\0')
-        || text.split('/').any(|part| part.is_empty() || part == "." || part == "..")
+        || text
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
     {
         return violation(format!("candidate path {text:?} is not portable and relative"));
     }
@@ -350,7 +363,10 @@ fn verify_no_symlink_components(root: &Path, relative: &Path) -> Result<(), Inpu
         current.push(part);
         let metadata = fs::symlink_metadata(&current).map_err(|error| io_error(&current, error))?;
         if metadata.file_type().is_symlink() {
-            return violation(format!("candidate path {} contains a symlink component", relative.display()));
+            return violation(format!(
+                "candidate path {} contains a symlink component",
+                relative.display()
+            ));
         }
     }
     Ok(())
@@ -362,15 +378,21 @@ fn guard_json(
     remaining_records: u64,
     path: &Path,
 ) -> Result<FileStats, InputGuardError> {
-    let text = std::str::from_utf8(bytes).map_err(|_| {
+    std::str::from_utf8(bytes).map_err(|_| {
         InputGuardError::Violation(format!("candidate JSON {} is not UTF-8", path.display()))
     })?;
     if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-        return violation(format!("candidate JSON {} contains a prohibited BOM", path.display()));
+        return violation(format!(
+            "candidate JSON {} contains a prohibited BOM",
+            path.display()
+        ));
     }
-    preflight_json(text.as_bytes(), policy, remaining_records, path)?;
+    preflight_json(bytes, policy, remaining_records, path)?;
     let value: Value = serde_json::from_slice(bytes).map_err(|error| {
-        InputGuardError::Violation(format!("candidate JSON {} is invalid: {error}", path.display()))
+        InputGuardError::Violation(format!(
+            "candidate JSON {} is invalid: {error}",
+            path.display()
+        ))
     })?;
     analyze_json_value(&value, policy, remaining_records, path)
 }
@@ -394,7 +416,7 @@ fn preflight_json(
     remaining_records: u64,
     path: &Path,
 ) -> Result<(), InputGuardError> {
-    let mut stack: Vec<LexFrame> = Vec::new();
+    let mut stack = Vec::<LexFrame>::new();
     let mut index = 0_usize;
     let mut records = 1_u64;
     while index < bytes.len() {
@@ -408,27 +430,30 @@ fn preflight_json(
                     let byte = bytes[index];
                     if escaped {
                         escaped = false;
-                        index += 1;
-                        continue;
-                    }
-                    if byte == b'\\' {
+                    } else if byte == b'\\' {
                         escaped = true;
-                        index += 1;
-                        continue;
-                    }
-                    if byte == b'"' {
+                    } else if byte == b'"' {
                         break;
                     }
                     index += 1;
                 }
                 if index >= bytes.len() {
-                    return violation(format!("candidate JSON {} has an unterminated string", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} has an unterminated string",
+                        path.display()
+                    ));
                 }
                 let decoded: String = serde_json::from_slice(&bytes[start..=index]).map_err(|error| {
-                    InputGuardError::Violation(format!("candidate JSON {} has an invalid string: {error}", path.display()))
+                    InputGuardError::Violation(format!(
+                        "candidate JSON {} has an invalid string: {error}",
+                        path.display()
+                    ))
                 })?;
                 if u64::try_from(decoded.len()).unwrap_or(u64::MAX) > policy.max_string_bytes {
-                    return violation(format!("candidate JSON {} string exceeds policy", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} string exceeds policy",
+                        path.display()
+                    ));
                 }
                 index += 1;
             }
@@ -436,10 +461,17 @@ fn preflight_json(
                 mark_array_value(&mut stack);
                 let depth = u64::try_from(stack.len() + 1).unwrap_or(u64::MAX);
                 if depth > policy.max_depth {
-                    return violation(format!("candidate JSON {} exceeds nesting-depth policy before parse", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} exceeds nesting-depth policy before parse",
+                        path.display()
+                    ));
                 }
                 stack.push(LexFrame {
-                    kind: if bytes[index] == b'{' { LexKind::Object } else { LexKind::Array },
+                    kind: if bytes[index] == b'{' {
+                        LexKind::Object
+                    } else {
+                        LexKind::Array
+                    },
                     count: 0,
                     array_has_value: false,
                 });
@@ -447,55 +479,83 @@ fn preflight_json(
             }
             b'}' => {
                 let Some(frame) = stack.pop() else {
-                    return violation(format!("candidate JSON {} has unmatched object closure", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} has unmatched object closure",
+                        path.display()
+                    ));
                 };
                 if !matches!(frame.kind, LexKind::Object) {
-                    return violation(format!("candidate JSON {} has mismatched object closure", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} has mismatched object closure",
+                        path.display()
+                    ));
                 }
                 index += 1;
             }
             b']' => {
                 let Some(mut frame) = stack.pop() else {
-                    return violation(format!("candidate JSON {} has unmatched array closure", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} has unmatched array closure",
+                        path.display()
+                    ));
                 };
                 if !matches!(frame.kind, LexKind::Array) {
-                    return violation(format!("candidate JSON {} has mismatched array closure", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} has mismatched array closure",
+                        path.display()
+                    ));
                 }
                 if frame.array_has_value {
                     frame.count = frame.count.saturating_add(1);
                 }
                 if frame.count > policy.max_array_items {
-                    return violation(format!("candidate JSON {} array exceeds item policy before parse", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} array exceeds item policy before parse",
+                        path.display()
+                    ));
                 }
                 records = records.saturating_add(frame.count);
                 if records > remaining_records {
-                    return violation(format!("candidate JSON {} exceeds aggregate record policy before parse", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} exceeds aggregate record policy before parse",
+                        path.display()
+                    ));
                 }
                 index += 1;
             }
             b':' => {
-                if let Some(frame) = stack.last_mut() {
-                    if matches!(frame.kind, LexKind::Object) {
-                        frame.count = frame.count.saturating_add(1);
-                        if frame.count > policy.max_object_properties {
-                            return violation(format!("candidate JSON {} object exceeds property policy before parse", path.display()));
-                        }
-                        records = records.saturating_add(1);
-                        if records > remaining_records {
-                            return violation(format!("candidate JSON {} exceeds aggregate record policy before parse", path.display()));
-                        }
+                if let Some(frame) = stack.last_mut()
+                    && matches!(frame.kind, LexKind::Object)
+                {
+                    frame.count = frame.count.saturating_add(1);
+                    if frame.count > policy.max_object_properties {
+                        return violation(format!(
+                            "candidate JSON {} object exceeds property policy before parse",
+                            path.display()
+                        ));
+                    }
+                    records = records.saturating_add(1);
+                    if records > remaining_records {
+                        return violation(format!(
+                            "candidate JSON {} exceeds aggregate record policy before parse",
+                            path.display()
+                        ));
                     }
                 }
                 index += 1;
             }
             b',' => {
-                if let Some(frame) = stack.last_mut() {
-                    if matches!(frame.kind, LexKind::Array) && frame.array_has_value {
-                        frame.count = frame.count.saturating_add(1);
-                        frame.array_has_value = false;
-                        if frame.count > policy.max_array_items {
-                            return violation(format!("candidate JSON {} array exceeds item policy before parse", path.display()));
-                        }
+                if let Some(frame) = stack.last_mut()
+                    && matches!(frame.kind, LexKind::Array)
+                    && frame.array_has_value
+                {
+                    frame.count = frame.count.saturating_add(1);
+                    frame.array_has_value = false;
+                    if frame.count > policy.max_array_items {
+                        return violation(format!(
+                            "candidate JSON {} array exceeds item policy before parse",
+                            path.display()
+                        ));
                     }
                 }
                 index += 1;
@@ -505,12 +565,18 @@ fn preflight_json(
                 let mut cursor = index;
                 let mut digits = 0_u64;
                 while cursor < bytes.len()
-                    && matches!(bytes[cursor], b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E')
+                    && matches!(
+                        bytes[cursor],
+                        b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E'
+                    )
                 {
                     if bytes[cursor].is_ascii_digit() {
                         digits = digits.saturating_add(1);
                         if digits > policy.max_number_digits {
-                            return violation(format!("candidate JSON {} number exceeds digit policy before parse", path.display()));
+                            return violation(format!(
+                                "candidate JSON {} number exceeds digit policy before parse",
+                                path.display()
+                            ));
                         }
                     }
                     cursor += 1;
@@ -525,16 +591,19 @@ fn preflight_json(
         }
     }
     if !stack.is_empty() {
-        return violation(format!("candidate JSON {} has unclosed containers", path.display()));
+        return violation(format!(
+            "candidate JSON {} has unclosed containers",
+            path.display()
+        ));
     }
     Ok(())
 }
 
 fn mark_array_value(stack: &mut [LexFrame]) {
-    if let Some(frame) = stack.last_mut() {
-        if matches!(frame.kind, LexKind::Array) {
-            frame.array_has_value = true;
-        }
+    if let Some(frame) = stack.last_mut()
+        && matches!(frame.kind, LexKind::Array)
+    {
+        frame.array_has_value = true;
     }
 }
 
@@ -554,18 +623,27 @@ fn analyze_json_value(
     ) -> Result<(), InputGuardError> {
         *max_depth = (*max_depth).max(depth);
         if depth > policy.max_depth {
-            return violation(format!("candidate JSON {} exceeds nesting-depth policy", path.display()));
+            return violation(format!(
+                "candidate JSON {} exceeds nesting-depth policy",
+                path.display()
+            ));
         }
         match value {
             Value::Object(object) => {
                 let properties = u64::try_from(object.len()).unwrap_or(u64::MAX);
                 if properties > policy.max_object_properties {
-                    return violation(format!("candidate JSON {} object exceeds property policy", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} object exceeds property policy",
+                        path.display()
+                    ));
                 }
                 *records = records.saturating_add(properties);
                 for (key, nested) in object {
                     if u64::try_from(key.len()).unwrap_or(u64::MAX) > policy.max_string_bytes {
-                        return violation(format!("candidate JSON {} key exceeds string policy", path.display()));
+                        return violation(format!(
+                            "candidate JSON {} key exceeds string policy",
+                            path.display()
+                        ));
                     }
                     walk(nested, policy, depth + 1, records, max_depth, path)?;
                 }
@@ -573,7 +651,10 @@ fn analyze_json_value(
             Value::Array(array) => {
                 let items = u64::try_from(array.len()).unwrap_or(u64::MAX);
                 if items > policy.max_array_items {
-                    return violation(format!("candidate JSON {} array exceeds item policy", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} array exceeds item policy",
+                        path.display()
+                    ));
                 }
                 *records = records.saturating_add(items);
                 for nested in array {
@@ -582,13 +663,23 @@ fn analyze_json_value(
             }
             Value::String(text) => {
                 if u64::try_from(text.len()).unwrap_or(u64::MAX) > policy.max_string_bytes {
-                    return violation(format!("candidate JSON {} string exceeds policy", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} string exceeds policy",
+                        path.display()
+                    ));
                 }
             }
             Value::Number(number) => {
-                let digits = number.to_string().bytes().filter(u8::is_ascii_digit).count();
+                let digits = number
+                    .to_string()
+                    .bytes()
+                    .filter(|byte| byte.is_ascii_digit())
+                    .count();
                 if u64::try_from(digits).unwrap_or(u64::MAX) > policy.max_number_digits {
-                    return violation(format!("candidate JSON {} number exceeds digit policy", path.display()));
+                    return violation(format!(
+                        "candidate JSON {} number exceeds digit policy",
+                        path.display()
+                    ));
                 }
             }
             Value::Bool(_) | Value::Null => {}
@@ -600,9 +691,16 @@ fn analyze_json_value(
     let mut max_depth = 1_u64;
     walk(value, policy, 1, &mut records, &mut max_depth, path)?;
     if records > remaining_records {
-        return violation(format!("candidate JSON {} exceeds aggregate record policy", path.display()));
+        return violation(format!(
+            "candidate JSON {} exceeds aggregate record policy",
+            path.display()
+        ));
     }
-    Ok(FileStats { bytes: 0, records, depth: max_depth })
+    Ok(FileStats {
+        bytes: 0,
+        records,
+        depth: max_depth,
+    })
 }
 
 fn guard_yaml(
@@ -615,29 +713,60 @@ fn guard_yaml(
         InputGuardError::Violation(format!("candidate YAML {} is not UTF-8", path.display()))
     })?;
     if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-        return violation(format!("candidate YAML {} contains a prohibited BOM", path.display()));
+        return violation(format!(
+            "candidate YAML {} contains a prohibited BOM",
+            path.display()
+        ));
     }
 
     let mut indent_stack = vec![0_usize];
-    let mut sequence_counts: BTreeMap<usize, u64> = BTreeMap::new();
+    let mut sequence_counts = BTreeMap::<usize, u64>::new();
+    let mut block_scalar: Option<(usize, u64)> = None;
     let mut records = 0_u64;
     let mut max_depth = 1_u64;
 
     for (line_index, raw_line) in text.lines().enumerate() {
-        if raw_line.as_bytes().iter().take_while(|byte| **byte == b' ' || **byte == b'\t').any(|byte| *byte == b'\t') {
-            return violation(format!("candidate YAML {} line {} uses tab indentation", path.display(), line_index + 1));
+        let line_number = line_index + 1;
+        let indent = leading_spaces(raw_line, path, line_number)?;
+        let trimmed_raw = raw_line.trim();
+
+        if let Some((header_indent, accumulated)) = block_scalar.as_mut() {
+            if trimmed_raw.is_empty() || indent > *header_indent {
+                *accumulated = accumulated
+                    .checked_add(u64::try_from(raw_line.len() + 1).unwrap_or(u64::MAX))
+                    .ok_or_else(|| {
+                        InputGuardError::Violation(format!(
+                            "candidate YAML {} block scalar byte count overflow",
+                            path.display()
+                        ))
+                    })?;
+                if *accumulated > policy.max_scalar_bytes {
+                    return violation(format!(
+                        "candidate YAML {} line {line_number} block scalar exceeds policy",
+                        path.display()
+                    ));
+                }
+                continue;
+            }
+            block_scalar = None;
         }
+
         let without_comment = strip_yaml_comment(raw_line);
         let trimmed = without_comment.trim();
         if trimmed.is_empty() || trimmed == "---" || trimmed == "..." {
             continue;
         }
         if trimmed.starts_with("%TAG") || trimmed.starts_with("%YAML") {
-            return violation(format!("candidate YAML {} line {} uses a prohibited directive", path.display(), line_index + 1));
+            return violation(format!(
+                "candidate YAML {} line {line_number} uses a prohibited directive",
+                path.display()
+            ));
         }
-        let indent = without_comment.len() - without_comment.trim_start_matches(' ').len();
+
         while indent < *indent_stack.last().unwrap_or(&0) {
-            indent_stack.pop();
+            if let Some(closed) = indent_stack.pop() {
+                sequence_counts.remove(&closed);
+            }
         }
         if indent > *indent_stack.last().unwrap_or(&0) {
             indent_stack.push(indent);
@@ -645,43 +774,88 @@ fn guard_yaml(
         let depth = u64::try_from(indent_stack.len()).unwrap_or(u64::MAX);
         max_depth = max_depth.max(depth);
         if depth > policy.max_depth {
-            return violation(format!("candidate YAML {} exceeds nesting-depth policy", path.display()));
+            return violation(format!(
+                "candidate YAML {} exceeds nesting-depth policy",
+                path.display()
+            ));
         }
 
         let mut content = trimmed;
-        if let Some(rest) = content.strip_prefix('-') {
-            if rest.is_empty() || rest.starts_with(char::is_whitespace) {
-                let count = sequence_counts.entry(indent).or_insert(0);
-                *count = count.saturating_add(1);
-                if *count > policy.max_sequence_items {
-                    return violation(format!("candidate YAML {} sequence exceeds item policy", path.display()));
-                }
-                records = records.saturating_add(1);
-                content = rest.trim_start();
+        if let Some(rest) = content.strip_prefix('-')
+            && (rest.is_empty()
+                || rest
+                    .as_bytes()
+                    .first()
+                    .is_some_and(|byte| byte.is_ascii_whitespace()))
+        {
+            let count = sequence_counts.entry(indent).or_insert(0);
+            *count = count.saturating_add(1);
+            if *count > policy.max_sequence_items {
+                return violation(format!(
+                    "candidate YAML {} sequence exceeds item policy",
+                    path.display()
+                ));
             }
+            records = records.saturating_add(1);
+            content = rest.trim_start();
         }
 
+        validate_yaml_flow(content, policy, path, line_number)?;
         if let Some((key, value)) = split_yaml_mapping(content) {
             if key.trim() == "<<" {
-                return violation(format!("candidate YAML {} line {} contains a prohibited merge key", path.display(), line_index + 1));
+                return violation(format!(
+                    "candidate YAML {} line {line_number} contains a prohibited merge key",
+                    path.display()
+                ));
             }
-            validate_yaml_scalar(key.trim(), policy, path, line_index + 1)?;
-            if !value.trim().is_empty() {
-                validate_yaml_scalar(value.trim(), policy, path, line_index + 1)?;
+            validate_yaml_scalar(key.trim(), policy, path, line_number)?;
+            let value = value.trim();
+            if is_block_scalar_header(value) {
+                block_scalar = Some((indent, 0));
+            } else if !value.is_empty() {
+                validate_yaml_scalar(value, policy, path, line_number)?;
             }
             records = records.saturating_add(1);
         } else if !content.is_empty() {
-            validate_yaml_scalar(content, policy, path, line_index + 1)?;
+            if is_block_scalar_header(content) {
+                block_scalar = Some((indent, 0));
+            } else {
+                validate_yaml_scalar(content, policy, path, line_number)?;
+            }
             if !trimmed.starts_with('-') {
                 records = records.saturating_add(1);
             }
         }
         if records > remaining_records {
-            return violation(format!("candidate YAML {} exceeds aggregate record policy before parse", path.display()));
+            return violation(format!(
+                "candidate YAML {} exceeds aggregate record policy before parse",
+                path.display()
+            ));
         }
     }
 
-    Ok(FileStats { bytes: 0, records, depth: max_depth })
+    Ok(FileStats {
+        bytes: 0,
+        records,
+        depth: max_depth,
+    })
+}
+
+fn leading_spaces(line: &str, path: &Path, line_number: usize) -> Result<usize, InputGuardError> {
+    let mut count = 0_usize;
+    for byte in line.bytes() {
+        match byte {
+            b' ' => count += 1,
+            b'\t' => {
+                return violation(format!(
+                    "candidate YAML {} line {line_number} uses tab indentation",
+                    path.display()
+                ));
+            }
+            _ => break,
+        }
+    }
+    Ok(count)
 }
 
 fn strip_yaml_comment(line: &str) -> &str {
@@ -701,7 +875,10 @@ fn strip_yaml_comment(line: &str) -> &str {
         match byte {
             b'\'' if !double => single = !single,
             b'"' if !single => double = !double,
-            b'#' if !single && !double && (index == 0 || bytes[index - 1].is_ascii_whitespace()) => {
+            b'#' if !single
+                && !double
+                && (index == 0 || bytes[index - 1].is_ascii_whitespace()) =>
+            {
                 return &line[..index];
             }
             _ => {}
@@ -732,7 +909,7 @@ fn split_yaml_mapping(text: &str) -> Option<(&str, &str)> {
             b']' | b'}' if !single && !double => flow_depth = flow_depth.saturating_sub(1),
             b':' if !single && !double && flow_depth == 0 => {
                 let next = bytes.get(index + 1).copied();
-                if next.is_none() || next.is_some_and(u8::is_ascii_whitespace) {
+                if next.is_none() || next.is_some_and(|byte| byte.is_ascii_whitespace()) {
                     return Some((&text[..index], &text[index + 1..]));
                 }
             }
@@ -742,6 +919,10 @@ fn split_yaml_mapping(text: &str) -> Option<(&str, &str)> {
     None
 }
 
+fn is_block_scalar_header(value: &str) -> bool {
+    matches!(value, "|" | "|-" | "|+" | ">" | ">-" | ">+")
+}
+
 fn validate_yaml_scalar(
     scalar: &str,
     policy: &YamlPolicy,
@@ -749,25 +930,98 @@ fn validate_yaml_scalar(
     line: usize,
 ) -> Result<(), InputGuardError> {
     if u64::try_from(scalar.len()).unwrap_or(u64::MAX) > policy.max_scalar_bytes {
-        return violation(format!("candidate YAML {} line {line} scalar exceeds policy", path.display()));
+        return violation(format!(
+            "candidate YAML {} line {line} scalar exceeds policy",
+            path.display()
+        ));
     }
     let trimmed = scalar.trim_start();
     if trimmed.starts_with('*') || trimmed.starts_with('&') {
-        return violation(format!("candidate YAML {} line {line} contains a prohibited alias or anchor", path.display()));
+        return violation(format!(
+            "candidate YAML {} line {line} contains a prohibited alias or anchor",
+            path.display()
+        ));
     }
     if trimmed.starts_with('!') {
-        return violation(format!("candidate YAML {} line {line} contains a prohibited custom tag", path.display()));
+        return violation(format!(
+            "candidate YAML {} line {line} contains a prohibited custom tag",
+            path.display()
+        ));
     }
     for segment in yaml_flow_segments(trimmed) {
         let segment = segment.trim_start();
         if segment.starts_with('*') || segment.starts_with('&') {
-            return violation(format!("candidate YAML {} line {line} contains a prohibited alias or anchor", path.display()));
+            return violation(format!(
+                "candidate YAML {} line {line} contains a prohibited alias or anchor",
+                path.display()
+            ));
         }
         if segment.starts_with('!') {
-            return violation(format!("candidate YAML {} line {line} contains a prohibited custom tag", path.display()));
+            return violation(format!(
+                "candidate YAML {} line {line} contains a prohibited custom tag",
+                path.display()
+            ));
         }
         if segment.starts_with("<<:") || segment == "<<" {
-            return violation(format!("candidate YAML {} line {line} contains a prohibited merge key", path.display()));
+            return violation(format!(
+                "candidate YAML {} line {line} contains a prohibited merge key",
+                path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_yaml_flow(
+    text: &str,
+    policy: &YamlPolicy,
+    path: &Path,
+    line: usize,
+) -> Result<(), InputGuardError> {
+    let bytes = text.as_bytes();
+    let mut single = false;
+    let mut double = false;
+    let mut escaped = false;
+    let mut sequence_items = Vec::<u64>::new();
+    let mut flow_depth = 0_u64;
+    for byte in bytes.iter().copied() {
+        if double && escaped {
+            escaped = false;
+            continue;
+        }
+        if double && byte == b'\\' {
+            escaped = true;
+            continue;
+        }
+        match byte {
+            b'\'' if !double => single = !single,
+            b'"' if !single => double = !double,
+            b'[' if !single && !double => {
+                flow_depth += 1;
+                sequence_items.push(1);
+                if flow_depth > policy.max_depth {
+                    return violation(format!(
+                        "candidate YAML {} line {line} exceeds flow nesting-depth policy",
+                        path.display()
+                    ));
+                }
+            }
+            b']' if !single && !double => {
+                sequence_items.pop();
+                flow_depth = flow_depth.saturating_sub(1);
+            }
+            b',' if !single && !double => {
+                if let Some(items) = sequence_items.last_mut() {
+                    *items = items.saturating_add(1);
+                    if *items > policy.max_sequence_items {
+                        return violation(format!(
+                            "candidate YAML {} line {line} flow sequence exceeds item policy",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+            _ => {}
         }
     }
     Ok(())
@@ -846,14 +1100,20 @@ mod tests {
     }
 
     fn input(format: CandidateFormat, path: &str) -> CandidateInput {
-        CandidateInput { format, relative_path: PathBuf::from(path) }
+        CandidateInput {
+            format,
+            relative_path: PathBuf::from(path),
+        }
     }
 
     #[test]
-    fn accepts_bounded_json_and_yaml_deterministically() {
+    fn accepts_bounded_json_yaml_and_block_scalars_deterministically() {
         let root = TempRoot::new();
         root.write("policy.json", br#"{"a":[1,2],"b":"ok"}"#);
-        root.write("workflow.yml", b"name: test\njobs:\n  verify:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo ok\n");
+        root.write(
+            "workflow.yml",
+            b"name: test\njobs:\n  verify:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: |\n          echo ok\n          echo done\n",
+        );
         let inputs = [
             input(CandidateFormat::Json, "policy.json"),
             input(CandidateFormat::Yaml, "workflow.yml"),
@@ -868,12 +1128,33 @@ mod tests {
     }
 
     #[test]
+    fn sibling_yaml_sequences_have_independent_limits() {
+        let root = TempRoot::new();
+        let first = "  - a\n".repeat(6_000);
+        let second = "  - b\n".repeat(6_000);
+        let document = format!("first:\n{first}second:\n{second}");
+        root.write("siblings.yml", document.as_bytes());
+        guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Yaml, "siblings.yml")],
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn rejects_oversize_before_json_parse() {
         let root = TempRoot::new();
         let policy = load_policy().unwrap();
-        let bytes = vec![b' '; usize::try_from(policy.preparse.max_single_file_bytes + 1).unwrap()];
+        let bytes = vec![
+            b' ';
+            usize::try_from(policy.preparse.max_single_file_bytes + 1).unwrap()
+        ];
         root.write("oversize.json", &bytes);
-        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "oversize.json")]).unwrap_err();
+        let error = guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Json, "oversize.json")],
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("before parse"));
     }
 
@@ -884,30 +1165,42 @@ mod tests {
         let depth = usize::try_from(policy.json.max_depth + 1).unwrap();
         let text = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
         root.write("deep.json", text.as_bytes());
-        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "deep.json")]).unwrap_err();
-        assert!(error.to_string().contains("nesting-depth policy before parse"));
+        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "deep.json")])
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("nesting-depth policy before parse"));
     }
 
     #[test]
     fn rejects_aggregate_record_exhaustion() {
         let root = TempRoot::new();
-        let array = format!("[{}]", (0..17_000).map(|_| "0").collect::<Vec<_>>().join(","));
+        let array = format!(
+            "[{}]",
+            (0..17_000).map(|_| "0").collect::<Vec<_>>().join(",")
+        );
         let document = format!("{{\"a\":{array},\"b\":{array},\"c\":{array}}}");
         root.write("records.json", document.as_bytes());
-        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "records.json")]).unwrap_err();
+        let error = guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Json, "records.json")],
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("record policy"));
     }
 
     #[test]
-    fn rejects_yaml_alias_custom_tag_and_merge_key() {
+    fn rejects_yaml_alias_anchor_custom_tag_and_merge_key() {
         for (name, text, expected) in [
             ("alias.yml", "value: *shared\n", "alias"),
+            ("anchor.yml", "value: &shared x\n", "anchor"),
             ("tag.yml", "value: !custom tagged\n", "custom tag"),
             ("merge.yml", "<<: *base\n", "merge key"),
         ] {
             let root = TempRoot::new();
             root.write(name, text.as_bytes());
-            let error = guard_inputs(&root.path, &[input(CandidateFormat::Yaml, name)]).unwrap_err();
+            let error = guard_inputs(&root.path, &[input(CandidateFormat::Yaml, name)])
+                .unwrap_err();
             assert!(error.to_string().contains(expected), "{error}");
         }
     }
@@ -915,7 +1208,11 @@ mod tests {
     #[test]
     fn rejects_path_traversal() {
         let root = TempRoot::new();
-        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "../outside.json")]).unwrap_err();
+        let error = guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Json, "../outside.json")],
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("not portable"));
     }
 
@@ -928,19 +1225,19 @@ mod tests {
         let outside = TempRoot::new();
         outside.write("value.json", b"{}");
         symlink(&outside.path, root.path.join("link")).unwrap();
-        let error = guard_inputs(&root.path, &[input(CandidateFormat::Json, "link/value.json")]).unwrap_err();
+        let error = guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Json, "link/value.json")],
+        )
+        .unwrap_err();
         assert!(error.to_string().contains("symlink component"));
     }
 
     #[test]
     fn rejects_unsupported_format() {
         let error = CandidateFormat::parse("toml").unwrap_err();
-        assert!(error.to_string().contains("unsupported candidate input format"));
-    }
-
-    #[test]
-    fn format_labels_are_stable() {
-        assert_eq!(CandidateFormat::Json.label(), "json");
-        assert_eq!(CandidateFormat::Yaml.label(), "yaml");
+        assert!(error
+            .to_string()
+            .contains("unsupported candidate input format"));
     }
 }
