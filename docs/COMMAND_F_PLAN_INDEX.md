@@ -50,7 +50,7 @@ These are capability groupings, not authorization to create separate services or
 
 Preserves the 35 interoperability gap hypotheses that motivate the product and research program, and maps them to the commandF response.
 
-Future agent/evidence/source-adoption control gaps are retained separately in `docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md` so they do not silently become healthcare-interoperability claims.
+Future agent/evidence/source-adoption control gaps are retained separately in `docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md` and `docs/COMMAND_F_AGENT_SECURITY_AND_CONTROL_GAPS_2026-09-08.md` so they do not silently become healthcare-interoperability claims.
 
 ## E. Donor/provenance authority
 
@@ -152,10 +152,27 @@ Refines the optional future agent/Copilot plane without changing current executi
 
 The plan also adds a donor-portfolio decision strategy across the repository's existing source inventory and records future-agent/source-adoption gaps discovered through the Tencent source study.
 
+`docs/COMMAND_F_AGENT_SECURITY_AND_CONTROL_GAPS_2026-09-08.md`
+
+Adds the second-pass cross-layer threat-model constraints that are easy to miss when each capability is reviewed separately, including:
+
+- untrusted-context/prompt-injection provenance and trust labels;
+- exact-action approval binding and TOCTOU resistance;
+- replay/idempotency/effect reconciliation;
+- delegated capability attenuation;
+- tenant/workspace/principal isolation;
+- tamper-evident audit evidence;
+- skill/plugin/tool supply-chain controls;
+- retention/deletion/export/privacy lifecycle;
+- concurrency leases/fencing;
+- model/provider routing and fallback identity;
+- cumulative autonomy circuit breakers;
+- human-approval fatigue and semantic previews.
+
 Important ordering rule:
 
-- this future planning coverage does **not** alter the active AF-02 contracts or dependency order;
-- no new canonical CF/AF identity is created by this document;
+- these future planning documents do **not** alter the active AF-02 contracts or dependency order;
+- no new canonical CF/AF identity is created by these documents;
 - implementation still requires a separately authorized Spec Kit unit and provenance/adoption gate;
 - the deterministic commandF core remains independent of all agent/memory/evaluation runtimes.
 
