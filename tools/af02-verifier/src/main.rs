@@ -1,3 +1,5 @@
+pub mod semantic;
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -286,6 +288,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let policy = parse_waiver_policy(&fs::read(policy_path)?)?;
             let value = serde_json::to_value(policy)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "verify-semantic-contract" => {
+            let contract_path = PathBuf::from(args.next().ok_or("missing semantic contract path")?);
+            let schema_path =
+                PathBuf::from(args.next().ok_or("missing semantic contract schema path")?);
+            if args.next().is_some() {
+                return Err(
+                    "verify-semantic-contract accepts exactly a contract path and schema path".into(),
+                );
+            }
+            let coverage = semantic::validate_semantic_contract(
+                &fs::read(contract_path)?,
+                &fs::read(schema_path)?,
+            )?;
+            let value = serde_json::json!({
+                "algorithm_count": coverage.algorithm_count,
+                "negative_fixture_count": coverage.negative_fixture_count,
+                "schema": "commandf.af02-semantic-contract-validation/v1"
+            });
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
