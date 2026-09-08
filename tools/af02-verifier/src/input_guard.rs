@@ -268,16 +268,17 @@ fn preflight_yaml_flow(
 
     for (line_index, raw_line) in text.lines().enumerate() {
         let line = line_index + 1;
-        let indent = leading_spaces(raw_line, path, line)?;
+        let content_indent = raw_line.bytes().take_while(|byte| *byte == b' ').count();
         let trimmed_raw = raw_line.trim();
 
         if let Some(header_indent) = block_scalar_indent {
-            if trimmed_raw.is_empty() || indent > header_indent {
+            if trimmed_raw.is_empty() || content_indent > header_indent {
                 continue;
             }
             block_scalar_indent = None;
         }
 
+        let indent = leading_spaces(raw_line, path, line)?;
         let without_comment = strip_yaml_comment(raw_line);
         let trimmed = without_comment.trim();
         if trimmed.is_empty() || trimmed == "---" || trimmed == "..." {
@@ -749,6 +750,13 @@ mod tests {
             let error = guard_inputs(&root.path, &[yaml(name)]).unwrap_err();
             assert!(error.to_string().contains(expected), "{error}");
         }
+    }
+
+    #[test]
+    fn accepts_tabs_inside_block_scalar_payload_after_required_indentation() {
+        let root = TempRoot::new();
+        root.write("block.yml", "value: |\n  \tpayload\n");
+        guard_inputs(&root.path, &[yaml("block.yml")]).unwrap();
     }
 
     #[test]
