@@ -168,6 +168,8 @@ pub fn verify_pr(
     let mut seen_current = BTreeSet::new();
     let mut authority_paths = BTreeSet::new();
     let mut current_authority = Vec::new();
+    let mut existing_base_authority = Vec::new();
+
     for changed in &input.changed_files {
         if !ALLOWED_FILE_STATUSES.contains(&changed.status.as_str()) {
             return contract(format!("unsupported GitHub file status {}", changed.status));
@@ -187,11 +189,10 @@ pub fn verify_pr(
         if current_protected && !known.contains(&current) {
             return contract(format!("unknown AF-02 authority path {current}"));
         }
-        if let Some(previous) = previous.as_deref()
-            && previous_protected
-            && !known.contains(previous)
-        {
-            return contract(format!("unknown prior AF-02 authority path {previous}"));
+        if let Some(previous_path) = previous.as_deref() {
+            if previous_protected && !known.contains(previous_path) {
+                return contract(format!("unknown prior AF-02 authority path {previous_path}"));
+            }
         }
 
         if changed.status == "renamed" && (current_protected || previous_protected) {
@@ -207,12 +208,19 @@ pub fn verify_pr(
 
         if current_protected {
             authority_paths.insert(current.clone());
-            current_authority.push(current);
+            current_authority.push(current.clone());
+            if canonical_base_file_exists(base_root, &current)? {
+                existing_base_authority.push(current);
+            } else if !matches!(changed.status.as_str(), "added" | "copied") {
+                return contract(format!(
+                    "future AF-02 authority {current} must enter as an explicit added or copied path"
+                ));
+            }
         }
-        if let Some(previous) = previous
-            && previous_protected
-        {
-            authority_paths.insert(previous);
+        if let Some(previous_path) = previous {
+            if previous_protected {
+                authority_paths.insert(previous_path);
+            }
         }
     }
 
@@ -234,6 +242,14 @@ pub fn verify_pr(
 
     validate_candidate_authority(candidate_root, &current_authority)?;
 
+    if !existing_base_authority.is_empty() {
+        existing_base_authority.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        return contract(format!(
+            "canonical-base AF-02 authority is immutable under the A0 gate; dedicated precanonical strengthening is required: {}",
+            existing_base_authority.join(",")
+        ));
+    }
+
     Ok(BaseGateProof {
         schema: GATE_PROOF_SCHEMA,
         repository: input.repository,
@@ -241,7 +257,7 @@ pub fn verify_pr(
         base_sha: input.base_sha,
         base_tree: input.base_tree,
         head_sha: input.head_sha,
-        mode: "AUTHORITY_VERIFICATION_REQUIRED",
+        mode: "FUTURE_AUTHORITY_ADDITION_VERIFIED",
         changed_path_count: input.changed_files.len(),
         authority_paths: authority_paths.into_iter().collect(),
         candidate_code_executed: false,
@@ -293,10 +309,9 @@ pub fn known_authority_paths(base_root: &Path) -> Result<Vec<String>, BaseGateEr
         known.insert(normalize_repo_path(line)?);
     }
     for entry in parse_inventory(base_root)?.entries {
-        if entry.planned_path.ends_with('/') {
-            continue;
+        if !entry.planned_path.ends_with('/') {
+            known.insert(normalize_repo_path(&entry.planned_path)?);
         }
-        known.insert(normalize_repo_path(&entry.planned_path)?);
     }
     Ok(known.into_iter().collect())
 }
@@ -347,6 +362,17 @@ fn verify_base_identity(
     if expected.schema != "commandf.af02-base-identity-proof/v1" {
         return contract("unexpected base-identity proof schema");
     }
+
+    let observed_sha = git_output(base_root, &["rev-parse", "HEAD"])?;
+    let observed_tree = git_output(base_root, &["rev-parse", "HEAD^{tree}"])?;
+    validate_git_sha(&observed_sha, "observed base commit")?;
+    validate_git_sha(&observed_tree, "observed base tree")?;
+    if expected.base_sha != observed_sha || expected.base_tree != observed_tree {
+        return contract(format!(
+            "declared base identity disagrees with locally observed canonical base {observed_sha}/{observed_tree}"
+        ));
+    }
+
     compare_file_blob(base_root, WORKFLOW_PATH, &expected.workflow_blob)?;
     compare_file_blob(base_root, RUNNER_PATH, &expected.runner_blob)?;
     compare_file_blob(
@@ -432,7 +458,10 @@ fn collect_regular_files(
 ) -> Result<(), BaseGateError> {
     let metadata = fs::symlink_metadata(current).map_err(|error| io_error(current, error))?;
     if metadata.file_type().is_symlink() {
-        return contract(format!("canonical-base identity path is a symlink: {}", current.display()));
+        return contract(format!(
+            "canonical-base identity path is a symlink: {}",
+            current.display()
+        ));
     }
     if metadata.is_file() {
         let relative = current
@@ -444,7 +473,10 @@ fn collect_regular_files(
         return Ok(());
     }
     if !metadata.is_dir() {
-        return contract(format!("canonical-base identity path has unsupported type: {}", current.display()));
+        return contract(format!(
+            "canonical-base identity path has unsupported type: {}",
+            current.display()
+        ));
     }
     let mut entries = fs::read_dir(current)
         .map_err(|error| io_error(current, error))?
@@ -519,13 +551,16 @@ fn validate_known_authority_paths(
         return contract("known authority universe is empty");
     }
     let mut known = BTreeSet::new();
-    let mut previous: Option<&str> = None;
+    let mut previous: Option<String> = None;
     for raw in paths {
         let path = normalize_repo_path(raw)?;
-        if previous.is_some_and(|item| item.as_bytes() >= path.as_bytes()) {
+        if previous
+            .as_deref()
+            .is_some_and(|item| item.as_bytes() >= path.as_bytes())
+        {
             return contract("known authority universe must be strictly UTF-8-byte sorted and unique");
         }
-        previous = Some(raw.as_str());
+        previous = Some(path.clone());
         known.insert(path);
     }
     for exact in AUTHORITY_EXACT {
@@ -556,11 +591,13 @@ fn validate_candidate_authority(
     for path in authority_paths {
         let size = ensure_regular_contained(candidate_root, path)?;
         if size > MAX_SINGLE_AUTHORITY_BYTES {
-            return contract(format!("candidate authority {path} exceeds single-file byte policy"));
+            return contract(format!(
+                "candidate authority {path} exceeds single-file byte policy"
+            ));
         }
-        aggregate = aggregate
-            .checked_add(size)
-            .ok_or_else(|| BaseGateError::Contract("candidate authority aggregate byte overflow".to_owned()))?;
+        aggregate = aggregate.checked_add(size).ok_or_else(|| {
+            BaseGateError::Contract("candidate authority aggregate byte overflow".to_owned())
+        })?;
         if aggregate > MAX_AUTHORITY_BYTES {
             return contract("candidate authority aggregate bytes exceed verifier-input policy");
         }
@@ -590,23 +627,48 @@ fn ensure_regular_contained(root: &Path, relative: &str) -> Result<u64, BaseGate
         current.push(part);
         let metadata = fs::symlink_metadata(&current).map_err(|error| io_error(&current, error))?;
         if metadata.file_type().is_symlink() {
-            return contract(format!("candidate authority contains symlink component {relative}"));
+            return contract(format!(
+                "candidate authority contains symlink component {relative}"
+            ));
         }
         if index + 1 == parts.len() {
             if !metadata.is_file() {
-                return contract(format!("candidate authority is not a regular file {relative}"));
+                return contract(format!(
+                    "candidate authority is not a regular file {relative}"
+                ));
             }
             return Ok(metadata.len());
         }
         if !metadata.is_dir() {
-            return contract(format!("candidate authority parent is not a directory {relative}"));
+            return contract(format!(
+                "candidate authority parent is not a directory {relative}"
+            ));
         }
     }
     contract("candidate authority path has no components")
 }
 
+fn canonical_base_file_exists(base_root: &Path, relative: &str) -> Result<bool, BaseGateError> {
+    let full = base_root.join(relative);
+    match fs::symlink_metadata(&full) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                return contract(format!(
+                    "canonical-base authority path is not a regular file: {relative}"
+                ));
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(io_error(&full, error)),
+    }
+}
+
 fn is_authority_path(path: &str) -> bool {
-    AUTHORITY_EXACT.contains(&path) || AUTHORITY_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+    AUTHORITY_EXACT.contains(&path)
+        || AUTHORITY_PREFIXES
+            .iter()
+            .any(|prefix| path.starts_with(prefix))
 }
 
 fn normalize_repo_path(raw: &str) -> Result<String, BaseGateError> {
@@ -614,12 +676,17 @@ fn normalize_repo_path(raw: &str) -> Result<String, BaseGateError> {
         || raw.as_bytes().contains(&0)
         || raw.contains('\\')
         || raw.starts_with('/')
-        || raw.as_bytes().len() > MAX_PATH_BYTES
+        || raw.len() > MAX_PATH_BYTES
     {
-        return contract(format!("changed path is not a bounded repository-relative POSIX path: {raw}"));
+        return contract(format!(
+            "changed path is not a bounded repository-relative POSIX path: {raw}"
+        ));
     }
     let parts = raw.split('/').collect::<Vec<_>>();
-    if parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
+    if parts
+        .iter()
+        .any(|part| part.is_empty() || *part == "." || *part == "..")
+    {
         return contract(format!("changed path is not canonical POSIX form: {raw}"));
     }
     Ok(raw.to_owned())
@@ -649,12 +716,15 @@ fn git_tree_blobs(
         if object_type != Some("blob") || fields.next().is_some() {
             return contract(format!("authority {path} is not a Git blob"));
         }
-        let sha = sha.ok_or_else(|| BaseGateError::Git("git ls-tree omitted blob SHA".to_owned()))?;
+        let sha = sha
+            .ok_or_else(|| BaseGateError::Git("git ls-tree omitted blob SHA".to_owned()))?;
         validate_git_sha(sha, path)?;
         blobs.insert(normalize_repo_path(path)?, sha.to_owned());
     }
     if blobs.is_empty() {
-        return contract(format!("canonical base has no tracked blobs under {prefix}"));
+        return contract(format!(
+            "canonical base has no tracked blobs under {prefix}"
+        ));
     }
     Ok(blobs)
 }
@@ -684,7 +754,9 @@ fn validate_git_sha(value: &str, label: &str) -> Result<(), BaseGateError> {
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return contract(format!("{label} Git identity is not lowercase 40-hex"));
+        return contract(format!(
+            "{label} Git identity is not lowercase 40-hex"
+        ));
     }
     Ok(())
 }
