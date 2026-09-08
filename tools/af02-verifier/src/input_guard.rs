@@ -379,7 +379,8 @@ fn scan_flow_line(
                     FlowFrame::mapping()
                 });
                 let depth = base_depth
-                    .saturating_add(u64::try_from(stack.len()).unwrap_or(u64::MAX));
+                    .checked_add(u64::try_from(stack.len()).unwrap_or(u64::MAX))
+                    .unwrap_or(u64::MAX);
                 stats.max_depth = stats.max_depth.max(depth);
                 if depth > policy.max_depth {
                     return violation(format!(
@@ -413,16 +414,15 @@ fn scan_flow_line(
                 }
             }
             b':' => {
-                if let Some(frame) = stack.last_mut()
-                    && frame.kind == FlowKind::Mapping
-                    && frame.mapping_expects_key_separator
-                {
-                    stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
-                        InputGuardError::Violation(
-                            "candidate YAML flow record count overflow".to_owned(),
-                        )
-                    })?;
-                    frame.mapping_expects_key_separator = false;
+                if let Some(frame) = stack.last_mut() {
+                    if frame.kind == FlowKind::Mapping && frame.mapping_expects_key_separator {
+                        stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
+                            InputGuardError::Violation(
+                                "candidate YAML flow record count overflow".to_owned(),
+                            )
+                        })?;
+                        frame.mapping_expects_key_separator = false;
+                    }
                 }
             }
             byte if byte.is_ascii_whitespace() => {}
@@ -488,10 +488,10 @@ fn finish_sequence_item(
 
 #[cfg(unix)]
 fn mark_sequence_content(stack: &mut [FlowFrame]) {
-    if let Some(frame) = stack.last_mut()
-        && frame.kind == FlowKind::Sequence
-    {
-        frame.sequence_has_item = true;
+    if let Some(frame) = stack.last_mut() {
+        if frame.kind == FlowKind::Sequence {
+            frame.sequence_has_item = true;
+        }
     }
 }
 
@@ -700,8 +700,7 @@ mod tests {
         let document = (0..6)
             .map(|index| format!("k{index}: [{sequence}]"))
             .collect::<Vec<_>>()
-            .join("\
-");
+            .join("\n");
         root.write("records.yml", &document);
         let error = guard_inputs(&root.path, &[yaml("records.yml")]).unwrap_err();
         assert!(error.to_string().contains("record"), "{error}");
@@ -713,8 +712,7 @@ mod tests {
         let policy = load_hardening_policy().unwrap();
         let flow_depth = usize::try_from(policy.yaml.max_depth).unwrap();
         let document = format!(
-            "value: {}0{}\
-",
+            "value: {}0{}\n",
             "{a: ".repeat(flow_depth),
             "}".repeat(flow_depth)
         );
@@ -726,18 +724,10 @@ mod tests {
     #[test]
     fn rejects_prohibited_node_properties_in_explicit_yaml_keys() {
         for (name, text, expected) in [
-            ("alias.yml", "? *shared\
-: value\
-", "alias"),
-            ("anchor.yml", "? &shared key\
-: value\
-", "anchor"),
-            ("tag.yml", "? !custom key\
-: value\
-", "custom tag"),
-            ("merge.yml", "? <<\
-: value\
-", "merge key"),
+            ("alias.yml", "? *shared\n: value\n", "alias"),
+            ("anchor.yml", "? &shared key\n: value\n", "anchor"),
+            ("tag.yml", "? !custom key\n: value\n", "custom tag"),
+            ("merge.yml", "? <<\n: value\n", "merge key"),
         ] {
             let root = TempRoot::new();
             root.write(name, text);
@@ -749,18 +739,10 @@ mod tests {
     #[test]
     fn rejects_prohibited_node_properties_after_block_sequence_indicator() {
         for (name, text, expected) in [
-            ("alias-seq.yml", "- ? *shared\
-  : value\
-", "alias"),
-            ("anchor-seq.yml", "- ? &shared key\
-  : value\
-", "anchor"),
-            ("tag-seq.yml", "- ? !custom key\
-  : value\
-", "custom tag"),
-            ("merge-seq.yml", "- ? <<\
-  : value\
-", "merge key"),
+            ("alias-seq.yml", "- ? *shared\n  : value\n", "alias"),
+            ("anchor-seq.yml", "- ? &shared key\n  : value\n", "anchor"),
+            ("tag-seq.yml", "- ? !custom key\n  : value\n", "custom tag"),
+            ("merge-seq.yml", "- ? <<\n  : value\n", "merge key"),
         ] {
             let root = TempRoot::new();
             root.write(name, text);
@@ -772,8 +754,7 @@ mod tests {
     #[test]
     fn accepts_bounded_flow_yaml_and_reports_flow_records() {
         let root = TempRoot::new();
-        root.write("flow.yml", "value: [{a: 1}, {b: [2, 3]}]\
-");
+        root.write("flow.yml", "value: [{a: 1}, {b: [2, 3]}]\n");
         let report = guard_inputs(&root.path, &[yaml("flow.yml")]).unwrap();
         assert!(report.records >= 7);
         assert!(report.max_depth >= 4);
