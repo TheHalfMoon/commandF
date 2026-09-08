@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: read
     steps:
       - name: Checkout canonical base
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 / Node 24
@@ -35,6 +34,4 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Run canonical-base AF-02 gate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: bash "${GITHUB_WORKSPACE}/base/.github/scripts/run_af02_base_verifier.sh" "${GITHUB_WORKSPACE}/base" "${GITHUB_WORKSPACE}/candidate"
