@@ -1,3 +1,4 @@
+pub mod enforcement;
 pub mod input_guard;
 pub mod semantic;
 
@@ -289,6 +290,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let policy = parse_waiver_policy(&fs::read(policy_path)?)?;
             let value = serde_json::to_value(policy)?;
+            std::io::Write::write_all(
+                &mut std::io::stdout().lock(),
+                &canonical_json_bytes(&value)?,
+            )?;
+        }
+        "parse-enforcement-inventory" => {
+            let inventory_path =
+                PathBuf::from(args.next().ok_or("missing enforcement inventory path")?);
+            let schema_path =
+                PathBuf::from(args.next().ok_or("missing enforcement inventory schema path")?);
+            if args.next().is_some() {
+                return Err(
+                    "parse-enforcement-inventory accepts exactly an inventory path and schema path"
+                        .into(),
+                );
+            }
+            let inventory = enforcement::parse_frozen_enforcement_inventory(
+                &fs::read(inventory_path)?,
+                &fs::read(schema_path)?,
+            )?;
+            let value = serde_json::to_value(inventory)?;
             std::io::Write::write_all(
                 &mut std::io::stdout().lock(),
                 &canonical_json_bytes(&value)?,
