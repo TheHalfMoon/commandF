@@ -1,0 +1,17 @@
+[workspace]
+members = []
+resolver = "2"
+
+[workspace.dependencies]
+libfuzzer-sys = "=0.4.13"
+arbitrary = { version = "=1.4.2", features = ["derive"] }
+proptest = "=1.11.0"
+
+[workspace.metadata.commandf.af02]
+stack = "A1"
+task = "T030"
+cargo-fuzz-version = "0.13.2"
+cargo-fuzz-upstream-commit = "984c861c8dfea28055254c5f1d2659ab2cd63f76"
+fuzz-toolchain = "nightly-2026-08-25"
+product-toolchain = "1.97.1"
+target = "x86_64-unknown-linux-gnu"
