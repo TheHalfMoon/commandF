@@ -400,6 +400,15 @@ fn t026_runtime_parent_is_pinned_offline_read_only_and_invokes_base_binary_only(
     assert!(workflow.contains("GIT_CONFIG_KEY_0: safe.directory"));
     assert!(workflow.contains("GIT_CONFIG_VALUE_0: ${{ github.workspace }}/base"));
     assert!(workflow.contains("Restore canonical checkout ownership"));
+    assert!(workflow.contains(
+        "      - name: Restore canonical checkout ownership\n        if: always()"
+    ));
+    assert!(workflow.contains(
+        "sudo chown \"$(id -u):$(id -g)\" \"${BASE_ROOT}\""
+    ));
+    assert!(workflow.contains(
+        "sudo chown -R \"$(id -u):$(id -g)\" \"${BASE_ROOT}/.git\""
+    ));
     assert!(!workflow.contains("GIT_CONFIG_VALUE_0: *"));
     assert!(!workflow.contains("docker run --rm --pull=never"));
 }
