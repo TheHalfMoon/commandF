@@ -76,6 +76,18 @@
         }
       }
     },
+    ".github/workflows/af02-base-verifier.yml": {
+      "jobs": {
+        "af02-base-verifier": {
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "runner": "ubuntu-24.04",
+          "timeout_minutes": 15
+        }
+      }
+    },
     ".github/workflows/cf06-oracle.yml": {
       "jobs": {
         "oracle-changed-profile": {
