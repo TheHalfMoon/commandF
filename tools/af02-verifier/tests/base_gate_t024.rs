@@ -35,7 +35,7 @@ fn base_gate_runner_self_test_passes() {
         "self-test schema must remain versioned"
     );
     assert_eq!(value["result"], "PASS");
-    assert_eq!(value["test_count"], 7);
+    assert_eq!(value["test_count"], 8);
 }
 
 #[test]
