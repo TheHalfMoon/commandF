@@ -92,7 +92,7 @@ fn canonical_base_identity_records_full_verifier_schema_inventory_and_workflow_t
 }
 
 #[test]
-fn authority_triggering_is_universal_across_frozen_surfaces() {
+fn authority_triggering_is_universal_and_existing_authority_fails_closed() {
     let cases = [
         ".github/required-checks.json",
         ".github/scripts/run_af02_base_verifier.sh",
@@ -107,11 +107,12 @@ fn authority_triggering_is_universal_across_frozen_surfaces() {
     for path in cases {
         let candidate = candidate_root("universal");
         copy_from_base(&candidate, path);
-        let proof = verify(&candidate, vec![changed("modified", path, None)])
-            .unwrap_or_else(|error| panic!("authority path {path} must classify: {error}"));
-        assert_eq!(proof.mode, "AUTHORITY_VERIFICATION_REQUIRED", "{path}");
-        assert_eq!(proof.authority_paths, vec![path.to_owned()]);
-        assert!(!proof.candidate_code_executed);
+        let error = verify(&candidate, vec![changed("modified", path, None)])
+            .expect_err("existing canonical authority must be classified and rejected");
+        assert!(
+            error.contains("canonical-base AF-02 authority is immutable"),
+            "authority path {path} was not rejected by the canonical immutability gate: {error}"
+        );
         fs::remove_dir_all(candidate).expect("remove isolated candidate root");
     }
 }
@@ -123,7 +124,8 @@ fn frozen_future_verifier_path_is_known_but_never_executed() {
     write_candidate(&candidate, path, b"pub fn run_replay() {}\n");
     let proof = verify(&candidate, vec![changed("added", path, None)])
         .expect("frozen future implementation path should be known authority data");
-    assert_eq!(proof.mode, "AUTHORITY_VERIFICATION_REQUIRED");
+    assert_eq!(proof.mode, "FUTURE_AUTHORITY_ADDITION_VERIFIED");
+    assert_eq!(proof.authority_paths, vec![path.to_owned()]);
     assert!(!proof.candidate_code_executed);
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
 }
@@ -156,7 +158,7 @@ fn unknown_authority_path_fails_closed() {
 }
 
 #[test]
-fn malformed_and_duplicate_key_json_authority_fail_closed() {
+fn malformed_and_duplicate_key_json_authority_fail_closed_before_immutability_decision() {
     for (label, bytes) in [
         ("malformed", b"{not-json".as_slice()),
         ("duplicate", br#"{"duplicate":1,"duplicate":2}"#.as_slice()),
@@ -174,16 +176,15 @@ fn malformed_and_duplicate_key_json_authority_fail_closed() {
 }
 
 #[test]
-fn canonical_yaml_authority_uses_hardened_parser_instead_of_bypassing_it() {
+fn canonical_yaml_authority_is_parsed_then_rejected_as_existing_authority() {
     let candidate = candidate_root("yaml");
     copy_from_base(&candidate, ".github/workflows/ci.yml");
-    let proof = verify(
+    let error = verify(
         &candidate,
         vec![changed("modified", ".github/workflows/ci.yml", None)],
     )
-    .expect("canonical-shaped YAML authority should pass hardened input parsing");
-    assert_eq!(proof.mode, "AUTHORITY_VERIFICATION_REQUIRED");
-    assert!(!proof.candidate_code_executed);
+    .expect_err("existing YAML authority must not self-green after hardened parsing");
+    assert!(error.contains("canonical-base AF-02 authority is immutable"));
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
 }
 
@@ -240,7 +241,27 @@ fn t026_base_ref_swap_is_rejected_before_candidate_parsing() {
 }
 
 #[test]
-fn t026_candidate_verifier_substitution_is_data_only_and_has_no_execution_side_effect() {
+fn t026_coordinated_base_identity_substitution_is_rejected_against_local_git_truth() {
+    let base = repo_root();
+    let candidate = candidate_root("coordinated-base-swap");
+    let mut input = test_gate_input(&base, vec![changed("modified", "README.md", None)])
+        .expect("build trusted gate input");
+    let forged_sha = "3333333333333333333333333333333333333333".to_owned();
+    let forged_tree = "4444444444444444444444444444444444444444".to_owned();
+    input.base_sha = forged_sha.clone();
+    input.base_tree = forged_tree.clone();
+    input.base_identity.base_sha = forged_sha;
+    input.base_identity.base_tree = forged_tree;
+    let bytes = serde_json::to_vec(&input).expect("serialize coordinated forged gate input");
+    let error = verify_pr(&base, &candidate, &bytes)
+        .expect_err("coordinated base identity substitution must fail")
+        .to_string();
+    assert!(error.contains("locally observed canonical base"));
+    fs::remove_dir_all(candidate).expect("remove isolated candidate root");
+}
+
+#[test]
+fn t026_candidate_verifier_substitution_is_rejected_and_never_executed() {
     let candidate = candidate_root("substitution");
     let marker = candidate.join("candidate-executed.marker");
     let malicious = format!(
@@ -252,13 +273,12 @@ fn t026_candidate_verifier_substitution_is_data_only_and_has_no_execution_side_e
         "tools/af02-verifier/src/main.rs",
         malicious.as_bytes(),
     );
-    let proof = verify(
+    let error = verify(
         &candidate,
         vec![changed("modified", "tools/af02-verifier/src/main.rs", None)],
     )
-    .expect("candidate verifier substitution is inspected as bytes only");
-    assert_eq!(proof.mode, "AUTHORITY_VERIFICATION_REQUIRED");
-    assert!(!proof.candidate_code_executed);
+    .expect_err("candidate verifier substitution must fail closed");
+    assert!(error.contains("canonical-base AF-02 authority is immutable"));
     assert!(!marker.exists(), "candidate verifier content must never execute");
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
 }
