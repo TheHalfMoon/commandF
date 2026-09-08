@@ -82,7 +82,7 @@ fn authority_triggering_is_universal_across_frozen_surfaces() {
         ".github/required-checks.json",
         ".github/scripts/run_af02_base_verifier.sh",
         ".github/workflows/ci.yml",
-        "donors/CF_06-RUSTSEC-0001/manifest.json",
+        "donors/af-02-adversarial-testing.yaml",
         "specs/016-af-02-adversarial-test-strength/semantic-contract.json",
         "tools/af02-verifier/src/main.rs",
         "tools/af02-verifier/src/replay.rs",
