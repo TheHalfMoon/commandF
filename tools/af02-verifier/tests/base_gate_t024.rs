@@ -43,7 +43,7 @@ fn pull_request_target_workflow_is_base_controlled_and_read_only() {
     let root = repo_root();
     let workflow = fs::read_to_string(root.join(WORKFLOW)).expect("read AF-02 base workflow");
 
-    assert!(workflow.contains("  pull_request_target:\n"));
+    assert!(workflow.contains("  pull_request_target: # zizmor: ignore[dangerous-triggers] canonical-base gate; candidate code is data-only and never executed\n"));
     assert!(!workflow.contains("  pull_request:\n"));
     assert!(!workflow.contains("    paths:\n"));
     assert_eq!(workflow.matches("uses: actions/checkout@").count(), 2);
