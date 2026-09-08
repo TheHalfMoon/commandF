@@ -5,7 +5,6 @@ use std::process::Command;
 
 use commandf_af02_verifier::canonical::{git_blob_sha1_hex, parse_json_no_duplicates};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use thiserror::Error;
 
 use crate::input_guard::{guard_inputs, CandidateFormat, CandidateInput};
@@ -189,10 +188,11 @@ pub fn verify_pr(
         if current_protected && !known.contains(&current) {
             return contract(format!("unknown AF-02 authority path {current}"));
         }
-        if let Some(previous_path) = previous.as_deref() {
-            if previous_protected && !known.contains(previous_path) {
-                return contract(format!("unknown prior AF-02 authority path {previous_path}"));
-            }
+        if let Some(previous_path) = previous.as_deref()
+            && previous_protected
+            && !known.contains(previous_path)
+        {
+            return contract(format!("unknown prior AF-02 authority path {previous_path}"));
         }
 
         if changed.status == "renamed" && (current_protected || previous_protected) {
@@ -217,10 +217,10 @@ pub fn verify_pr(
                 ));
             }
         }
-        if let Some(previous_path) = previous {
-            if previous_protected {
-                authority_paths.insert(previous_path);
-            }
+        if let Some(previous_path) = previous
+            && previous_protected
+        {
+            authority_paths.insert(previous_path);
         }
     }
 
