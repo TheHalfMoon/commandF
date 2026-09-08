@@ -39,14 +39,11 @@ fn af02_t030_fuzz_workspace_is_isolated_and_pinned() {
     assert!(fuzz_manifest.contains("members = []"));
     assert!(fuzz_manifest.contains("resolver = \"2\""));
     assert!(fuzz_manifest.contains("libfuzzer-sys = \"=0.4.13\""));
-    assert!(
-        fuzz_manifest.contains("arbitrary = { version = \"=1.4.2\", features = [\"derive\"] }")
-    );
+    assert!(fuzz_manifest.contains("arbitrary = { version = \"=1.4.2\", features = [\"derive\"] }"));
     assert!(fuzz_manifest.contains("proptest = \"=1.11.0\""));
     assert!(fuzz_manifest.contains("cargo-fuzz-version = \"0.13.2\""));
-    assert!(fuzz_manifest.contains(
-        "cargo-fuzz-upstream-commit = \"984c861c8dfea28055254c5f1d2659ab2cd63f76\""
-    ));
+    assert!(fuzz_manifest
+        .contains("cargo-fuzz-upstream-commit = \"984c861c8dfea28055254c5f1d2659ab2cd63f76\""));
     assert!(fuzz_manifest.contains("fuzz-toolchain = \"nightly-2026-08-25\""));
     assert!(fuzz_manifest.contains("product-toolchain = \"1.97.1\""));
     assert!(fuzz_manifest.contains("target = \"x86_64-unknown-linux-gnu\""));
