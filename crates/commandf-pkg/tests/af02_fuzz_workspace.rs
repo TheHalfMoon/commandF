@@ -72,7 +72,6 @@ fn af02_t031_archive_package_raw_fuzzer_is_bounded_and_uses_product_seams() {
     assert!(fuzz_manifest.contains("cargo-fuzz = true"));
     assert!(fuzz_manifest.contains("commandf-pkg = { path = \"../crates/commandf-pkg\" }"));
     assert!(fuzz_manifest.contains("libfuzzer-sys = { workspace = true }"));
-    assert!(fuzz_manifest.contains("task = \"T031\""));
     assert!(fuzz_manifest.contains("name = \"archive_package_raw\""));
     assert!(fuzz_manifest.contains("path = \"fuzz_targets/archive_package_raw.rs\""));
 
@@ -84,4 +83,62 @@ fn af02_t031_archive_package_raw_fuzzer_is_bounded_and_uses_product_seams() {
     assert!(target.contains("fs::remove_dir_all("));
     assert!(!target.contains("read_manifest("));
     assert!(!target.contains("commandf_pkg::archive"));
+}
+
+#[test]
+fn af02_t032_lockfile_raw_and_structured_properties_bind_independent_model() {
+    let root = repo_root();
+    let fuzz_manifest =
+        fs::read_to_string(root.join("fuzz/Cargo.toml")).expect("read isolated fuzz manifest");
+    let raw_target = fs::read_to_string(root.join("fuzz/fuzz_targets/lockfile_raw.rs"))
+        .expect("read lockfile raw target");
+    let property = fs::read_to_string(root.join("fuzz/tests/lockfile_v2_properties.rs"))
+        .expect("read Lockfile V2 property suite");
+    let model = fs::read_to_string(root.join("tests/assurance/af02_models/lockfile_v2.rs"))
+        .expect("read independent Lockfile V2 model");
+
+    assert!(fuzz_manifest.contains("task = \"T032\""));
+    assert!(fuzz_manifest.contains("proptest = { workspace = true }"));
+    assert!(fuzz_manifest.contains("name = \"lockfile_raw\""));
+    assert!(fuzz_manifest.contains("path = \"fuzz_targets/lockfile_raw.rs\""));
+    assert!(raw_target.contains("const MAX_INPUT_BYTES: usize = 256 * 1024;"));
+    assert!(raw_target.contains("Lockfile::from_slice(data)"));
+
+    assert!(property.contains("PROP-LOCKFILE-V2-001"));
+    assert!(property.contains("ProptestConfig::with_cases(CASE_COUNT)"));
+    assert!(property.contains("CASE_COUNT: u32 = 256"));
+    assert!(property.contains("../../tests/assurance/af02_models/lockfile_v2.rs"));
+    assert!(property.contains("model_validate(&case)"));
+    assert!(property.contains("product_accepts(&case)"));
+
+    for forbidden in [
+        "commandf_pkg",
+        "Lockfile::validate_v2",
+        "Lockfile::new_v2",
+        "Lockfile::to_bytes",
+        "Lockfile::from_slice",
+    ] {
+        assert!(
+            !model.contains(forbidden),
+            "independent model must not reuse product validator API: {forbidden}"
+        );
+    }
+    for class in [
+        "UnsortedRoots",
+        "DuplicateRoot",
+        "UnsortedPackages",
+        "DuplicatePackageIdentity",
+        "UnsortedEdges",
+        "DuplicateEdge",
+        "MissingSourcePackage",
+        "MissingTargetPackage",
+        "EmptyConstraint",
+        "UndeclaredDependency",
+        "ConstraintMismatch",
+        "UnsatisfiedTargetVersion",
+        "MultipleTargetsForDependency",
+        "MissingResolvedEdge",
+    ] {
+        assert!(model.contains(class), "missing frozen invalidity class {class}");
+    }
 }
