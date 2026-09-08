@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PurePosixPath};
+use std::path::Path;
 use std::process::Command;
 
 use commandf_af02_verifier::canonical::parse_json_no_duplicates;
@@ -167,8 +167,9 @@ fn parse_inventory(base_root: &Path) -> Result<EnforcementInventory, BaseGateErr
     let bytes = fs::read(&path).map_err(|error| io_error(&path, error))?;
     let value = parse_json_no_duplicates(&bytes)
         .map_err(|error| BaseGateError::Json(format!("canonical enforcement inventory: {error}")))?;
-    let inventory: EnforcementInventory = serde_json::from_value(value)
-        .map_err(|error| BaseGateError::Json(format!("canonical enforcement inventory shape: {error}")))?;
+    let inventory: EnforcementInventory = serde_json::from_value(value).map_err(|error| {
+        BaseGateError::Json(format!("canonical enforcement inventory shape: {error}"))
+    })?;
     if inventory.schema != "commandf.af02-enforcement-inventory/v1"
         || inventory.policy_status != "PLANNING_FREEZE"
         || inventory.closure_rule
@@ -242,14 +243,12 @@ fn verify_structured_candidate(candidate_root: &Path, path: &str) -> Result<(), 
     };
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return contract(format!(
-            "structured candidate authority {} is not a regular file",
-            path
+            "structured candidate authority {path} is not a regular file"
         ));
     }
     if metadata.len() > MAX_AUTHORITY_BYTES {
         return contract(format!(
-            "structured candidate authority {} exceeds bounded byte policy",
-            path
+            "structured candidate authority {path} exceeds bounded byte policy"
         ));
     }
     let bytes = fs::read(&candidate).map_err(|error| io_error(&candidate, error))?;
@@ -271,24 +270,23 @@ fn verify_structured_candidate(candidate_root: &Path, path: &str) -> Result<(), 
 }
 
 fn is_authority_path(path: &str) -> bool {
-    AUTHORITY_EXACT.contains(&path) || AUTHORITY_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+    AUTHORITY_EXACT.contains(&path)
+        || AUTHORITY_PREFIXES
+            .iter()
+            .any(|prefix| path.starts_with(prefix))
 }
 
 fn normalize_repo_path(raw: &str) -> Result<String, BaseGateError> {
-    if raw.is_empty() || raw.contains('\0') || raw.contains('\\') || raw.len() > 4096 {
-        return contract("changed path is empty, oversized, or contains prohibited characters");
-    }
-    let path = PurePosixPath::new(raw);
-    if path.is_absolute()
+    if raw.is_empty()
+        || raw.contains('\0')
+        || raw.contains('\\')
+        || raw.len() > 4096
         || raw.starts_with('/')
-        || path
-            .components()
-            .any(|component| matches!(component, std::path::Component::ParentDir | std::path::Component::CurDir))
+        || raw.split('/').any(|part| part.is_empty() || part == "." || part == "..")
     {
-        return contract(format!("changed path is not canonical repository-relative POSIX form: {raw}"));
-    }
-    if path.to_string_lossy() != raw {
-        return contract(format!("changed path is not canonical POSIX form: {raw}"));
+        return contract(format!(
+            "changed path is not canonical repository-relative POSIX form: {raw}"
+        ));
     }
     Ok(raw.to_owned())
 }
@@ -317,7 +315,8 @@ fn git_tree_blobs(
         if object_type != Some("blob") || fields.next().is_some() {
             return contract(format!("schema authority {path} is not a Git blob"));
         }
-        let sha = sha.ok_or_else(|| BaseGateError::Git("git ls-tree omitted blob SHA".to_owned()))?;
+        let sha =
+            sha.ok_or_else(|| BaseGateError::Git("git ls-tree omitted blob SHA".to_owned()))?;
         validate_git_sha(sha, path)?;
         blobs.insert(normalize_repo_path(path)?, sha.to_owned());
     }
@@ -333,8 +332,7 @@ fn git_output(base_root: &Path, args: &[&str]) -> Result<String, BaseGateError> 
         .map_err(|error| BaseGateError::Git(format!("cannot execute Git: {error}")))?;
     if !output.status.success() {
         return Err(BaseGateError::Git(format!(
-            "git {:?} failed: {}",
-            args,
+            "git {args:?} failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
@@ -344,8 +342,14 @@ fn git_output(base_root: &Path, args: &[&str]) -> Result<String, BaseGateError> 
 }
 
 fn validate_git_sha(value: &str, label: &str) -> Result<(), BaseGateError> {
-    if value.len() != 40 || !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-        return contract(format!("{label} Git identity is not lowercase 40-hex"));
+    if value.len() != 40
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return contract(format!(
+            "{label} Git identity is not lowercase 40-hex"
+        ));
     }
     Ok(())
 }
