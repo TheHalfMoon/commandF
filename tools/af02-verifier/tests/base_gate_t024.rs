@@ -49,10 +49,11 @@ fn pull_request_target_workflow_is_base_controlled_and_read_only() {
     assert_eq!(workflow.matches("uses: actions/checkout@").count(), 2);
     assert_eq!(workflow.matches("persist-credentials: false").count(), 2);
     assert!(workflow.contains("      contents: read\n"));
-    assert!(workflow.contains("      pull-requests: read\n"));
+    assert!(!workflow.contains("pull-requests:"));
     assert!(!workflow.contains("contents: write"));
-    assert!(!workflow.contains("pull-requests: write"));
     assert!(!workflow.contains("checks: write"));
+    assert!(!workflow.contains("GITHUB_TOKEN"));
+    assert!(!workflow.contains("github.token"));
     assert!(workflow.contains("path: base\n"));
     assert!(workflow.contains("path: candidate\n"));
     assert!(workflow.contains(
@@ -62,13 +63,16 @@ fn pull_request_target_workflow_is_base_controlled_and_read_only() {
 }
 
 #[test]
-fn base_gate_runner_has_no_candidate_execution_escape_hatch() {
+fn base_gate_runner_has_no_candidate_execution_or_token_escape_hatch() {
     let root = repo_root();
     let runner = fs::read_to_string(root.join(RUNNER)).expect("read AF-02 base runner");
 
     assert!(runner.starts_with("#!/usr/bin/env bash\nset -euo pipefail\n"));
     assert!(runner.contains("\"candidate_code_executed\": False"));
     assert!(runner.contains("git_head(candidate_root)"));
+    assert!(runner.contains("GITHUB_API_ROOT = \"https://api.github.com\""));
+    assert!(!runner.contains("GITHUB_TOKEN"));
+    assert!(!runner.contains("Authorization"));
     assert!(!runner.contains("cargo run"));
     assert!(!runner.contains("cargo build"));
     assert!(!runner.contains("eval "));
