@@ -324,13 +324,13 @@ fn validate_manifest(manifest: &CorpusManifest) -> Result<(), CorpusError> {
         if let Some(parent) = &entry.parent_scenario_id_or_null {
             validate_id(parent, "parent_scenario_id_or_null")?;
         }
-        if let Some(tool) = &entry.minimization_tool_or_null {
-            if tool.is_empty() || tool.len() > 160 {
-                return Err(CorpusError::Contract(format!(
-                    "scenario {} has invalid minimization tool identity",
-                    entry.scenario_id
-                )));
-            }
+        if let Some(tool) = &entry.minimization_tool_or_null
+            && (tool.is_empty() || tool.len() > 160)
+        {
+            return Err(CorpusError::Contract(format!(
+                "scenario {} has invalid minimization tool identity",
+                entry.scenario_id
+            )));
         }
         if !scenarios.insert(entry.scenario_id.as_str()) {
             return Err(CorpusError::Contract(format!(

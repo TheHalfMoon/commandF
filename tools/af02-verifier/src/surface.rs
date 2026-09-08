@@ -704,14 +704,14 @@ impl ScannerVisitor<'_> {
     }
 
     fn invalidate_assignment(&mut self, assign: &ExprAssign) {
-        if let Expr::Path(path) = assign.left.as_ref() {
-            if path.path.segments.len() == 1 {
-                let name = path.path.segments[0].ident.to_string();
-                for scope in self.bindings.iter_mut().rev() {
-                    if let Some(binding) = scope.get_mut(&name) {
-                        *binding = Binding::Unknown;
-                        break;
-                    }
+        if let Expr::Path(path) = assign.left.as_ref()
+            && path.path.segments.len() == 1
+        {
+            let name = path.path.segments[0].ident.to_string();
+            for scope in self.bindings.iter_mut().rev() {
+                if let Some(binding) = scope.get_mut(&name) {
+                    *binding = Binding::Unknown;
+                    break;
                 }
             }
         }
@@ -839,16 +839,16 @@ fn receiver_ownership(
         return Ownership::Different;
     }
 
-    if let Expr::Path(path) = receiver {
-        if path.path.segments.len() == 1 {
-            let name = path.path.segments[0].ident.to_string();
-            if let Some(binding) = bindings.iter().rev().find_map(|scope| scope.get(&name)) {
-                return match binding {
-                    Binding::Known(path) if expected.contains(path) => Ownership::Expected,
-                    Binding::Known(_) => Ownership::Different,
-                    Binding::Unknown => Ownership::Unknown,
-                };
-            }
+    if let Expr::Path(path) = receiver
+        && path.path.segments.len() == 1
+    {
+        let name = path.path.segments[0].ident.to_string();
+        if let Some(binding) = bindings.iter().rev().find_map(|scope| scope.get(&name)) {
+            return match binding {
+                Binding::Known(path) if expected.contains(path) => Ownership::Expected,
+                Binding::Known(_) => Ownership::Different,
+                Binding::Unknown => Ownership::Unknown,
+            };
         }
     }
     Ownership::Unknown

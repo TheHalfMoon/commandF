@@ -771,10 +771,10 @@ pub fn validate_coverage_accounting(
         if entry.covered > entry.total {
             return contract_error(format!("coverage arithmetic invalid for {}", entry.path));
         }
-        if let Some(surface_id) = entry.surface_id.as_deref() {
-            if !observed_surfaces.insert(surface_id) {
-                return contract_error(format!("coverage surface overlap {surface_id}"));
-            }
+        if let Some(surface_id) = entry.surface_id.as_deref()
+            && !observed_surfaces.insert(surface_id)
+        {
+            return contract_error(format!("coverage surface overlap {surface_id}"));
         }
     }
     if observed_paths != expected_paths_set {
@@ -1303,15 +1303,15 @@ fn validate_schema_node(
         })?;
         return validate_schema_node(instance, target, root, path);
     }
-    if let Some(expected) = schema.get("const") {
-        if instance != expected {
-            return contract_error(format!("{path}: value differs from schema const"));
-        }
+    if let Some(expected) = schema.get("const")
+        && instance != expected
+    {
+        return contract_error(format!("{path}: value differs from schema const"));
     }
-    if let Some(values) = schema.get("enum").and_then(Value::as_array) {
-        if !values.contains(instance) {
-            return contract_error(format!("{path}: value is outside schema enum"));
-        }
+    if let Some(values) = schema.get("enum").and_then(Value::as_array)
+        && !values.contains(instance)
+    {
+        return contract_error(format!("{path}: value is outside schema enum"));
     }
     if let Some(all_of) = schema.get("allOf").and_then(Value::as_array) {
         for child in all_of {
@@ -1327,10 +1327,10 @@ fn validate_schema_node(
             return contract_error(format!("{path}: oneOf matched {matches} branches"));
         }
     }
-    if let Some(not_schema) = schema.get("not") {
-        if validate_schema_node(instance, not_schema, root, path).is_ok() {
-            return contract_error(format!("{path}: value matches prohibited schema"));
-        }
+    if let Some(not_schema) = schema.get("not")
+        && validate_schema_node(instance, not_schema, root, path).is_ok()
+    {
+        return contract_error(format!("{path}: value matches prohibited schema"));
     }
     if let Some(condition) = schema.get("if") {
         let condition_matches = validate_schema_node(instance, condition, root, path).is_ok();
@@ -1385,15 +1385,15 @@ fn validate_schema_node(
         }
     }
     if let Some(array) = instance.as_array() {
-        if let Some(min_items) = schema.get("minItems").and_then(Value::as_u64) {
-            if array.len() < min_items as usize {
-                return contract_error(format!("{path}: array is shorter than minItems"));
-            }
+        if let Some(min_items) = schema.get("minItems").and_then(Value::as_u64)
+            && array.len() < min_items as usize
+        {
+            return contract_error(format!("{path}: array is shorter than minItems"));
         }
-        if let Some(max_items) = schema.get("maxItems").and_then(Value::as_u64) {
-            if array.len() > max_items as usize {
-                return contract_error(format!("{path}: array is longer than maxItems"));
-            }
+        if let Some(max_items) = schema.get("maxItems").and_then(Value::as_u64)
+            && array.len() > max_items as usize
+        {
+            return contract_error(format!("{path}: array is longer than maxItems"));
         }
         if schema.get("uniqueItems") == Some(&Value::Bool(true)) {
             for index in 0..array.len() {
@@ -1425,20 +1425,20 @@ fn validate_schema_node(
     }
     if let Some(text) = instance.as_str() {
         let chars = text.chars().count() as u64;
-        if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64) {
-            if chars < minimum {
-                return contract_error(format!("{path}: string is shorter than minLength"));
-            }
+        if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64)
+            && chars < minimum
+        {
+            return contract_error(format!("{path}: string is shorter than minLength"));
         }
-        if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64) {
-            if chars > maximum {
-                return contract_error(format!("{path}: string is longer than maxLength"));
-            }
+        if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64)
+            && chars > maximum
+        {
+            return contract_error(format!("{path}: string is longer than maxLength"));
         }
-        if let Some(pattern) = schema.get("pattern").and_then(Value::as_str) {
-            if !known_pattern_matches(pattern, text)? {
-                return contract_error(format!("{path}: string does not match schema pattern"));
-            }
+        if let Some(pattern) = schema.get("pattern").and_then(Value::as_str)
+            && !known_pattern_matches(pattern, text)?
+        {
+            return contract_error(format!("{path}: string does not match schema pattern"));
         }
         if let Some(format) = schema.get("format").and_then(Value::as_str) {
             match format {
@@ -1452,15 +1452,15 @@ fn validate_schema_node(
         }
     }
     if let Some(value) = integer_value(instance) {
-        if let Some(minimum) = schema.get("minimum").and_then(integer_value) {
-            if value < minimum {
-                return contract_error(format!("{path}: integer is below minimum"));
-            }
+        if let Some(minimum) = schema.get("minimum").and_then(integer_value)
+            && value < minimum
+        {
+            return contract_error(format!("{path}: integer is below minimum"));
         }
-        if let Some(maximum) = schema.get("maximum").and_then(integer_value) {
-            if value > maximum {
-                return contract_error(format!("{path}: integer exceeds maximum"));
-            }
+        if let Some(maximum) = schema.get("maximum").and_then(integer_value)
+            && value > maximum
+        {
+            return contract_error(format!("{path}: integer exceeds maximum"));
         }
     }
     Ok(())
