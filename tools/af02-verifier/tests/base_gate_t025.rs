@@ -84,12 +84,9 @@ fn canonical_base_identity_records_full_verifier_schema_inventory_and_workflow_t
             "canonical verifier identity must bind {required}"
         );
     }
-    assert!(
-        proof.schema_blobs.contains_key(
-            "specs/016-af-02-adversarial-test-strength/schemas/af02-enforcement-inventory-v1.schema.json"
-        ),
-        "frozen enforcement-inventory schema must be bound by Git blob identity"
-    );
+    assert!(proof.schema_blobs.contains_key(
+        "specs/016-af-02-adversarial-test-strength/schemas/af02-enforcement-inventory-v1.schema.json"
+    ));
     assert!(proof.verifier_blobs.values().all(|sha| sha.len() == 40));
     assert!(proof.schema_blobs.values().all(|sha| sha.len() == 40));
 }
@@ -231,11 +228,8 @@ fn t026_authority_rename_and_removal_fail_closed() {
 fn t026_base_ref_swap_is_rejected_before_candidate_parsing() {
     let base = repo_root();
     let candidate = candidate_root("base-swap");
-    let mut input = test_gate_input(
-        &base,
-        vec![changed("modified", "README.md", None)],
-    )
-    .expect("build trusted gate input");
+    let mut input = test_gate_input(&base, vec![changed("modified", "README.md", None)])
+        .expect("build trusted gate input");
     input.base_sha = "2222222222222222222222222222222222222222".to_owned();
     let bytes = serde_json::to_vec(&input).expect("serialize forged gate input");
     let error = verify_pr(&base, &candidate, &bytes)
@@ -369,9 +363,13 @@ fn t026_runtime_parent_is_pinned_offline_read_only_and_invokes_base_binary_only(
     assert!(!runner.contains("/workspace/candidate/target/"));
     assert!(!runner.contains("candidate/.github/scripts/"));
 
+    assert!(workflow.contains(
+        "uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5"
+    ));
+    assert!(workflow.contains("toolchain: 1.97.1"));
+    assert!(workflow.contains(
+        "cargo build --locked --release --manifest-path \"${GITHUB_WORKSPACE}/base/tools/af02-verifier/Cargo.toml\" --target-dir \"${GITHUB_WORKSPACE}/base/target/af02-verifier\""
+    ));
     assert!(workflow.contains("docker pull \"docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f\""));
-    assert!(workflow.contains("docker run --rm --pull=never"));
-    assert!(workflow.contains("--mount \"type=bind,src=${GITHUB_WORKSPACE}/base,dst=/workspace\""));
-    assert!(workflow.contains("--workdir /workspace/tools/af02-verifier"));
-    assert!(workflow.contains("cargo build --locked --release --target-dir /workspace/target/af02-verifier"));
+    assert!(!workflow.contains("docker run --rm --pull=never"));
 }
