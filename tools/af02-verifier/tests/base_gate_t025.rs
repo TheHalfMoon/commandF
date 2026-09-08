@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base_gate::{test_gate_input, verify_pr, ChangedFile};
+use input_guard::canonical_policy_sha256;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -64,6 +65,7 @@ fn canonical_base_identity_records_full_verifier_schema_inventory_and_workflow_t
     let proof = base_gate::prove_base_identity(&repo_root())
         .expect("prove exact canonical-base identities");
 
+    assert_eq!(canonical_policy_sha256().len(), 64);
     assert_eq!(proof.schema, "commandf.af02-base-identity-proof/v1");
     assert_eq!(proof.base_sha.len(), 40);
     assert_eq!(proof.base_tree.len(), 40);
