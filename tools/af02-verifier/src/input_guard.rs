@@ -379,8 +379,7 @@ fn scan_flow_line(
                     FlowFrame::mapping()
                 });
                 let depth = base_depth
-                    .checked_add(u64::try_from(stack.len()).unwrap_or(u64::MAX))
-                    .unwrap_or(u64::MAX);
+                    .saturating_add(u64::try_from(stack.len()).unwrap_or(u64::MAX));
                 stats.max_depth = stats.max_depth.max(depth);
                 if depth > policy.max_depth {
                     return violation(format!(
@@ -414,15 +413,16 @@ fn scan_flow_line(
                 }
             }
             b':' => {
-                if let Some(frame) = stack.last_mut() {
-                    if frame.kind == FlowKind::Mapping && frame.mapping_expects_key_separator {
-                        stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
-                            InputGuardError::Violation(
-                                "candidate YAML flow record count overflow".to_owned(),
-                            )
-                        })?;
-                        frame.mapping_expects_key_separator = false;
-                    }
+                if let Some(frame) = stack.last_mut()
+                    && frame.kind == FlowKind::Mapping
+                    && frame.mapping_expects_key_separator
+                {
+                    stats.flow_records = stats.flow_records.checked_add(1).ok_or_else(|| {
+                        InputGuardError::Violation(
+                            "candidate YAML flow record count overflow".to_owned(),
+                        )
+                    })?;
+                    frame.mapping_expects_key_separator = false;
                 }
             }
             byte if byte.is_ascii_whitespace() => {}
@@ -488,10 +488,10 @@ fn finish_sequence_item(
 
 #[cfg(unix)]
 fn mark_sequence_content(stack: &mut [FlowFrame]) {
-    if let Some(frame) = stack.last_mut() {
-        if frame.kind == FlowKind::Sequence {
-            frame.sequence_has_item = true;
-        }
+    if let Some(frame) = stack.last_mut()
+        && frame.kind == FlowKind::Sequence
+    {
+        frame.sequence_has_item = true;
     }
 }
 
