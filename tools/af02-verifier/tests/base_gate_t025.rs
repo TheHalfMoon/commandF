@@ -290,7 +290,7 @@ fn t026_parser_exhaustion_fails_before_semantic_acceptance() {
     for _ in 0..40 {
         deep.push_str("{\"a\":");
     }
-    deep.push_str("0");
+    deep.push('0');
     for _ in 0..40 {
         deep.push('}');
     }
@@ -316,7 +316,8 @@ fn t026_symlink_authority_fails_closed() {
     use std::os::unix::fs::symlink;
 
     let candidate = candidate_root("symlink");
-    let outside = candidate_root("outside").join("authority.json");
+    let outside_root = candidate_root("outside");
+    let outside = outside_root.join("authority.json");
     fs::write(&outside, b"{}").expect("write outside authority target");
     let target = candidate.join(".github/required-checks.json");
     fs::create_dir_all(target.parent().expect("symlink parent")).expect("create symlink parent");
@@ -328,8 +329,7 @@ fn t026_symlink_authority_fails_closed() {
     .expect_err("symlink authority must fail closed");
     assert!(error.contains("symlink"));
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
-    fs::remove_dir_all(outside.parent().expect("outside parent"))
-        .expect("remove outside fixture root");
+    fs::remove_dir_all(outside_root).expect("remove outside fixture root");
 }
 
 #[test]
@@ -369,7 +369,9 @@ fn t026_runtime_parent_is_pinned_offline_read_only_and_invokes_base_binary_only(
     assert!(!runner.contains("/workspace/candidate/target/"));
     assert!(!runner.contains("candidate/.github/scripts/"));
 
-    assert!(workflow.contains("cargo fetch --locked --manifest-path \"${GITHUB_WORKSPACE}/base/tools/af02-verifier/Cargo.toml\""));
-    assert!(workflow.contains("cargo build --offline --locked --release --manifest-path \"${GITHUB_WORKSPACE}/base/tools/af02-verifier/Cargo.toml\""));
     assert!(workflow.contains("docker pull \"docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f\""));
+    assert!(workflow.contains("docker run --rm --pull=never"));
+    assert!(workflow.contains("--mount \"type=bind,src=${GITHUB_WORKSPACE}/base,dst=/workspace\""));
+    assert!(workflow.contains("--workdir /workspace/tools/af02-verifier"));
+    assert!(workflow.contains("cargo build --locked --release --target-dir /workspace/target/af02-verifier"));
 }
