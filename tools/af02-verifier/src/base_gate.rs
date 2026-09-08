@@ -616,6 +616,19 @@ fn validate_candidate_authority(
     if !structured.is_empty() {
         guard_inputs(candidate_root, &structured)
             .map_err(|error| BaseGateError::Input(error.to_string()))?;
+        for input in &structured {
+            if input.format != CandidateFormat::Json {
+                continue;
+            }
+            let path = candidate_root.join(&input.relative_path);
+            let bytes = fs::read(&path).map_err(|error| io_error(&path, error))?;
+            parse_json_no_duplicates(&bytes).map_err(|error| {
+                BaseGateError::Input(format!(
+                    "candidate JSON {} contains a duplicate key or is otherwise non-canonical: {error}",
+                    input.relative_path.display()
+                ))
+            })?;
+        }
     }
     Ok(())
 }
