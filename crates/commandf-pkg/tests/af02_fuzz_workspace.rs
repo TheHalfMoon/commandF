@@ -97,7 +97,7 @@ fn af02_t032_lockfile_raw_and_structured_properties_bind_independent_model() {
     let model = fs::read_to_string(root.join("tests/assurance/af02_models/lockfile_v2.rs"))
         .expect("read independent Lockfile V2 model");
 
-    assert!(fuzz_manifest.contains("task = \"T032\""));
+    assert!(fuzz_manifest.contains("stack = \"A1\""));
     assert!(fuzz_manifest.contains("proptest = { workspace = true }"));
     assert!(fuzz_manifest.contains("name = \"lockfile_raw\""));
     assert!(fuzz_manifest.contains("path = \"fuzz_targets/lockfile_raw.rs\""));
@@ -143,5 +143,129 @@ fn af02_t032_lockfile_raw_and_structured_properties_bind_independent_model() {
             model.contains(class),
             "missing frozen invalidity class {class}"
         );
+    }
+}
+
+#[test]
+fn af02_t033_adversarial_properties_bind_all_frozen_models() {
+    let root = repo_root();
+    let fuzz_manifest =
+        fs::read_to_string(root.join("fuzz/Cargo.toml")).expect("read isolated fuzz manifest");
+    let property = fs::read_to_string(root.join("fuzz/tests/adversarial_properties.rs"))
+        .expect("read T033 adversarial property suite");
+
+    assert!(fuzz_manifest.contains("task = \"T033\""));
+    for dependency in [
+        "flate2 = \"=1.1.9\"",
+        "serde_json = \"=1.0.151\"",
+        "sha2 = \"=0.10.9\"",
+        "tar = \"=0.4.46\"",
+    ] {
+        assert!(
+            fuzz_manifest.contains(dependency),
+            "T033 helper dependency must stay pinned to canonical product-lock identity: {dependency}"
+        );
+    }
+
+    for property_id in [
+        "PROP-CANONICAL-REFERENCE-001",
+        "PROP-CONTEXT-GRAPH-ORDER-001",
+        "PROP-GATE-FINGERPRINT-SUPPRESSION-001",
+        "PROP-PORTABLE-PATH-001",
+    ] {
+        assert!(
+            property.contains(property_id),
+            "missing frozen T033 property id {property_id}"
+        );
+    }
+    assert!(property.contains("const CASE_COUNT: u32 = 256;"));
+    assert!(property.contains("ProptestConfig::with_cases(CASE_COUNT)"));
+
+    let models = [
+        (
+            "tests/assurance/af02_models/canonical_reference.rs",
+            &[
+                "commandf_pkg",
+                "parse_canonical_target",
+                "resolve_reference",
+                "TerminologyClosure::resolve_value_set",
+            ][..],
+            &[
+                "EMPTY_TARGET",
+                "EMPTY_TARGET_BEFORE_VERSION",
+                "EMPTY_EXPLICIT_VERSION",
+                "UNKNOWN_URL",
+                "VERSION_WITHOUT_MATCH",
+                "DUPLICATE_CANDIDATE_IDENTITY",
+            ][..],
+        ),
+        (
+            "tests/assurance/af02_models/context_graph_order.rs",
+            &["commandf_pkg", "build_context_graph"][..],
+            &[
+                "PACKAGE_ORDER_PERMUTATION",
+                "ARTIFACT_ORDER_PERMUTATION",
+                "DEPENDENCY_EDGE_ORDER_PERMUTATION",
+                "REFERENCE_ORDER_PERMUTATION",
+                "DUPLICATE_ARTIFACT",
+                "DUPLICATE_EDGE",
+                "DUPLICATE_REFERENCE",
+            ][..],
+        ),
+        (
+            "tests/assurance/af02_models/gate_truth_table.rs",
+            &[
+                "commandf_pkg",
+                "finding_fingerprint_v1",
+                "evaluate_quality_gate",
+                "validate_quality_gate_report",
+                "evaluate_compatibility_policy",
+            ][..],
+            &[
+                "DUPLICATE_CURRENT_FINGERPRINT",
+                "DUPLICATE_BASELINE_FINGERPRINT",
+                "DUPLICATE_SUPPRESSION_FINGERPRINT",
+                "SUPPRESSION_METADATA_MISMATCH",
+                "BASELINE_PACKAGE_MISMATCH",
+                "BASELINE_RULESET_MISMATCH",
+                "FINGERPRINT_FIELD_TAMPER",
+                "DECISION_COUNTER_TAMPER",
+                "UNUSED_SUPPRESSION_TAMPER",
+            ][..],
+        ),
+        (
+            "tests/assurance/af02_models/portable_path.rs",
+            &[
+                "commandf_pkg",
+                "portable_relative_path",
+                "relative_path_to_slash",
+            ][..],
+            &[
+                "EMPTY",
+                "LEADING_SLASH",
+                "UNC_PREFIX",
+                "DRIVE_PREFIX",
+                "EMPTY_COMPONENT",
+                "DOT_COMPONENT",
+                "PARENT_COMPONENT",
+                "DISALLOWED_SINGLE_DOT",
+            ][..],
+        ),
+    ];
+
+    for (path, forbidden_calls, invalidities) in models {
+        let model = fs::read_to_string(root.join(path)).expect("read frozen independent model");
+        for forbidden in forbidden_calls {
+            assert!(
+                !model.contains(forbidden),
+                "{path} must not reuse forbidden product implementation: {forbidden}"
+            );
+        }
+        for invalidity in invalidities {
+            assert!(
+                model.contains(invalidity),
+                "{path} is missing frozen invalidity {invalidity}"
+            );
+        }
     }
 }

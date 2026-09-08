@@ -16,16 +16,24 @@ commandf-pkg = { path = "../crates/commandf-pkg" }
 libfuzzer-sys = { workspace = true }
 
 [dev-dependencies]
+flate2 = { workspace = true }
 proptest = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
 
 [workspace.dependencies]
 libfuzzer-sys = "=0.4.13"
 arbitrary = { version = "=1.4.2", features = ["derive"] }
 proptest = "=1.11.0"
+flate2 = "=1.1.9"
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+tar = "=0.4.46"
 
 [workspace.metadata.commandf.af02]
 stack = "A1"
-task = "T032"
+task = "T033"
 cargo-fuzz-version = "0.13.2"
 cargo-fuzz-upstream-commit = "984c861c8dfea28055254c5f1d2659ab2cd63f76"
 fuzz-toolchain = "nightly-2026-08-25"
