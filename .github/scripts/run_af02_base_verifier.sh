@@ -514,7 +514,11 @@ def verify_container_inspect(inspect: dict) -> dict:
         fail("verifier container does not drop all capabilities")
     if not isinstance(security, list) or not any("no-new-privileges" in item for item in security):
         fail("verifier container omits no-new-privileges")
-    workspace_mount = [item for item in mounts if isinstance(item, dict) and item.get("Destination") == "/workspace"]
+    workspace_mount = [
+        item
+        for item in mounts
+        if isinstance(item, dict) and item.get("Destination") == "/workspace"
+    ]
     if len(workspace_mount) != 1 or workspace_mount[0].get("RW") is not False:
         fail("verifier workspace mount is not uniquely read-only")
     cgroup_v2 = Path("/sys/fs/cgroup/cgroup.controllers").is_file()
@@ -540,7 +544,13 @@ def kill_container(container_id: str) -> None:
     )
 
 
-def run_container_bounded(container_id: str) -> tuple[int, bytes, bytes]:
+def run_container_bounded(container_id: str) -> tuple[int, bytes, bytes, dict]:
+    observation = {
+        "wall_timeout_enforced": False,
+        "stdout_exceeded": False,
+        "stderr_exceeded": False,
+        "termination": "CLEAN_EXIT",
+    }
     try:
         process = subprocess.Popen(
             ["docker", "start", "--attach", container_id],
@@ -555,14 +565,16 @@ def run_container_bounded(container_id: str) -> tuple[int, bytes, bytes]:
     selector.register(process.stderr, selectors.EVENT_READ, "stderr")
     streams = {"stdout": bytearray(), "stderr": bytearray()}
     deadline = time.monotonic() + PARSER_WALL_SECONDS
+    observation["wall_timeout_enforced"] = True
     try:
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
+                observation["termination"] = "WALL_TIMEOUT_KILL"
                 kill_container(container_id)
                 process.kill()
                 process.wait(timeout=5)
-                fail("verifier subprocess exceeded parser wall-time policy")
+                return -1, bytes(streams["stdout"]), bytes(streams["stderr"]), observation
             events = selector.select(timeout=min(0.25, remaining))
             if not events and process.poll() is not None:
                 events = [(key, selectors.EVENT_READ) for key in list(selector.get_map().values())]
@@ -574,26 +586,31 @@ def run_container_bounded(container_id: str) -> tuple[int, bytes, bytes]:
                 bucket = streams[key.data]
                 bucket.extend(chunk)
                 if len(bucket) > STREAM_LIMIT:
+                    observation[f"{key.data}_exceeded"] = True
+                    observation["termination"] = "SEMANTIC_REJECT"
                     kill_container(container_id)
                     process.kill()
                     process.wait(timeout=5)
-                    fail(f"verifier subprocess {key.data} exceeded byte ceiling")
+                    return -1, bytes(streams["stdout"]), bytes(streams["stderr"]), observation
         code = process.wait(timeout=5)
+        if code != 0:
+            observation["termination"] = "SEMANTIC_REJECT"
     finally:
         selector.close()
-    return code, bytes(streams["stdout"]), bytes(streams["stderr"])
+    return code, bytes(streams["stdout"]), bytes(streams["stderr"]), observation
 
 
 def validate_process_evidence(
     binary: Path,
+    expected_binary_sha256: str,
     lock_path: Path,
     identity: dict,
     inspect: dict,
     stdout: bytes,
     stderr: bytes,
+    observation: dict,
 ) -> tuple[dict, str]:
     enforcement = verify_container_inspect(inspect)
-    before_binary = sha256_file(binary)
     after_binary = sha256_file(binary)
     observed_lock_blob = git_blob_sha1_file(lock_path)
     expected_lock_blob = identity["cargo_lock_blob"]
@@ -607,23 +624,23 @@ def validate_process_evidence(
     }
     evidence = {
         "binary_sha256": after_binary,
-        "expected_binary_sha256": before_binary,
+        "expected_binary_sha256": expected_binary_sha256,
         "cargo_lock_blob": observed_lock_blob,
         "expected_cargo_lock_blob": expected_lock_blob,
         "unprivileged": enforcement["unprivileged"],
         "cgroup_v2": enforcement["cgroup_v2"],
-        "wall_timeout_enforced": True,
+        "wall_timeout_enforced": observation["wall_timeout_enforced"],
         "memory_limit_enforced": enforcement["memory_limit_enforced"],
         "pid_limit_enforced": enforcement["pid_limit_enforced"],
         "network_none": enforcement["network_none"],
         "root_read_only": enforcement["root_read_only"],
         "stdout_observed": len(stdout),
         "stdout_limit": STREAM_LIMIT,
-        "stdout_exceeded": len(stdout) > STREAM_LIMIT,
+        "stdout_exceeded": observation["stdout_exceeded"],
         "stderr_observed": len(stderr),
         "stderr_limit": STREAM_LIMIT,
-        "stderr_exceeded": len(stderr) > STREAM_LIMIT,
-        "termination": "CLEAN_EXIT",
+        "stderr_exceeded": observation["stderr_exceeded"],
+        "termination": observation["termination"],
     }
     return evidence, sha256_bytes(canonical_json(cgroup_snapshot).encode("utf-8"))
 
@@ -678,7 +695,7 @@ def main() -> None:
         fail("candidate checkout SHA differs from GitHub event head SHA")
 
     changed_files = github_truth(repository, number, base_sha, head_sha)
-    gate_input_path, identity = write_gate_input(
+    _, identity = write_gate_input(
         base_root, repository, number, base_sha, head_sha, changed_files
     )
 
@@ -689,11 +706,27 @@ def main() -> None:
     if git_blob_sha1_file(lock_path) != identity["cargo_lock_blob"]:
         fail("canonical verifier Cargo.lock bytes differ from Git identity")
 
+    expected_binary_sha256 = sha256_file(binary)
     container_id = ""
     try:
         container_id, inspect = docker_create(base_root.parent)
         enforcement = verify_container_inspect(inspect)
-        code, stdout, stderr = run_container_bounded(container_id)
+        code, stdout, stderr, observation = run_container_bounded(container_id)
+
+        evidence, cgroup_snapshot_sha256 = validate_process_evidence(
+            binary,
+            expected_binary_sha256,
+            lock_path,
+            identity,
+            inspect,
+            stdout,
+            stderr,
+            observation,
+        )
+        evidence_path = base_root / "target/af02-verifier/af02-process-evidence.json"
+        evidence_path.write_text(canonical_json(evidence), encoding="utf-8")
+        run_process_evidence_validator(binary, evidence_path)
+
         if code != 0:
             fail(
                 "canonical verifier rejected candidate: "
@@ -705,13 +738,6 @@ def main() -> None:
             fail(f"canonical verifier returned invalid JSON: {exc}")
         if not isinstance(proof, dict) or proof.get("candidate_code_executed") is not False:
             fail("canonical verifier did not prove candidate-code non-execution")
-
-        evidence, cgroup_snapshot_sha256 = validate_process_evidence(
-            binary, lock_path, identity, inspect, stdout, stderr
-        )
-        evidence_path = base_root / "target/af02-verifier/af02-process-evidence.json"
-        evidence_path.write_text(canonical_json(evidence), encoding="utf-8")
-        run_process_evidence_validator(binary, evidence_path)
 
         print(
             canonical_json(
@@ -731,8 +757,12 @@ def main() -> None:
                         "network_none": enforcement["network_none"],
                         "root_read_only": enforcement["root_read_only"],
                         "unprivileged": enforcement["unprivileged"],
+                        "wall_timeout_enforced": evidence["wall_timeout_enforced"],
                         "stdout_bytes": len(stdout),
+                        "stdout_exceeded": evidence["stdout_exceeded"],
                         "stderr_bytes": len(stderr),
+                        "stderr_exceeded": evidence["stderr_exceeded"],
+                        "termination": evidence["termination"],
                     },
                 }
             )
