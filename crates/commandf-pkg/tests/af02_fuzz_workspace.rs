@@ -71,7 +71,9 @@ fn af02_t031_archive_package_raw_fuzzer_is_bounded_and_uses_product_seams() {
     assert!(fuzz_manifest.contains("name = \"commandf-af02-fuzz\""));
     assert!(fuzz_manifest.contains("cargo-fuzz = true"));
     assert!(fuzz_manifest.contains("commandf-pkg = { path = \"../crates/commandf-pkg\" }"));
-    assert!(fuzz_manifest.contains("libfuzzer-sys = { workspace = true }"));
+    assert!(fuzz_manifest.contains("libfuzzer-sys = { workspace = true, optional = true }"));
+    assert!(fuzz_manifest.contains("fuzzing = [\"dep:libfuzzer-sys\"]"));
+    assert!(fuzz_manifest.contains("required-features = [\"fuzzing\"]"));
     assert!(fuzz_manifest.contains("name = \"archive_package_raw\""));
     assert!(fuzz_manifest.contains("path = \"fuzz_targets/archive_package_raw.rs\""));
 
@@ -105,8 +107,8 @@ fn af02_t032_lockfile_raw_and_structured_properties_bind_independent_model() {
     assert!(raw_target.contains("Lockfile::from_slice(data)"));
 
     assert!(property.contains("PROP-LOCKFILE-V2-001"));
-    assert!(property.contains("ProptestConfig::with_cases(CASE_COUNT)"));
-    assert!(property.contains("CASE_COUNT: u32 = 256"));
+    assert!(property.contains("property_runner::runner(SEED_HEX)"));
+    assert!(property.contains("6ce9e5ba7a78953b8949a9298bb3089861cf4660919e6fa809b7766fb9139d50"));
     assert!(property.contains("../../tests/assurance/af02_models/lockfile_v2.rs"));
     assert!(property.contains("model_validate(&case)"));
     assert!(property.contains("product_accepts(&case)"));
@@ -154,7 +156,7 @@ fn af02_t033_adversarial_properties_bind_all_frozen_models() {
     let property = fs::read_to_string(root.join("fuzz/tests/adversarial_properties.rs"))
         .expect("read T033 adversarial property suite");
 
-    assert!(fuzz_manifest.contains("task = \"T033\""));
+    assert!(fuzz_manifest.contains("stack = \"A1\""));
     for dependency in [
         "flate2 = \"=1.1.9\"",
         "serde_json = \"=1.0.151\"",
@@ -178,8 +180,11 @@ fn af02_t033_adversarial_properties_bind_all_frozen_models() {
             "missing frozen T033 property id {property_id}"
         );
     }
-    assert!(property.contains("const CASE_COUNT: u32 = 256;"));
-    assert!(property.contains("ProptestConfig::with_cases(CASE_COUNT)"));
+    assert!(property.contains("property_runner::runner("));
+    assert!(property.contains("460617d7c267dbea82a6571424601e1c12d468d07b55842e01cd967e9ca57f84"));
+    assert!(property.contains("8961a39186ec93f00f2757102a78d6ba457bc2837c132ad551e96f5970cc2e4a"));
+    assert!(property.contains("7aee90d41e14cd0d4f509e11eadace4ce6823f4c214246761a1f89752dd4a48a"));
+    assert!(property.contains("c15f7011fce0482f9839861a576d9c108142c08bc95d4bfb444981c25b874c3f"));
 
     let models = [
         (
@@ -267,5 +272,87 @@ fn af02_t033_adversarial_properties_bind_all_frozen_models() {
                 "{path} is missing frozen invalidity {invalidity}"
             );
         }
+    }
+}
+
+#[test]
+fn af02_t034_deterministic_property_configuration_is_frozen_and_complete() {
+    let root = repo_root();
+    let fuzz_manifest =
+        fs::read_to_string(root.join("fuzz/Cargo.toml")).expect("read isolated fuzz manifest");
+    let fuzz_lock =
+        fs::read_to_string(root.join("fuzz/Cargo.lock")).expect("read isolated fuzz lockfile");
+    let runner = fs::read_to_string(root.join("fuzz/tests/support/property_runner.rs"))
+        .expect("read deterministic property runner");
+    let archive_property =
+        fs::read_to_string(root.join("fuzz/tests/archive_manifest_properties.rs"))
+            .expect("read archive property suite");
+    let lockfile_property = fs::read_to_string(root.join("fuzz/tests/lockfile_v2_properties.rs"))
+        .expect("read Lockfile property suite");
+    let adversarial_property =
+        fs::read_to_string(root.join("fuzz/tests/adversarial_properties.rs"))
+            .expect("read adversarial property suite");
+
+    assert!(fuzz_manifest.contains("task = \"T034\""));
+    assert!(runner.contains("pub const CASE_COUNT: u32 = 256;"));
+    assert!(runner.contains("pub const MAX_SHRINK_ITERS: u32 = 4096;"));
+    assert!(runner.contains("failure_persistence: None"));
+    assert!(runner.contains("rng_algorithm: RngAlgorithm::ChaCha"));
+    assert!(runner.contains("TestRng::from_seed(RngAlgorithm::ChaCha, &seed)"));
+
+    for package in [
+        "arbitrary",
+        "flate2",
+        "libfuzzer-sys",
+        "proptest",
+        "serde_json",
+        "sha2",
+        "tar",
+    ] {
+        assert!(
+            lock_has_package(&fuzz_lock, package),
+            "isolated fuzz lockfile must retain {package}"
+        );
+    }
+
+    assert!(archive_property.contains("PROP-ARCHIVE-MANIFEST-001"));
+    assert!(archive_property
+        .contains("9f2ff50e2d1382752f79e92585f4fec473081f43d327cf810cc594cf28689dd8"));
+    assert!(lockfile_property
+        .contains("6ce9e5ba7a78953b8949a9298bb3089861cf4660919e6fa809b7766fb9139d50"));
+    for seed in [
+        "460617d7c267dbea82a6571424601e1c12d468d07b55842e01cd967e9ca57f84",
+        "8961a39186ec93f00f2757102a78d6ba457bc2837c132ad551e96f5970cc2e4a",
+        "7aee90d41e14cd0d4f509e11eadace4ce6823f4c214246761a1f89752dd4a48a",
+        "c15f7011fce0482f9839861a576d9c108142c08bc95d4bfb444981c25b874c3f",
+    ] {
+        assert!(
+            adversarial_property.contains(seed),
+            "adversarial property suite must bind frozen seed {seed}"
+        );
+    }
+
+    let archive_model =
+        fs::read_to_string(root.join("tests/assurance/af02_models/archive_manifest.rs"))
+            .expect("read independent archive model");
+    for forbidden in ["commandf_pkg", "read_manifest(", "commandf_pkg::archive"] {
+        assert!(
+            !archive_model.contains(forbidden),
+            "archive model must not reuse product implementation: {forbidden}"
+        );
+    }
+    for class in [
+        "DUPLICATE_MANIFEST",
+        "MANIFEST_TOO_LARGE",
+        "MISSING_MANIFEST",
+        "PREFIX_VARIANT",
+        "ENTRY_COUNT_OVER_LIMIT",
+        "DECOMPRESSED_BUDGET_OVER_LIMIT",
+        "INVALID_MANIFEST_JSON",
+    ] {
+        assert!(
+            archive_model.contains(class),
+            "archive model missing {class}"
+        );
     }
 }

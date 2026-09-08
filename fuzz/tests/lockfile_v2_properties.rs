@@ -3,6 +3,9 @@ use std::collections::BTreeMap;
 use commandf_pkg::{LockedPackage, Lockfile, ResolvedDependency};
 use proptest::prelude::*;
 
+#[path = "support/property_runner.rs"]
+mod property_runner;
+
 #[path = "../../tests/assurance/af02_models/lockfile_v2.rs"]
 mod lockfile_v2_model;
 
@@ -12,7 +15,7 @@ use lockfile_v2_model::{
 };
 
 const PROPERTY_ID: &str = "PROP-LOCKFILE-V2-001";
-const CASE_COUNT: u32 = 256;
+const SEED_HEX: &str = "6ce9e5ba7a78953b8949a9298bb3089861cf4660919e6fa809b7766fb9139d50";
 
 fn product_accepts(case: &ModelLockfile) -> bool {
     let packages = case
@@ -75,25 +78,28 @@ fn af02_lockfile_model_rejects_every_frozen_invalidity_class() {
     }
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(CASE_COUNT))]
-
-    #[test]
-    fn af02_lockfile_valid_graphs_match_independent_model(
-        major in 0u8..=8,
-        minor in 0u8..=8,
-        patch in 0u8..=16,
-        wildcard in any::<bool>(),
-    ) {
-        let case = generated_valid_case(major, minor, patch, wildcard);
-        prop_assert_eq!(model_validate(&case), Verdict::ValidCanonical);
-        prop_assert!(product_accepts(&case));
-    }
+#[test]
+fn af02_lockfile_valid_graphs_match_independent_model() {
+    let strategy = (0u8..=8, 0u8..=8, 0u8..=16, any::<bool>());
+    let mut runner = property_runner::runner(SEED_HEX);
+    runner
+        .run(&strategy, |(major, minor, patch, wildcard)| {
+            let case = generated_valid_case(major, minor, patch, wildcard);
+            prop_assert_eq!(model_validate(&case), Verdict::ValidCanonical);
+            prop_assert!(product_accepts(&case));
+            Ok(())
+        })
+        .expect("frozen Lockfile property must match the independent model");
 }
 
 #[test]
 fn af02_lockfile_property_identity_is_frozen() {
     assert_eq!(PROPERTY_ID, "PROP-LOCKFILE-V2-001");
-    assert_eq!(CASE_COUNT, 256);
+    assert_eq!(property_runner::CASE_COUNT, 256);
+    assert_eq!(property_runner::MAX_SHRINK_ITERS, 4096);
+    assert_eq!(
+        SEED_HEX,
+        "6ce9e5ba7a78953b8949a9298bb3089861cf4660919e6fa809b7766fb9139d50"
+    );
     let _ = BTreeMap::<String, String>::new();
 }

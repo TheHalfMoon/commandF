@@ -11,9 +11,13 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+[features]
+default = []
+fuzzing = ["dep:libfuzzer-sys"]
+
 [dependencies]
 commandf-pkg = { path = "../crates/commandf-pkg" }
-libfuzzer-sys = { workspace = true }
+libfuzzer-sys = { workspace = true, optional = true }
 
 [dev-dependencies]
 flate2 = { workspace = true }
@@ -33,7 +37,7 @@ tar = "=0.4.46"
 
 [workspace.metadata.commandf.af02]
 stack = "A1"
-task = "T033"
+task = "T034"
 cargo-fuzz-version = "0.13.2"
 cargo-fuzz-upstream-commit = "984c861c8dfea28055254c5f1d2659ab2cd63f76"
 fuzz-toolchain = "nightly-2026-08-25"
@@ -43,6 +47,7 @@ target = "x86_64-unknown-linux-gnu"
 [[bin]]
 name = "archive_package_raw"
 path = "fuzz_targets/archive_package_raw.rs"
+required-features = ["fuzzing"]
 test = false
 doc = false
 bench = false
@@ -50,6 +55,7 @@ bench = false
 [[bin]]
 name = "lockfile_raw"
 path = "fuzz_targets/lockfile_raw.rs"
+required-features = ["fuzzing"]
 test = false
 doc = false
 bench = false

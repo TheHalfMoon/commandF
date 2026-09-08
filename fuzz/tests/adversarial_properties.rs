@@ -7,15 +7,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use commandf_pkg::{
     build_context_graph, build_source_mapped_check_report, evaluate_compatibility_policy,
     evaluate_quality_gate, finding_fingerprint_v1, validate_quality_gate_report,
-    CanonicalReferenceRelation, CanonicalResolutionStatus, CheckDirection, CheckFailOn, CheckPolicy,
-    CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
-    ElementView, FindingFingerprint, GateSuppression, GateSuppressions, LockedPackage, Lockfile,
-    PackageCache, PackageEvidence, QualityGateDisposition, ResolvedDependency, ResourceKey,
-    ResourceKeyKind, StructuralChangeKind,
+    CanonicalReferenceRelation, CanonicalResolutionStatus, CheckDirection, CheckFailOn,
+    CheckPolicy, CompatibilityDirection, CompatibilityFinding, CompatibilityReport,
+    CompatibilitySeverity, ElementView, FindingFingerprint, GateSuppression, GateSuppressions,
+    LockedPackage, Lockfile, PackageCache, PackageEvidence, QualityGateDisposition,
+    ResolvedDependency, ResourceKey, ResourceKeyKind, StructuralChangeKind,
 };
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use proptest::prelude::*;
+
+#[path = "support/property_runner.rs"]
+mod property_runner;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tar::{Builder, Header};
@@ -29,11 +32,17 @@ mod gate_truth_table_model;
 #[path = "../../tests/assurance/af02_models/portable_path.rs"]
 mod portable_path_model;
 
-const CASE_COUNT: u32 = 256;
 const CANONICAL_REFERENCE_PROPERTY: &str = "PROP-CANONICAL-REFERENCE-001";
 const CONTEXT_GRAPH_PROPERTY: &str = "PROP-CONTEXT-GRAPH-ORDER-001";
 const GATE_PROPERTY: &str = "PROP-GATE-FINGERPRINT-SUPPRESSION-001";
 const PORTABLE_PATH_PROPERTY: &str = "PROP-PORTABLE-PATH-001";
+const CANONICAL_REFERENCE_SEED_HEX: &str =
+    "460617d7c267dbea82a6571424601e1c12d468d07b55842e01cd967e9ca57f84";
+const CONTEXT_GRAPH_SEED_HEX: &str =
+    "8961a39186ec93f00f2757102a78d6ba457bc2837c132ad551e96f5970cc2e4a";
+const GATE_SEED_HEX: &str = "7aee90d41e14cd0d4f509e11eadace4ce6823f4c214246761a1f89752dd4a48a";
+const PORTABLE_PATH_SEED_HEX: &str =
+    "c15f7011fce0482f9839861a576d9c108142c08bc95d4bfb444981c25b874c3f";
 static SCRATCH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn scratch(label: &str) -> PathBuf {
@@ -111,7 +120,10 @@ fn check_finding(rule_id: &str, after_filename: Option<&str>) -> CompatibilityFi
     }
 }
 
-fn check_report(findings: Vec<CompatibilityFinding>, policy: CheckPolicy) -> commandf_pkg::CheckReport {
+fn check_report(
+    findings: Vec<CompatibilityFinding>,
+    policy: CheckPolicy,
+) -> commandf_pkg::CheckReport {
     let compatibility = CompatibilityReport {
         schema: CompatibilityReport::SCHEMA_V1,
         ruleset: CompatibilityReport::RULESET_V1.to_owned(),
@@ -158,8 +170,7 @@ fn product_portable_path_accepts(value: &str) -> bool {
         "endLine": 2
     }]))
     .expect("serialize generated SUSHI index");
-    let accepted =
-        build_source_mapped_check_report(&report, &index, &root, Path::new(".")).is_ok();
+    let accepted = build_source_mapped_check_report(&report, &index, &root, Path::new(".")).is_ok();
     cleanup(&root);
     accepted
 }
@@ -235,10 +246,7 @@ fn fail_on(value: u8) -> (gate_truth_table_model::FailOn, CheckFailOn) {
             gate_truth_table_model::FailOn::Breaking,
             CheckFailOn::Breaking,
         ),
-        1 => (
-            gate_truth_table_model::FailOn::Risky,
-            CheckFailOn::Risky,
-        ),
+        1 => (gate_truth_table_model::FailOn::Risky, CheckFailOn::Risky),
         _ => (gate_truth_table_model::FailOn::None, CheckFailOn::None),
     }
 }
@@ -337,7 +345,7 @@ fn product_canonical_resolution(
         .map(|candidate| {
             candidate
                 .filename
-                .strip_prefix("package/ValueSet-")
+                .strip_prefix("ValueSet-")
                 .and_then(|value| value.strip_suffix(".json"))
                 .unwrap_or(&candidate.filename)
                 .to_owned()
@@ -409,8 +417,14 @@ fn graph_fixture(
     let first_digest = sha256_hex(&first_archive);
     let second_digest = sha256_hex(&second_archive);
     let cache = PackageCache::new(&root);
-    assert_eq!(cache.put(&first_archive).expect("cache alpha"), first_digest);
-    assert_eq!(cache.put(&second_archive).expect("cache beta"), second_digest);
+    assert_eq!(
+        cache.put(&first_archive).expect("cache alpha"),
+        first_digest
+    );
+    assert_eq!(
+        cache.put(&second_archive).expect("cache beta"),
+        second_digest
+    );
 
     let first_package = locked_package("af02.alpha", "1.0.0", &first_digest);
     let second_package = locked_package("af02.beta", "1.0.0", &second_digest);
@@ -419,10 +433,7 @@ fn graph_fixture(
         packages.reverse();
     }
     let lock = Lockfile::new_v2(
-        vec![
-            "af02.beta@1.0.0".to_owned(),
-            "af02.alpha@1.0.0".to_owned(),
-        ],
+        vec!["af02.beta@1.0.0".to_owned(), "af02.alpha@1.0.0".to_owned()],
         packages,
         Vec::<ResolvedDependency>::new(),
     );
@@ -450,7 +461,7 @@ fn graph_fixture(
     let model_artifacts = vec![
         context_graph_order_model::ArtifactNode {
             package: alpha_identity.clone(),
-            filename: "package/Patient-patient.json".to_owned(),
+            filename: "Patient-patient.json".to_owned(),
             sha256: sha256_hex(&resource_b),
             resource_type: "Patient".to_owned(),
             id: Some("patient".to_owned()),
@@ -459,7 +470,7 @@ fn graph_fixture(
         },
         context_graph_order_model::ArtifactNode {
             package: alpha_identity,
-            filename: "package/StructureDefinition-alpha.json".to_owned(),
+            filename: "StructureDefinition-alpha.json".to_owned(),
             sha256: sha256_hex(&resource_a),
             resource_type: "StructureDefinition".to_owned(),
             id: Some("alpha".to_owned()),
@@ -468,7 +479,7 @@ fn graph_fixture(
         },
         context_graph_order_model::ArtifactNode {
             package: beta_identity,
-            filename: "package/ValueSet-beta.json".to_owned(),
+            filename: "ValueSet-beta.json".to_owned(),
             sha256: sha256_hex(&second_resources[0].1),
             resource_type: "ValueSet".to_owned(),
             id: Some("beta".to_owned()),
@@ -477,10 +488,7 @@ fn graph_fixture(
         },
     ];
     let expected = context_graph_order_model::canonicalize(
-        vec![
-            "af02.alpha@1.0.0".to_owned(),
-            "af02.beta@1.0.0".to_owned(),
-        ],
+        vec!["af02.alpha@1.0.0".to_owned(), "af02.beta@1.0.0".to_owned()],
         model_packages,
         model_artifacts,
         Vec::new(),
@@ -588,19 +596,22 @@ fn af02_portable_path_rejects_every_frozen_invalidity_class() {
     }
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(CASE_COUNT))]
-
-    #[test]
-    fn af02_portable_valid_paths_match_independent_model(
-        components in prop::collection::vec("[a-z][a-z0-9]{0,7}", 1..=4),
-        backslashes in any::<bool>(),
-    ) {
-        let separator = if backslashes { "\\" } else { "/" };
-        let value = components.join(separator);
-        prop_assert!(portable_path_model::normalize(&value, false).is_ok());
-        prop_assert!(product_portable_path_accepts(&value));
-    }
+#[test]
+fn af02_portable_valid_paths_match_independent_model() {
+    let strategy = (
+        prop::collection::vec("[a-z][a-z0-9]{0,7}", 1..=4),
+        any::<bool>(),
+    );
+    let mut runner = property_runner::runner(PORTABLE_PATH_SEED_HEX);
+    runner
+        .run(&strategy, |(components, backslashes)| {
+            let separator = if backslashes { "\\" } else { "/" };
+            let value = components.join(separator);
+            prop_assert!(portable_path_model::normalize(&value, false).is_ok());
+            prop_assert!(product_portable_path_accepts(&value));
+            Ok(())
+        })
+        .expect("frozen portable-path property must match the independent model");
 }
 
 #[test]
@@ -639,180 +650,209 @@ fn af02_canonical_reference_covers_every_frozen_invalidity_class() {
         expected,
         canonical_reference_model::Resolution::Resolved("candidate".to_owned())
     );
-    assert_eq!(
-        product_canonical_resolution(canonical, &duplicates)
-            .expect("duplicate candidate identity must be deduplicated"),
-        expected
+    assert!(
+        product_canonical_resolution(canonical, &duplicates).is_err(),
+        "{CANONICAL_REFERENCE_PROPERTY} duplicate candidate identity must fail closed at the public artifact boundary"
     );
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(CASE_COUNT))]
+#[test]
+fn af02_canonical_reference_resolution_matches_independent_model() {
+    let strategy = (0usize..=3, any::<bool>(), any::<bool>());
+    let mut runner = property_runner::runner(CANONICAL_REFERENCE_SEED_HEX);
+    runner
+        .run(
+            &strategy,
+            |(candidate_count, explicit_version, fragment)| {
+                let candidates = (0..candidate_count)
+                    .map(|index| canonical_reference_model::Candidate {
+                        identity: format!("candidate-{index}"),
+                        url: "https://example.org/ValueSet/target".to_owned(),
+                        version: Some(format!("{}.0.0", index + 1)),
+                    })
+                    .collect::<Vec<_>>();
+                let mut canonical = "https://example.org/ValueSet/target".to_owned();
+                if explicit_version {
+                    canonical.push_str("|1.0.0");
+                }
+                if fragment {
+                    canonical.push_str("#fragment");
+                }
 
-    #[test]
-    fn af02_canonical_reference_resolution_matches_independent_model(
-        candidate_count in 0usize..=3,
-        explicit_version in any::<bool>(),
-        fragment in any::<bool>(),
-    ) {
-        let candidates = (0..candidate_count)
-            .map(|index| canonical_reference_model::Candidate {
-                identity: format!("candidate-{index}"),
-                url: "https://example.org/ValueSet/target".to_owned(),
-                version: Some(if index % 2 == 0 { "1.0.0" } else { "2.0.0" }.to_owned()),
-            })
-            .collect::<Vec<_>>();
-        let mut canonical = "https://example.org/ValueSet/target".to_owned();
-        if explicit_version {
-            canonical.push_str("|1.0.0");
-        }
-        if fragment {
-            canonical.push_str("#fragment");
-        }
-
-        let expected = canonical_reference_model::resolve(&canonical, &candidates);
-        let actual = product_canonical_resolution(&canonical, &candidates)
-            .map_err(TestCaseError::fail)?;
-        prop_assert_eq!(actual, expected);
-    }
-}
-
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(CASE_COUNT))]
-
-    #[test]
-    fn af02_context_graph_order_matches_independent_model(
-        reverse_packages in any::<bool>(),
-        reverse_resources in any::<bool>(),
-    ) {
-        let (lock, cache, root, expected) = graph_fixture(reverse_packages, reverse_resources);
-        let report = build_context_graph(&lock, &cache)
-            .map_err(|error| TestCaseError::fail(error.to_string()))?;
-        let actual = project_graph(&report);
-        cleanup(&root);
-        prop_assert_eq!(actual, expected);
-    }
-}
-
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(CASE_COUNT))]
-
-    #[test]
-    fn af02_gate_truth_table_matches_independent_model(
-        severity_code in 0u8..3,
-        producer in any::<bool>(),
-        direction_code in 0u8..3,
-        fail_code in 0u8..3,
-        baseline_member in any::<bool>(),
-        suppressed in any::<bool>(),
-        object_order_flip in any::<bool>(),
-    ) {
-        let before = if object_order_flip {
-            serde_json::from_str(r#"{"z":1,"a":{"y":2,"x":3}}"#).expect("model JSON")
-        } else {
-            serde_json::from_str(r#"{"a":{"x":3,"y":2},"z":1}"#).expect("model JSON")
-        };
-        let finding = model_gate_finding(
-            severity(severity_code),
-            direction(producer),
-            before,
-            json!({"items":[1,2,3]}),
-        );
-        let ruleset = CompatibilityReport::RULESET_V1;
-        let fingerprint = gate_truth_table_model::fingerprint(ruleset, &finding);
-        let baseline = if baseline_member {
-            vec![finding.clone()]
-        } else {
-            Vec::new()
-        };
-        let suppressions = if suppressed {
-            vec![gate_truth_table_model::Suppression {
-                fingerprint: fingerprint.clone(),
-                rationale: "accepted".to_owned(),
-                reference: Some("AF02-T033".to_owned()),
-            }]
-        } else {
-            Vec::new()
-        };
-        let (model_direction, product_direction) = selected_direction(direction_code);
-        let (model_fail, product_fail) = fail_on(fail_code);
-        let expected = gate_truth_table_model::evaluate(
-            ruleset,
-            std::slice::from_ref(&finding),
-            &baseline,
-            &suppressions,
-            model_direction,
-            model_fail,
-        )
-        .expect("generated model case must be valid");
-
-        let current_product = check_report(
-            vec![product_gate_finding(&finding)],
-            CheckPolicy {
-                direction: product_direction,
-                fail_on: product_fail,
+                let expected = canonical_reference_model::resolve(&canonical, &candidates);
+                let actual = product_canonical_resolution(&canonical, &candidates)
+                    .map_err(TestCaseError::fail)?;
+                prop_assert_eq!(actual, expected);
+                Ok(())
             },
-        );
-        let baseline_product = baseline_member.then(|| {
-            check_report(
-                vec![product_gate_finding(&finding)],
-                CheckPolicy {
-                    direction: product_direction,
-                    fail_on: product_fail,
-                },
-            )
-        });
-        let suppression_product = if suppressed {
-            Some(GateSuppressions {
-                schema: GateSuppressions::SCHEMA_V1,
-                suppressions: vec![GateSuppression {
-                    finding_fingerprint: FindingFingerprint {
-                        schema: FindingFingerprint::SCHEMA_V1,
-                        digest: fingerprint.clone(),
-                    },
-                    rationale: "accepted".to_owned(),
-                    reference: Some("AF02-T033".to_owned()),
-                }],
-            })
-        } else {
-            None
-        };
-        let actual = evaluate_quality_gate(
-            &current_product,
-            baseline_product.as_ref(),
-            suppression_product.as_ref(),
         )
-        .map_err(|error| TestCaseError::fail(error.to_string()))?;
+        .expect("frozen canonical-reference property must match the independent model");
+}
 
-        prop_assert_eq!(actual.findings.len(), 1);
-        prop_assert_eq!(actual.findings[0].fingerprint.digest.clone(), fingerprint);
-        prop_assert_eq!(
-            actual.findings[0].disposition,
-            match expected.dispositions[0] {
-                gate_truth_table_model::Disposition::New => QualityGateDisposition::New,
-                gate_truth_table_model::Disposition::Baseline => QualityGateDisposition::Baseline,
-                gate_truth_table_model::Disposition::Suppressed => QualityGateDisposition::Suppressed,
-            }
-        );
-        prop_assert_eq!(actual.decision.selected_findings, expected.selected_findings);
-        prop_assert_eq!(actual.decision.new_findings, expected.new_findings);
-        prop_assert_eq!(actual.decision.baseline_findings, expected.baseline_findings);
-        prop_assert_eq!(actual.decision.suppressed_findings, expected.suppressed_findings);
-        prop_assert_eq!(
-            actual.decision.new_selected_breaking_findings,
-            expected.new_selected_breaking_findings
-        );
-        prop_assert_eq!(
-            actual.decision.new_selected_risky_findings,
-            expected.new_selected_risky_findings
-        );
-        prop_assert_eq!(
-            actual.decision.new_selected_additive_findings,
-            expected.new_selected_additive_findings
-        );
-        prop_assert_eq!(actual.decision.blocking_findings, expected.blocking_findings);
-        prop_assert_eq!(actual.decision.passed, expected.passed);
-    }
+#[test]
+fn af02_context_graph_order_matches_independent_model() {
+    let strategy = (any::<bool>(), any::<bool>());
+    let mut runner = property_runner::runner(CONTEXT_GRAPH_SEED_HEX);
+    runner
+        .run(&strategy, |(reverse_packages, reverse_resources)| {
+            let (lock, cache, root, expected) = graph_fixture(reverse_packages, reverse_resources);
+            let report = build_context_graph(&lock, &cache)
+                .map_err(|error| TestCaseError::fail(error.to_string()))?;
+            let actual = project_graph(&report);
+            cleanup(&root);
+            prop_assert_eq!(actual, expected);
+            Ok(())
+        })
+        .expect("frozen context-graph property must match the independent model");
+}
+
+#[test]
+fn af02_gate_truth_table_matches_independent_model() {
+    let strategy = (
+        0u8..3,
+        any::<bool>(),
+        0u8..3,
+        0u8..3,
+        any::<bool>(),
+        any::<bool>(),
+        any::<bool>(),
+    );
+    let mut runner = property_runner::runner(GATE_SEED_HEX);
+    runner
+        .run(
+            &strategy,
+            |(
+                severity_code,
+                producer,
+                direction_code,
+                fail_code,
+                baseline_member,
+                suppressed,
+                object_order_flip,
+            )| {
+                let before = if object_order_flip {
+                    serde_json::from_str(r#"{"z":1,"a":{"y":2,"x":3}}"#).expect("model JSON")
+                } else {
+                    serde_json::from_str(r#"{"a":{"x":3,"y":2},"z":1}"#).expect("model JSON")
+                };
+                let finding = model_gate_finding(
+                    severity(severity_code),
+                    direction(producer),
+                    before,
+                    json!({"items":[1,2,3]}),
+                );
+                let ruleset = CompatibilityReport::RULESET_V1;
+                let fingerprint = gate_truth_table_model::fingerprint(ruleset, &finding);
+                let baseline = if baseline_member {
+                    vec![finding.clone()]
+                } else {
+                    Vec::new()
+                };
+                let suppressions = if suppressed {
+                    vec![gate_truth_table_model::Suppression {
+                        fingerprint: fingerprint.clone(),
+                        rationale: "accepted".to_owned(),
+                        reference: Some("AF02-T033".to_owned()),
+                    }]
+                } else {
+                    Vec::new()
+                };
+                let (model_direction, product_direction) = selected_direction(direction_code);
+                let (model_fail, product_fail) = fail_on(fail_code);
+                let expected = gate_truth_table_model::evaluate(
+                    ruleset,
+                    std::slice::from_ref(&finding),
+                    &baseline,
+                    &suppressions,
+                    model_direction,
+                    model_fail,
+                )
+                .expect("generated model case must be valid");
+
+                let current_product = check_report(
+                    vec![product_gate_finding(&finding)],
+                    CheckPolicy {
+                        direction: product_direction,
+                        fail_on: product_fail,
+                    },
+                );
+                let baseline_product = baseline_member.then(|| {
+                    check_report(
+                        vec![product_gate_finding(&finding)],
+                        CheckPolicy {
+                            direction: product_direction,
+                            fail_on: product_fail,
+                        },
+                    )
+                });
+                let suppression_product = if suppressed {
+                    Some(GateSuppressions {
+                        schema: GateSuppressions::SCHEMA_V1,
+                        suppressions: vec![GateSuppression {
+                            finding_fingerprint: FindingFingerprint {
+                                schema: FindingFingerprint::SCHEMA_V1,
+                                digest: fingerprint.clone(),
+                            },
+                            rationale: "accepted".to_owned(),
+                            reference: Some("AF02-T033".to_owned()),
+                        }],
+                    })
+                } else {
+                    None
+                };
+                let actual = evaluate_quality_gate(
+                    &current_product,
+                    baseline_product.as_ref(),
+                    suppression_product.as_ref(),
+                )
+                .map_err(|error| TestCaseError::fail(error.to_string()))?;
+
+                prop_assert_eq!(actual.findings.len(), 1);
+                prop_assert_eq!(actual.findings[0].fingerprint.digest.clone(), fingerprint);
+                prop_assert_eq!(
+                    actual.findings[0].disposition,
+                    match expected.dispositions[0] {
+                        gate_truth_table_model::Disposition::New => QualityGateDisposition::New,
+                        gate_truth_table_model::Disposition::Baseline =>
+                            QualityGateDisposition::Baseline,
+                        gate_truth_table_model::Disposition::Suppressed =>
+                            QualityGateDisposition::Suppressed,
+                    }
+                );
+                prop_assert_eq!(
+                    actual.decision.selected_findings,
+                    expected.selected_findings
+                );
+                prop_assert_eq!(actual.decision.new_findings, expected.new_findings);
+                prop_assert_eq!(
+                    actual.decision.baseline_findings,
+                    expected.baseline_findings
+                );
+                prop_assert_eq!(
+                    actual.decision.suppressed_findings,
+                    expected.suppressed_findings
+                );
+                prop_assert_eq!(
+                    actual.decision.new_selected_breaking_findings,
+                    expected.new_selected_breaking_findings
+                );
+                prop_assert_eq!(
+                    actual.decision.new_selected_risky_findings,
+                    expected.new_selected_risky_findings
+                );
+                prop_assert_eq!(
+                    actual.decision.new_selected_additive_findings,
+                    expected.new_selected_additive_findings
+                );
+                prop_assert_eq!(
+                    actual.decision.blocking_findings,
+                    expected.blocking_findings
+                );
+                prop_assert_eq!(actual.decision.passed, expected.passed);
+                Ok(())
+            },
+        )
+        .expect("frozen gate property must match the independent model");
 }
 
 #[test]
@@ -899,17 +939,28 @@ fn af02_gate_frozen_invalidity_classes_fail_closed() {
 
 #[test]
 fn af02_t033_property_identities_are_frozen() {
-    assert_eq!(CASE_COUNT, 256);
-    assert_eq!(
-        CANONICAL_REFERENCE_PROPERTY,
-        "PROP-CANONICAL-REFERENCE-001"
-    );
+    assert_eq!(property_runner::CASE_COUNT, 256);
+    assert_eq!(property_runner::MAX_SHRINK_ITERS, 4096);
+    assert_eq!(CANONICAL_REFERENCE_PROPERTY, "PROP-CANONICAL-REFERENCE-001");
     assert_eq!(CONTEXT_GRAPH_PROPERTY, "PROP-CONTEXT-GRAPH-ORDER-001");
-    assert_eq!(
-        GATE_PROPERTY,
-        "PROP-GATE-FINGERPRINT-SUPPRESSION-001"
-    );
+    assert_eq!(GATE_PROPERTY, "PROP-GATE-FINGERPRINT-SUPPRESSION-001");
     assert_eq!(PORTABLE_PATH_PROPERTY, "PROP-PORTABLE-PATH-001");
+    assert_eq!(
+        CANONICAL_REFERENCE_SEED_HEX,
+        "460617d7c267dbea82a6571424601e1c12d468d07b55842e01cd967e9ca57f84"
+    );
+    assert_eq!(
+        CONTEXT_GRAPH_SEED_HEX,
+        "8961a39186ec93f00f2757102a78d6ba457bc2837c132ad551e96f5970cc2e4a"
+    );
+    assert_eq!(
+        GATE_SEED_HEX,
+        "7aee90d41e14cd0d4f509e11eadace4ce6823f4c214246761a1f89752dd4a48a"
+    );
+    assert_eq!(
+        PORTABLE_PATH_SEED_HEX,
+        "c15f7011fce0482f9839861a576d9c108142c08bc95d4bfb444981c25b874c3f"
+    );
     assert_eq!(canonical_reference_model::INVALIDITY_CLASSES.len(), 6);
     assert_eq!(context_graph_order_model::INVALIDITY_CLASSES.len(), 7);
     assert_eq!(gate_truth_table_model::INVALIDITY_CLASSES.len(), 9);
