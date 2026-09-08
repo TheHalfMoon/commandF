@@ -166,7 +166,7 @@ fn malformed_and_duplicate_key_json_authority_fail_closed_before_immutability_de
         ("duplicate", br#"{"duplicate":1,"duplicate":2}"#.as_slice()),
     ] {
         let candidate = candidate_root(label);
-        write_candidate(&candidate, ".github/required-checks.json", bytes);
+        write_candidate(candidate.as_path(), ".github/required-checks.json", bytes);
         let error = verify(
             &candidate,
             vec![changed("modified", ".github/required-checks.json", None)],
@@ -393,5 +393,13 @@ fn t026_runtime_parent_is_pinned_offline_read_only_and_invokes_base_binary_only(
         "cargo build --locked --release --manifest-path \"${GITHUB_WORKSPACE}/base/tools/af02-verifier/Cargo.toml\" --target-dir \"${GITHUB_WORKSPACE}/base/target/af02-verifier\""
     ));
     assert!(workflow.contains("docker pull \"docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f\""));
+    assert!(workflow.contains("Prepare canonical Git ownership for unprivileged verifier"));
+    assert!(workflow.contains("sudo chown 65534:65534 \"${BASE_ROOT}\""));
+    assert!(workflow.contains("sudo chown -R 65534:65534 \"${BASE_ROOT}/.git\""));
+    assert!(workflow.contains("GIT_CONFIG_COUNT: \"1\""));
+    assert!(workflow.contains("GIT_CONFIG_KEY_0: safe.directory"));
+    assert!(workflow.contains("GIT_CONFIG_VALUE_0: ${{ github.workspace }}/base"));
+    assert!(workflow.contains("Restore canonical checkout ownership"));
+    assert!(!workflow.contains("GIT_CONFIG_VALUE_0: *"));
     assert!(!workflow.contains("docker run --rm --pull=never"));
 }

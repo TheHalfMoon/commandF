@@ -41,5 +41,24 @@ jobs:
         run: cargo build --locked --release --manifest-path "${GITHUB_WORKSPACE}/base/tools/af02-verifier/Cargo.toml" --target-dir "${GITHUB_WORKSPACE}/base/target/af02-verifier"
       - name: Acquire pinned verifier runtime image
         run: docker pull "docker.io/library/rust@sha256:9146b0f62e1939989aa96fc8d89699a43c5635bf212819235a773e1a9e71a98f"
+      - name: Prepare canonical Git ownership for unprivileged verifier
+        env:
+          BASE_ROOT: ${{ github.workspace }}/base
+        run: |
+          sudo chown 65534:65534 "${BASE_ROOT}"
+          sudo chown -R 65534:65534 "${BASE_ROOT}/.git"
+          test "$(stat -c '%u:%g' "${BASE_ROOT}")" = "65534:65534"
+          test "$(stat -c '%u:%g' "${BASE_ROOT}/.git")" = "65534:65534"
       - name: Run canonical-base AF-02 gate
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: safe.directory
+          GIT_CONFIG_VALUE_0: ${{ github.workspace }}/base
         run: bash "${GITHUB_WORKSPACE}/base/.github/scripts/run_af02_base_verifier.sh" "${GITHUB_WORKSPACE}/base" "${GITHUB_WORKSPACE}/candidate"
+      - name: Restore canonical checkout ownership
+        if: always()
+        env:
+          BASE_ROOT: ${{ github.workspace }}/base
+        run: |
+          sudo chown "$(id -u):$(id -g)" "${BASE_ROOT}"
+          sudo chown -R "$(id -u):$(id -g)" "${BASE_ROOT}/.git"
