@@ -19,6 +19,8 @@ SCHEMA = "commandf.af02-base-gate-bootstrap/v1"
 SELF_TEST_SCHEMA = "commandf.af02-base-gate-self-test/v1"
 MAX_CHANGED_FILES = 3000
 MAX_PATH_BYTES = 4096
+MAX_API_BYTES = 4 * 1024 * 1024
+GITHUB_API_ROOT = "https://api.github.com"
 
 AUTHORITY_EXACT = frozenset(
     {
@@ -182,12 +184,11 @@ def read_event() -> tuple[dict, str, int, str, str]:
     return event, full_name, number, base_sha, head_sha
 
 
-def api_json(url: str, token: str) -> object:
+def api_json(url: str) -> object:
     request = urllib.request.Request(
         url,
         headers={
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "commandf-af02-base-gate",
         },
@@ -197,10 +198,10 @@ def api_json(url: str, token: str) -> object:
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status != 200:
                 fail(f"GitHub API returned HTTP {response.status}")
-            body = response.read(4 * 1024 * 1024 + 1)
+            body = response.read(MAX_API_BYTES + 1)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         fail(f"GitHub API request failed: {exc}")
-    if len(body) > 4 * 1024 * 1024:
+    if len(body) > MAX_API_BYTES:
         fail("GitHub API response exceeded the bounded size")
     try:
         return json.loads(body)
@@ -209,15 +210,11 @@ def api_json(url: str, token: str) -> object:
 
 
 def github_truth(repository: str, number: int, event_base: str, event_head: str) -> set[str]:
-    token = os.environ.get("GITHUB_TOKEN")
-    api_root = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
-    if not token:
-        fail("GITHUB_TOKEN is missing")
     owner, repo = repository.split("/", 1)
     owner_q = urllib.parse.quote(owner, safe="")
     repo_q = urllib.parse.quote(repo, safe="")
-    pr_url = f"{api_root}/repos/{owner_q}/{repo_q}/pulls/{number}"
-    pr = api_json(pr_url, token)
+    pr_url = f"{GITHUB_API_ROOT}/repos/{owner_q}/{repo_q}/pulls/{number}"
+    pr = api_json(pr_url)
     if not isinstance(pr, dict):
         fail("GitHub pull request API root is not an object")
     api_base = pr.get("base")
@@ -235,7 +232,7 @@ def github_truth(repository: str, number: int, event_base: str, event_head: str)
     file_count = 0
     for page in range(1, 31):
         files_url = f"{pr_url}/files?per_page=100&page={page}"
-        payload = api_json(files_url, token)
+        payload = api_json(files_url)
         if not isinstance(payload, list):
             fail("GitHub pull request files response is not an array")
         for entry in payload:
