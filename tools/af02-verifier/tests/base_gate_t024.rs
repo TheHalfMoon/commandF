@@ -67,7 +67,7 @@ fn base_gate_runner_has_no_candidate_execution_escape_hatch() {
     let runner = fs::read_to_string(root.join(RUNNER)).expect("read AF-02 base runner");
 
     assert!(runner.starts_with("#!/usr/bin/env bash\nset -euo pipefail\n"));
-    assert!(runner.contains("candidate_code_executed\": False"));
+    assert!(runner.contains("\"candidate_code_executed\": False"));
     assert!(runner.contains("git_head(candidate_root)"));
     assert!(!runner.contains("cargo run"));
     assert!(!runner.contains("cargo build"));
