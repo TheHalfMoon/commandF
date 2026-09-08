@@ -139,6 +139,9 @@ fn af02_t032_lockfile_raw_and_structured_properties_bind_independent_model() {
         "MultipleTargetsForDependency",
         "MissingResolvedEdge",
     ] {
-        assert!(model.contains(class), "missing frozen invalidity class {class}");
+        assert!(
+            model.contains(class),
+            "missing frozen invalidity class {class}"
+        );
     }
 }
