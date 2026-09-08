@@ -45,11 +45,10 @@ BOOTSTRAP_EXACT = frozenset(
         ".github/scripts/run_af02_base_verifier.sh",
         ".github/workflow-trust-policy.json",
         ".github/workflows/af02-base-verifier.yml",
+        "tools/af02-verifier/src/base_gate.rs",
+        "tools/af02-verifier/src/main.rs",
+        "tools/af02-verifier/tests/base_gate_t025.rs",
     }
-)
-BOOTSTRAP_PREFIXES = (
-    "tools/af02-verifier/src/",
-    "tools/af02-verifier/tests/",
 )
 ALLOWED_FILE_STATUSES = frozenset(
     {"added", "changed", "copied", "modified", "removed", "renamed", "unchanged"}
@@ -88,7 +87,7 @@ def is_authority_path(path: str) -> bool:
 
 
 def is_bootstrap_path(path: str) -> bool:
-    return path in BOOTSTRAP_EXACT or any(path.startswith(prefix) for prefix in BOOTSTRAP_PREFIXES)
+    return path in BOOTSTRAP_EXACT
 
 
 def classify_paths(paths: set[str]) -> str:
@@ -118,6 +117,7 @@ def run_self_test() -> None:
             ".github/workflows/af02-base-verifier.yml",
             ".github/scripts/run_af02_base_verifier.sh",
             "tools/af02-verifier/src/base_gate.rs",
+            "tools/af02-verifier/src/main.rs",
             "tools/af02-verifier/tests/base_gate_t025.rs",
         },
         "BOOTSTRAP_T025_STRENGTHENING",
@@ -134,6 +134,10 @@ def run_self_test() -> None:
         "BLOCKED_PENDING_T025",
     )
     expect({"Cargo.lock"}, "BLOCKED_PENDING_T025")
+    expect(
+        {"tools/af02-verifier/src/semantic.rs"},
+        "BLOCKED_PENDING_T025",
+    )
 
     if validate_repo_path("tools/af02-verifier/src/main.rs") != "tools/af02-verifier/src/main.rs":
         fail("self-test normalized path changed unexpectedly")
