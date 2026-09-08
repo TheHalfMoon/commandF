@@ -2,6 +2,19 @@
 members = []
 resolver = "2"
 
+[package]
+name = "commandf-af02-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+commandf-pkg = { path = "../crates/commandf-pkg" }
+libfuzzer-sys = { workspace = true }
+
 [workspace.dependencies]
 libfuzzer-sys = "=0.4.13"
 arbitrary = { version = "=1.4.2", features = ["derive"] }
@@ -9,9 +22,16 @@ proptest = "=1.11.0"
 
 [workspace.metadata.commandf.af02]
 stack = "A1"
-task = "T030"
+task = "T031"
 cargo-fuzz-version = "0.13.2"
 cargo-fuzz-upstream-commit = "984c861c8dfea28055254c5f1d2659ab2cd63f76"
 fuzz-toolchain = "nightly-2026-08-25"
 product-toolchain = "1.97.1"
 target = "x86_64-unknown-linux-gnu"
+
+[[bin]]
+name = "archive_package_raw"
+path = "fuzz_targets/archive_package_raw.rs"
+test = false
+doc = false
+bench = false

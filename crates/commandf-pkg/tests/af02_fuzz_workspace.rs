@@ -59,3 +59,29 @@ fn af02_t030_fuzz_workspace_is_isolated_and_pinned() {
         );
     }
 }
+
+#[test]
+fn af02_t031_archive_package_raw_fuzzer_is_bounded_and_uses_product_seams() {
+    let root = repo_root();
+    let fuzz_manifest =
+        fs::read_to_string(root.join("fuzz/Cargo.toml")).expect("read isolated fuzz manifest");
+    let target = fs::read_to_string(root.join("fuzz/fuzz_targets/archive_package_raw.rs"))
+        .expect("read archive/package raw fuzz target");
+
+    assert!(fuzz_manifest.contains("name = \"commandf-af02-fuzz\""));
+    assert!(fuzz_manifest.contains("cargo-fuzz = true"));
+    assert!(fuzz_manifest.contains("commandf-pkg = { path = \"../crates/commandf-pkg\" }"));
+    assert!(fuzz_manifest.contains("libfuzzer-sys = { workspace = true }"));
+    assert!(fuzz_manifest.contains("task = \"T031\""));
+    assert!(fuzz_manifest.contains("name = \"archive_package_raw\""));
+    assert!(fuzz_manifest.contains("path = \"fuzz_targets/archive_package_raw.rs\""));
+
+    assert!(target.contains("const MAX_INPUT_BYTES: usize = 256 * 1024;"));
+    assert!(target.contains("inspect_package("));
+    assert!(target.contains("LocalMirrorSource::new("));
+    assert!(target.contains("Resolver::new("));
+    assert!(target.contains("PackageCache::new("));
+    assert!(target.contains("fs::remove_dir_all("));
+    assert!(!target.contains("read_manifest("));
+    assert!(!target.contains("commandf_pkg::archive"));
+}
