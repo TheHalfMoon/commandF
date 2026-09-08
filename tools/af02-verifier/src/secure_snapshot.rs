@@ -1,4 +1,8 @@
 use std::collections::BTreeSet;
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use std::ffi::{c_char, c_int, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
@@ -153,23 +157,44 @@ fn validate_relative_path(path: &Path) -> Result<(), InputGuardError> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const O_RDONLY: c_int = 0;
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const O_DIRECTORY: c_int = 0o200000;
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const O_NOFOLLOW: c_int = 0o400000;
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const O_CLOEXEC: c_int = 0o2000000;
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const AT_FDCWD: c_int = -100;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 unsafe extern "C" {
     fn openat(dirfd: c_int, pathname: *const c_char, flags: c_int) -> c_int;
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn open_candidate_root(candidate_root: &Path) -> Result<std::os::fd::OwnedFd, InputGuardError> {
     use std::os::fd::AsRawFd;
     use std::os::unix::fs::MetadataExt;
@@ -207,12 +232,21 @@ fn open_candidate_root(candidate_root: &Path) -> Result<std::os::fd::OwnedFd, In
     Ok(current)
 }
 
-#[cfg(all(unix, not(target_os = "linux")))]
+#[cfg(all(
+    unix,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
 fn open_candidate_root(_candidate_root: &Path) -> Result<std::os::fd::OwnedFd, InputGuardError> {
     violation("secure descriptor-relative no-follow open is unavailable on this Unix platform")
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn open_candidate_file(
     root_fd: &std::os::fd::OwnedFd,
     relative: &Path,
@@ -242,7 +276,13 @@ fn open_candidate_file(
     Ok(File::from(file_fd))
 }
 
-#[cfg(all(unix, not(target_os = "linux")))]
+#[cfg(all(
+    unix,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
 fn open_candidate_file(
     _root_fd: &std::os::fd::OwnedFd,
     _relative: &Path,
@@ -250,17 +290,26 @@ fn open_candidate_file(
     violation("secure descriptor-relative no-follow open is unavailable on this Unix platform")
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn directory_flags() -> c_int {
     O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn file_flags() -> c_int {
     O_RDONLY | O_NOFOLLOW | O_CLOEXEC
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 fn openat_owned(
     dirfd: c_int,
     path: &Path,
@@ -302,7 +351,11 @@ fn violation<T>(message: impl Into<String>) -> Result<T, InputGuardError> {
     Err(InputGuardError::Violation(message.into()))
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(
+    test,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 mod tests {
     use std::io::Read;
     use std::os::unix::fs::symlink;
