@@ -27,13 +27,23 @@ pub enum EnforcementError {
     Resolver(String),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct FrozenEnforcementInventory {
+    schema: String,
+    policy_status: String,
+    entries: Vec<EnforcementInventoryEntry>,
+    closure_rule: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct EnforcementInventory {
     pub schema: String,
     pub policy_status: String,
     pub entries: Vec<EnforcementInventoryEntry>,
     pub closure_rule: String,
+    pub inventory_sha256: String,
+    pub schema_git_blob_sha: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -87,31 +97,31 @@ pub fn parse_frozen_enforcement_inventory(
     }
 
     let instance_value = parse_json_no_duplicates(instance_bytes)?;
-    let inventory: EnforcementInventory = serde_json::from_value(instance_value)?;
-    if inventory.schema != ENFORCEMENT_SCHEMA_ID {
+    let frozen: FrozenEnforcementInventory = serde_json::from_value(instance_value)?;
+    if frozen.schema != ENFORCEMENT_SCHEMA_ID {
         return contract_error(format!(
             "unexpected enforcement-inventory schema id {}",
-            inventory.schema
+            frozen.schema
         ));
     }
-    if inventory.policy_status != POLICY_STATUS {
+    if frozen.policy_status != POLICY_STATUS {
         return contract_error(format!(
             "unexpected enforcement-inventory policy status {}",
-            inventory.policy_status
+            frozen.policy_status
         ));
     }
-    if inventory.closure_rule != CLOSURE_RULE {
+    if frozen.closure_rule != CLOSURE_RULE {
         return contract_error(format!(
             "unexpected enforcement-inventory closure rule {}",
-            inventory.closure_rule
+            frozen.closure_rule
         ));
     }
-    if inventory.entries != frozen_entries {
+    if frozen.entries != frozen_entries {
         return contract_error("enforcement inventory differs from schema-frozen role topology");
     }
 
     let mut roles = BTreeSet::new();
-    for entry in &inventory.entries {
+    for entry in &frozen.entries {
         if !roles.insert(entry.role.as_str()) {
             return contract_error(format!("duplicate enforcement role {}", entry.role));
         }
@@ -130,7 +140,14 @@ pub fn parse_frozen_enforcement_inventory(
         ));
     }
 
-    Ok(inventory)
+    Ok(EnforcementInventory {
+        schema: frozen.schema,
+        policy_status: frozen.policy_status,
+        entries: frozen.entries,
+        closure_rule: frozen.closure_rule,
+        inventory_sha256: sha256_hex(instance_bytes),
+        schema_git_blob_sha: ENFORCEMENT_SCHEMA_GIT_BLOB_SHA.to_owned(),
+    })
 }
 
 pub fn verify_enforcement_inventory<R: CanonicalEnforcementResolver>(
@@ -186,8 +203,8 @@ pub fn verify_enforcement_inventory<R: CanonicalEnforcementResolver>(
         current_stack: current_stack.to_owned(),
         role_count: inventory.entries.len(),
         active_role_count,
-        inventory_sha256: sha256_hex(instance_bytes),
-        schema_git_blob_sha: ENFORCEMENT_SCHEMA_GIT_BLOB_SHA.to_owned(),
+        inventory_sha256: inventory.inventory_sha256,
+        schema_git_blob_sha: inventory.schema_git_blob_sha,
     })
 }
 
@@ -254,6 +271,8 @@ mod tests {
     fn parses_exact_schema_frozen_inventory_with_shared_module_paths() {
         let inventory = parse_frozen_enforcement_inventory(INVENTORY_BYTES, SCHEMA_BYTES).unwrap();
         assert_eq!(inventory.entries.len(), ROLE_COUNT);
+        assert_eq!(inventory.inventory_sha256, sha256_hex(INVENTORY_BYTES));
+        assert_eq!(inventory.schema_git_blob_sha, ENFORCEMENT_SCHEMA_GIT_BLOB_SHA);
         let surface_roles = inventory
             .entries
             .iter()
@@ -261,6 +280,31 @@ mod tests {
             .map(|entry| entry.role.as_str())
             .collect::<Vec<_>>();
         assert_eq!(surface_roles, ["SURFACE_SCANNER", "SURFACE_POLICY_PARSER"]);
+    }
+
+    #[test]
+    fn parsed_output_retains_exact_input_and_schema_provenance() {
+        let inventory = parse_frozen_enforcement_inventory(INVENTORY_BYTES, SCHEMA_BYTES).unwrap();
+        let output = serde_json::to_value(inventory).unwrap();
+        assert_eq!(
+            output.get("inventory_sha256").and_then(Value::as_str),
+            Some(sha256_hex(INVENTORY_BYTES).as_str())
+        );
+        assert_eq!(
+            output.get("schema_git_blob_sha").and_then(Value::as_str),
+            Some(ENFORCEMENT_SCHEMA_GIT_BLOB_SHA)
+        );
+    }
+
+    #[test]
+    fn rejects_candidate_supplied_provenance_fields() {
+        for field in ["inventory_sha256", "schema_git_blob_sha"] {
+            let mut value = parse_json_no_duplicates(INVENTORY_BYTES).unwrap();
+            value[field] = Value::String("0".repeat(64));
+            let tampered = serde_json::to_vec(&value).unwrap();
+            let error = parse_frozen_enforcement_inventory(&tampered, SCHEMA_BYTES).unwrap_err();
+            assert!(error.to_string().contains("unknown field"));
+        }
     }
 
     #[test]
@@ -275,6 +319,8 @@ mod tests {
         assert_eq!(verified.role_count, 27);
         assert_eq!(verified.active_role_count, 16);
         assert_eq!(verified.current_stack, "A0");
+        assert_eq!(verified.inventory_sha256, sha256_hex(INVENTORY_BYTES));
+        assert_eq!(verified.schema_git_blob_sha, ENFORCEMENT_SCHEMA_GIT_BLOB_SHA);
     }
 
     #[test]
