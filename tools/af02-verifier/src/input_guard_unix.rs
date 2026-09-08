@@ -727,11 +727,11 @@ fn guard_yaml(
 
     for (line_index, raw_line) in text.lines().enumerate() {
         let line_number = line_index + 1;
-        let indent = leading_spaces(raw_line, path, line_number)?;
+        let content_indent = raw_line.bytes().take_while(|byte| *byte == b' ').count();
         let trimmed_raw = raw_line.trim();
 
         if let Some((header_indent, accumulated)) = block_scalar.as_mut() {
-            if trimmed_raw.is_empty() || indent > *header_indent {
+            if trimmed_raw.is_empty() || content_indent > *header_indent {
                 *accumulated = accumulated
                     .checked_add(u64::try_from(raw_line.len() + 1).unwrap_or(u64::MAX))
                     .ok_or_else(|| {
@@ -751,6 +751,7 @@ fn guard_yaml(
             block_scalar = None;
         }
 
+        let indent = leading_spaces(raw_line, path, line_number)?;
         let without_comment = strip_yaml_comment(raw_line);
         let trimmed = without_comment.trim();
         if trimmed.is_empty() || trimmed == "---" || trimmed == "..." {
@@ -1137,6 +1138,17 @@ mod tests {
         guard_inputs(
             &root.path,
             &[input(CandidateFormat::Yaml, "siblings.yml")],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn accepts_tabs_inside_block_scalar_payload_after_required_indentation() {
+        let root = TempRoot::new();
+        root.write("block.yml", b"value: |\n  \tpayload\n");
+        guard_inputs(
+            &root.path,
+            &[input(CandidateFormat::Yaml, "block.yml")],
         )
         .unwrap();
     }
