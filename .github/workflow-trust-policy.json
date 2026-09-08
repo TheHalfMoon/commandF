@@ -80,8 +80,7 @@
       "jobs": {
         "af02-base-verifier": {
           "permissions": {
-            "contents": "read",
-            "pull-requests": "read"
+            "contents": "read"
           },
           "runner": "ubuntu-24.04",
           "timeout_minutes": 15
