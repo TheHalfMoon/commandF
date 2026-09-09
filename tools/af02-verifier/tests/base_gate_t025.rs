@@ -120,15 +120,36 @@ fn authority_triggering_is_universal_and_existing_authority_fails_closed() {
 }
 
 #[test]
-fn frozen_future_verifier_path_is_known_but_never_executed() {
+fn frozen_future_verifier_path_transitions_to_immutable_authority() {
     let candidate = candidate_root("future-role");
     let path = "tools/af02-verifier/src/replay.rs";
-    write_candidate(&candidate, path, b"pub fn run_replay() {}\n");
-    let proof = verify(&candidate, vec![changed("added", path, None)])
-        .expect("frozen future implementation path should be known authority data");
-    assert_eq!(proof.mode, "FUTURE_AUTHORITY_ADDITION_VERIFIED");
-    assert_eq!(proof.authority_paths, vec![path.to_owned()]);
-    assert!(!proof.candidate_code_executed);
+
+    if repo_root().join(path).exists() {
+        let marker = candidate.join("future-authority-executed.marker");
+        let malicious = format!(
+            "pub fn run_replay() {{ std::fs::write({:?}, b\"executed\").unwrap(); }}\n",
+            marker
+        );
+        write_candidate(&candidate, path, malicious.as_bytes());
+        let error = verify(&candidate, vec![changed("modified", path, None)])
+            .expect_err("activated future authority must become immutable canonical authority");
+        assert!(
+            error.contains("canonical-base AF-02 authority is immutable"),
+            "activated future authority was not rejected by the canonical immutability gate: {error}"
+        );
+        assert!(
+            !marker.exists(),
+            "rejected activated future authority must never execute candidate code"
+        );
+    } else {
+        write_candidate(&candidate, path, b"pub fn run_replay() {}\n");
+        let proof = verify(&candidate, vec![changed("added", path, None)])
+            .expect("frozen future implementation path should be known authority data");
+        assert_eq!(proof.mode, "FUTURE_AUTHORITY_ADDITION_VERIFIED");
+        assert_eq!(proof.authority_paths, vec![path.to_owned()]);
+        assert!(!proof.candidate_code_executed);
+    }
+
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
 }
 
