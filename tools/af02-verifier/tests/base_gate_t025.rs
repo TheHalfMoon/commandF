@@ -241,7 +241,8 @@ fn t026_authority_rename_and_removal_fail_closed() {
 
     let removal = verify(
         &candidate,
-        vec![changed("removed", ".github/required-checks.json", None)])
+        vec![changed("removed", ".github/required-checks.json", None)],
+    )
     .expect_err("authority removal must fail closed");
     assert!(removal.contains("authority removal"));
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
