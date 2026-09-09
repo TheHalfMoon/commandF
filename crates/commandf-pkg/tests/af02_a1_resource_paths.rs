@@ -16,11 +16,12 @@ mod corpus {
     }
 }
 
+#[path = "../../../tools/af02-verifier/src/replay.rs"]
+mod replay;
+#[rustfmt::skip]
 #[allow(dead_code)]
 #[path = "../../../tools/af02-verifier/src/resource.rs"]
 mod resource;
-#[path = "../../../tools/af02-verifier/src/replay.rs"]
-mod replay;
 
 use corpus::ExpectedOutcome;
 use replay::{HarnessFailure, NormalizedOutcome, ReplayExecution, SurfaceObservation};
@@ -176,9 +177,7 @@ fn af02_t035_replay_role_is_bound_to_the_canonical_resource_runner() {
     assert!(replay_source.contains("pub fn normalize_result("));
     assert!(inventory.contains("\"role\":\"REPLAY_RUNNER\""));
     assert!(inventory.contains("\"role\":\"RESULT_NORMALIZER\""));
-    assert!(inventory.contains(
-        "\"planned_path\":\"tools/af02-verifier/src/replay.rs\""
-    ));
+    assert!(inventory.contains("\"planned_path\":\"tools/af02-verifier/src/replay.rs\""));
     for variant in ["AcceptCanonical", "RejectInvalid", "FailClosedLimit"] {
         assert!(
             corpus_source.contains(variant),
@@ -246,7 +245,10 @@ fn prepare_property_binaries(root: &Path, image: &str, build: &Path) -> Vec<Path
         if value.get("reason").and_then(serde_json::Value::as_str) != Some("compiler-artifact") {
             continue;
         }
-        let Some(name) = value.pointer("/target/name").and_then(serde_json::Value::as_str) else {
+        let Some(name) = value
+            .pointer("/target/name")
+            .and_then(serde_json::Value::as_str)
+        else {
             continue;
         };
         if !PROPERTY_TESTS.contains(&name) {
