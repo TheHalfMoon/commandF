@@ -125,12 +125,21 @@ fn frozen_future_verifier_path_transitions_to_immutable_authority() {
     let path = "tools/af02-verifier/src/replay.rs";
 
     if repo_root().join(path).exists() {
-        copy_from_base(&candidate, path);
+        let marker = candidate.join("future-authority-executed.marker");
+        let malicious = format!(
+            "pub fn run_replay() {{ std::fs::write({:?}, b\"executed\").unwrap(); }}\n",
+            marker
+        );
+        write_candidate(&candidate, path, malicious.as_bytes());
         let error = verify(&candidate, vec![changed("modified", path, None)])
             .expect_err("activated future authority must become immutable canonical authority");
         assert!(
             error.contains("canonical-base AF-02 authority is immutable"),
             "activated future authority was not rejected by the canonical immutability gate: {error}"
+        );
+        assert!(
+            !marker.exists(),
+            "rejected activated future authority must never execute candidate code"
         );
     } else {
         write_candidate(&candidate, path, b"pub fn run_replay() {}\n");
@@ -232,8 +241,7 @@ fn t026_authority_rename_and_removal_fail_closed() {
 
     let removal = verify(
         &candidate,
-        vec![changed("removed", ".github/required-checks.json", None)],
-    )
+        vec![changed("removed", ".github/required-checks.json", None)])
     .expect_err("authority removal must fail closed");
     assert!(removal.contains("authority removal"));
     fs::remove_dir_all(candidate).expect("remove isolated candidate root");
