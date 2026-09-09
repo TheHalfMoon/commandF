@@ -58,9 +58,12 @@ pub fn run_replay(
 ) -> ReplayExecution {
     match run_bounded(policy, source_dir, output_dir, command) {
         Ok(runner) => ReplayExecution::Completed { runner },
-        Err(error) => ReplayExecution::HarnessFailure {
-            failure: classify_resource_error(&error),
-        },
+        Err(error) => {
+            eprintln!("AF02_REPLAY_HARNESS_ERROR={error}");
+            ReplayExecution::HarnessFailure {
+                failure: classify_resource_error(&error),
+            }
+        }
     }
 }
 
