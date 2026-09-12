@@ -158,6 +158,7 @@ The following planning artifacts were produced from a whole-plan review against 
 - `docs/COMMAND_F_MASTER_ARCHITECTURE_V3_CANDIDATE.md`
 - `docs/COMMAND_F_PLAN_GAP_REVIEW_2026-09-12.md`
 - `docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`
+- `docs/COMMAND_F_V3_EXECUTION_PLAYBOOK.md`
 
 They are **planning candidates only**. They do not supersede V2 execution authority, mutate an active AF/CF task frontier, or authorize production implementation by themselves.
 
@@ -176,4 +177,4 @@ The V3 candidate preserves CF-01..CF-16 and AF-01..AF-04 identities and proposes
 - public compatibility evidence; and
 - benchmark/research convergence.
 
-No candidate in this overlay may bypass the existing build-order rule. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.
+No candidate in this overlay may bypass the existing build-order rule. `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` is the single implementation-facing navigation document for the candidate roadmap: it defines the dependency DAG, closure contract for every G01-G40 gap, per-slice work packages, acceptance evidence, and agent operating loop. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.

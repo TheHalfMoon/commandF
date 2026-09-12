@@ -57,6 +57,20 @@ Severity meaning:
 | G28 | P1 | Donor lifecycle/staleness is not automatically visible | discovery preserves sources | archived/deprecated upstreams can remain listed as if current | qualification records maintenance/deprecation state and requires refresh before adoption |
 | G29 | P0 | Software license and terminology/data-content rights need a stronger cross-plan gate | existing docs state separation | open-source terminology server can be legal while the terminology content is not redistributable | CF-21/25 rights-aware BOM/evidence and explicit content-license disposition |
 | G30 | P0 | commandF's own output/rule compatibility needs a public migration policy | fingerprints and schemas exist piecemeal | downstream automation can lose trust across commandF upgrades | CF-18/23 schema compatibility and deprecation policy |
+| G31 | P0 | Artifact-only maturity misses protocol-level compatibility surfaces | SMART, Bulk Data, subscriptions and related protocols are retained in discovery but not execution maturity | a resource-compatible change can still break launch/export/event workflows | CF-18 protocol maturity + CF-19 contract scanning + CF-20 conformance evidence |
+| G32 | P0 | Configuration and policy precedence are not frozen as evidence-bearing semantics | CLI/policy/config exist across slices | two surfaces can produce different conclusions from hidden precedence | CF-18/23 versioned config schema, deterministic precedence and effective-config evidence |
+| G33 | P0 | No stable partial-result/error taxonomy across future APIs | failures are handled slice-by-slice | oracle/resource/unsupported failures can be misread as safe/no-impact | CF-18/23 stable classified error and stage-completion contract |
+| G34 | P1 | Observed interaction contracts lack explicit privacy-safe capture governance | interaction evidence is retained as a candidate | useful consumer evidence could accidentally introduce PHI/secrets or unverifiable redaction | CF-19/20 opt-in minimization/redaction/retention policy plus synthetic/public qualification path |
+| G35 | P1 | Evidence bundle interchange/version compatibility is not a first-class contract | evidence bundles are retained conceptually | offline replay can break across commandF versions without a migration/rejection policy | CF-21/23 versioned bundle manifest, validator and compatibility policy |
+| G36 | P1 | Multi-package/workspace/monorepo and branch-range comparison semantics are implicit | package-level commands exist | real IG repositories can be compared inconsistently or double-count stacked changes | CF-17/19/23 explicit workspace identity and exact-commit comparison semantics |
+| G37 | P1 | Public observatory has no correction/retraction/freshness model | public evidence site is planned | corrected analysis can overwrite history or stale data can look current | CF-27 immutable supersession, freshness and retraction policy |
+| G38 | P1 | Plugin lifecycle compatibility and revocation are not specified | capability-scoped Wasm seam is planned | signed plugins can still become unsafe or unusable across ABI/key/version changes | CF-24 API/ABI compatibility, revocation, upgrade and key-rollover policy |
+| G39 | P1 | Cross-system concurrency/transaction safety has no explicit V3 evidence lane | original gap ledger retains race/concurrency risk | compatibility can look correct in static artifacts yet fail under ordering/transaction semantics | CF-20 measured runtime/concurrency evidence + CF-28 reproducible benchmark lane |
+| G40 | P2 | Identity/consent/authorization adjacent domains need an explicit scope boundary | original ledger retains patient matching, Consent/Permission and SMART limitations | commandF can either silently omit relevant dependencies or expand into an unsafe universal identity/policy engine | CF-19 declared-contract evidence + CF-24 bounded policy adapters; identity matching stays external/research unless a future Spec Kit proves need |
+
+## Closure rule
+
+A row in this ledger is not closed because it appears in a roadmap. It becomes closed only when its owning slice satisfies the executable closure contract in `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` and that evidence is canonical.
 
 ## Additional gaps discovered during open-source comparison
 
@@ -93,17 +107,17 @@ Extism/Wasmtime are attractive because WebAssembly provides an isolation seam, b
 | Candidate slice | Primary gaps closed |
 | --- | --- |
 | CF-17 Ecosystem Observatory | G01, G15, G22, G27, G28 |
-| CF-18 Compatibility Coverage Model | G02, G03, G08, G09, G13, G14, G30 |
-| CF-19 Consumer Contract Scanner | G04, G05 |
-| CF-20 Compatibility Lab | G06, G07, G10, G23 |
-| CF-21 Interoperability BOM + Reproducible Build | G11, G12, G19, G29 |
+| CF-18 Compatibility Coverage Model | G02, G03, G08, G09, G13, G14, G30, G31, G32, G33 |
+| CF-19 Consumer Contract Scanner | G04, G05, G18, G31, G34, G36, G40 |
+| CF-20 Compatibility Lab | G06, G07, G10, G23, G31, G34, G39 |
+| CF-21 Interoperability BOM + Reproducible Build | G11, G12, G19, G29, G35 |
 | CF-22 Deterministic TestGen | G24 plus evidence-to-test traceability |
-| CF-23 Developer Platform | G16, G20, G30 |
-| CF-24 Plugin and Policy SDK | G17 |
+| CF-23 Developer Platform | G16, G20, G30, G32, G33, G35, G36 |
+| CF-24 Plugin and Policy SDK | G17, G38, G40 |
 | CF-25 Terminology Gap/Federation Intelligence | G29 plus terminology gaps already retained |
 | CF-26 Transformation Evidence/Certificates | transformation/loss/provenance moat |
-| CF-27 Public Compatibility Observatory | G21 plus standards/vendor drift visibility |
-| CF-28 Bench and Research Convergence | G25 and objective comparative evidence |
+| CF-27 Public Compatibility Observatory | G21, G37 plus standards/vendor drift visibility |
+| CF-28 Bench and Research Convergence | G25, G39 and objective comparative evidence |
 
 ## Things the plan should explicitly *not* add now
 
@@ -131,6 +145,10 @@ Wave 3: CF-26 -> CF-27 -> CF-28
 ```
 
 Dependencies can allow selected planning work in parallel, but no slice should borrow future evidence to close itself.
+
+## Build handoff
+
+The dependency graph, task skeleton, G01-G40 closure contracts, per-slice work packages, acceptance evidence, protocol scope, configuration/error/privacy/workspace rules, and agent operating loop are defined in `COMMAND_F_V3_EXECUTION_PLAYBOOK.md`. Future agents should start there after re-reading live canonical authority.
 
 ## Definition of plan success
 

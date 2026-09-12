@@ -45,6 +45,8 @@ The following remain true across every future slice:
 - offline and air-gapped operation remains possible for all deterministic core analysis once required inputs are acquired;
 - future plugins are capability-scoped, resource-bounded, deterministic by contract, and denied network/filesystem authority by default;
 - no universal clinical IR becomes a product prerequisite without executed research evidence from multiple real dialects.
+- static artifact compatibility never implies cross-system transaction/concurrency safety; any such claim requires measured runtime evidence;
+- patient identity matching and general consent/authorization policy remain external/bounded domains: commandF may analyze declared compatibility contracts or adapters but does not claim a universal matcher or policy engine.
 
 ## Architecture: seven cooperating planes
 
@@ -88,6 +90,8 @@ A finding is not simply `BREAKING` or `SAFE`. It is evaluated across a versioned
 | `TERMINOLOGY` | Did allowed coded meaning, binding strength, system/version, expansion, or translation behavior change? |
 | `QUERY` | Can Search/FHIRPath/CQL/SQL-on-FHIR or other declared query behavior change? |
 | `RUNTIME` | Does observed validator/server/client behavior diverge despite apparently compatible metadata? |
+| `PROTOCOL` | Can a REST operation, SMART launch, Bulk Data, subscription/event, or other declared interaction contract stop working? |
+| `AUTHORIZATION` | Did declared SMART/backend-service scopes, capabilities, or access expectations change in a way that breaks a protected client? |
 | `AUTHORING` | Can source-authored FSH/mapping intent no longer reproduce the built artifact? |
 | `MIGRATION` | Is an explicit migration/recipe required for protected consumers? |
 
@@ -180,6 +184,23 @@ Initial priority groups:
 | P2 | additional canonical/conformance resources proven relevant by the ecosystem corpus |
 
 Unsupported artifact/field transitions must be explicitly reported as unsupported/unclassified, never silently ignored.
+
+
+## Protocol coverage and maturity matrix
+
+FHIR interoperability risk also exists above individual resource schemas. Protocol support therefore advances through an independent maturity matrix rather than being implied by artifact support.
+
+Initial candidate order:
+
+| Priority | Protocol/interaction surfaces |
+| --- | --- |
+| P0 | FHIR REST interactions/operations, Search behavior, CapabilityStatement-declared behavior |
+| P1 | SMART App Launch/backend-service declarations and scopes; FHIR Bulk Data export |
+| P1 | R4/R4B/R5 subscriptions/eventing where standards/IGs define computable contracts |
+| P2 | bounded FHIRcast/CDS Hooks contracts when an owned consumer/IG declares them |
+| P2 | GraphQL-on-FHIR and other evolving interfaces only where ecosystem evidence justifies support |
+
+A protocol can be `DISCOVER -> PARSE -> DIFF -> CLASSIFY -> CONSUMER -> ORACLE` mature independently of the underlying resource artifact maturity. Authorization analysis is compatibility evidence about declared client/server expectations; commandF does not become a universal access-control engine.
 
 ## Change-space coverage
 
@@ -335,6 +356,20 @@ Support must be explicit by capability, not implied by parsing.
 - R6 remains preview/research while it is a draft publication sequence; mutable CI builds can inform readiness but cannot support a production compatibility guarantee.
 - cross-version conversion evidence is always labeled separately from same-version compatibility.
 
+## Configuration, error, workspace, and privacy contracts
+
+Future V3 surfaces must share one deterministic configuration model with explicit precedence and retained effective semantic identity. Environment variables may carry secrets/locations where necessary but must not silently change compatibility policy.
+
+Machine interfaces must classify invalid input, unsupported version/protocol, unclassified transition, configuration/policy error, oracle unavailable/unsupported/disagreement, resource-limit failure, rights/privacy denial, plugin failure, and internal invariant failure separately. Partial reports state which stages completed; missing evidence is never equivalent to no impact.
+
+Workspace analysis must define multi-package roots, exact commit/range identity, stacked-change behavior, generated/cache exclusions, and stable source identifiers without leaking host-local paths into portable evidence.
+
+Observed HTTP interaction evidence is optional and requires an explicit opt-in, minimization/redaction/retention contract plus synthetic/public fixtures that qualify the same semantic path. Core repository CI remains PHI-free.
+
+## Execution playbook
+
+`COMMAND_F_V3_EXECUTION_PLAYBOOK.md` is the implementation-facing companion to this architecture candidate. It provides the candidate dependency DAG, universal Spec Kit skeleton, G01-G40 executable closure contracts, per-slice work packages, exact acceptance expectations, protocol scope, configuration/error/privacy/workspace rules, and agent operating loop. It remains planning-only until a later canonical migration gate activates V3 execution authority.
+
 ## New post-CF-16 candidate roadmap
 
 These identities are planning candidates only and do not renumber, bypass, or authorize the current CF-01..CF-16 or AF program.
@@ -353,19 +388,19 @@ Depends on: CF-03/04/07/13 plus real-corpus evidence.
 
 ### CF-19 — Consumer Contract Scanner
 
-Ships parsers/indexers for selected Search, SearchParameter, FHIRPath, CQL, SQL-on-FHIR ViewDefinition, CapabilityStatement, and TestScript consumer evidence plus protected consumer/version edges.
+Ships parsers/indexers for selected Search, SearchParameter, FHIRPath, CQL, SQL-on-FHIR ViewDefinition, CapabilityStatement, TestScript, REST-operation, SMART/Bulk/subscription declarations and other bounded protocol consumer evidence plus protected consumer/version edges and privacy-safe optional interaction-contract imports.
 
 Depends on: CF-11G, CF-12, CF-18.
 
 ### CF-20 — Compatibility Lab
 
-Ships reproducible differential matrices for selected validators/FHIRPath engines/test frameworks and declared-versus-observed behavior with external availability separated from deterministic conclusions.
+Ships reproducible differential matrices for selected validators/FHIRPath engines/test frameworks and supported protocol conformance suites, plus declared-versus-observed behavior with external availability separated from deterministic conclusions.
 
 Depends on: CF-06, CF-10 evidence model, CF-18/19.
 
 ### CF-21 — Interoperability BOM and Reproducible Build Evidence
 
-Ships exact interoperability dependency closure, IG source-to-built evidence, and machine export/bundle formats distinct from software SBOM.
+Ships exact interoperability dependency closure, IG source-to-built evidence, a versioned Interoperability BOM, and versioned validated machine export/bundle formats distinct from software SBOM.
 
 Depends on: CF-01/02/09/17 and AF-03.
 
@@ -377,13 +412,13 @@ Depends on: CF-18/20/21.
 
 ### CF-23 — Developer Platform
 
-Ships stable machine API, local daemon/cache, pre-commit workflow, LSP/VS Code integration, and optional read-only MCP adapter over the same deterministic engine.
+Ships stable machine API, deterministic configuration/error contracts, workspace/monorepo comparison semantics, local daemon/cache, pre-commit workflow, LSP/VS Code integration, verified install/update flows, and optional read-only MCP adapter over the same deterministic engine.
 
 Depends on: stabilized finding/compatibility schemas from CF-18/19.
 
 ### CF-24 — Capability-Scoped Plugin and Policy SDK
 
-Ships pinned/signed Wasm plugin contracts, capability manifests, resource limits, organization policy adapters, and provenance. Core compatibility rules remain outside the plugin trust boundary.
+Ships pinned/signed Wasm plugin contracts, capability manifests, resource limits, API/ABI compatibility and revocation/key-rollover policy, organization policy adapters, and provenance. Core compatibility rules remain outside the plugin trust boundary.
 
 Depends on: CF-18, AF-03/04, CF-23 stable API.
 
@@ -401,7 +436,7 @@ Depends on: CF-16, CF-21, CF-25 and executed transformation research.
 
 ### CF-27 — Public Compatibility Observatory
 
-Ships a public evidence view/database over immutable analyzed releases, rule coverage, standards drift, and compatibility history. It hosts analysis evidence, not FHIR packages as a competing registry.
+Ships a public evidence view/database over immutable analyzed releases, rule coverage, standards drift, and compatibility history, with explicit freshness/correction/retraction semantics. It hosts analysis evidence, not FHIR packages as a competing registry.
 
 Depends on: CF-17..22 and production-grade privacy/provenance review.
 
