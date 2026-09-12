@@ -166,11 +166,11 @@ A candidate is accepted into a future Spec Kit only if all applicable questions 
 
 Some previously retained sources must not be treated as current simply because they remain useful historically:
 
-- the broad `GoogleCloudPlatform/healthcare` repository was archived in 2026; use the still-relevant healthcare-data-harmonization project only under its own live identity;
-- older FHIRconnect specification locations have been superseded/deprecated; the donor ledger must follow the currently maintained specification/repository identity before any new adoption;
+- prior discovery notes suggest lifecycle changes around the broad `GoogleCloudPlatform/healthcare` material. Treat that lifecycle claim as **UNVERIFIED_RESEARCH** until a donor record pins the exact repository identity, dated upstream lifecycle evidence, immutable reference/digest, and the separate `healthcare-data-harmonization` identity before adoption;
+- prior discovery notes suggest older FHIRconnect specification locations changed or were superseded. Treat that lifecycle claim as **UNVERIFIED_RESEARCH** until the donor record pins the exact old/new source identities, dated upstream notice, immutable references/digests, and the currently maintained specification/repository before adoption;
 - mutable upstream `main`, `latest`, build.fhir.org current content, package CI builds, and "latest release" download URLs are discovery conveniences, never retained evidence identities.
 
-The open-source inventory should gain an automated stale-source check in a future planning/assurance unit: archived repository, renamed/default branch, disappeared release, changed license, or deprecation notice must surface as a review event.
+Any future lifecycle claim used for adoption must itself carry immutable evidence. The open-source inventory should also gain an automated stale-source check in a future planning/assurance unit: archived repository, renamed/default branch, disappeared release, changed license, or deprecation notice must surface as a review event.
 
 ## Strong recommendations by roadmap slice
 

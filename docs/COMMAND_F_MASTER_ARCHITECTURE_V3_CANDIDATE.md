@@ -107,7 +107,7 @@ Owns evidence about who depends on what:
 - SQL-on-FHIR `ViewDefinition` dependencies;
 - CapabilityStatement expectations;
 - TestScript/Inferno contract evidence;
-- selected observed HTTP interaction contracts where privacy policy permits;
+- selected **synthetic/public or metadata-only** HTTP interaction contracts inside the approved default trust boundary; any instance-touching profiler is a separate on-premises trust boundary and emits aggregate/statistical evidence by default;
 - protected consumer/version sets used by `can-i-certify` decisions.
 
 Consumer evidence must preserve deployment/version context. A consumer contract is never inferred solely from package popularity.
@@ -261,12 +261,12 @@ The observatory enables standards/vendor drift, empirical rule validation, compa
 Before ecosystem-scale analysis, commandF needs explicit scaling semantics:
 
 - content-addressed raw inputs and normalized artifacts;
-- deterministic cache keys over input digests + engine/rule/config identities;
+- deterministic cache keys over input digests + parser + normalizer + engine + rule + configuration identities; parser/normalizer identity may be components of a versioned engine identity only if that composition is explicit and tested;
 - incremental graph updates keyed by immutable artifact identities;
 - invalidation based on dependency edges rather than global rebuilds;
 - bounded parallelism and resource envelopes measured by AF-04;
 - local/offline mirrors with the same logical identity as network-fetched artifacts;
-- no cache hit may bypass a changed rule/model/tool identity.
+- no cache hit may bypass a changed parser, normalizer, engine, rule, model, configuration, or external-tool identity.
 
 A Merkle-style identity graph is a useful implementation pattern, not a mandated storage technology.
 

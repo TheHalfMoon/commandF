@@ -165,7 +165,7 @@ A gap is **PLANNED** when mapped to a future unit. It becomes **CLOSED** only wh
 | G23 | CF-20/21 | GoFSH/SUSHI/source-map round-trip observations are retained and divergence is explicit. |
 | G24 | CF-22 | Every generated assertion traces to exact deterministic evidence; AI output cannot activate authority by itself. |
 | G25 | CF-18/28 research lane | Compatibility algebra receives randomized/property/differential evidence; formal work stays research until executed. |
-| G26 | all future slices | Any adopted source has qualification record, pin, rights, trust boundary, owner slice, and adoption mode. |
+| G26 | all future slices + V3 reconciliation gate | Any adopted source has qualification record, exact identity/pin, rights, trust boundary, owner slice, adoption mode, and immutable lifecycle evidence for any archived/deprecated/superseded claim. |
 | G27 | CF-17 | Package dependency closure and canonical-reference closure are reported independently with unresolved witnesses. |
 | G28 | CF-17 + donor policy | Source lifecycle/staleness is recorded and refreshed before adoption. |
 | G29 | CF-21/25 | Software license and terminology/content rights are separately encoded and redistribution is fail-closed. |

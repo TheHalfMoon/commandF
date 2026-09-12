@@ -108,7 +108,7 @@ Extism/Wasmtime are attractive because WebAssembly provides an isolation seam, b
 | --- | --- |
 | CF-17 Ecosystem Observatory | G01, G15, G22, G27, G28 |
 | CF-18 Compatibility Coverage Model | G02, G03, G08, G09, G13, G14, G30, G31, G32, G33 |
-| CF-19 Consumer Contract Scanner | G04, G05, G18, G31, G34, G36, G40 |
+| CF-19 Consumer Contract Scanner | G04, G05, G31, G34, G36, G40; enriches CF-15 migration evidence but does not own G18 core authority |
 | CF-20 Compatibility Lab | G06, G07, G10, G23, G31, G34, G39 |
 | CF-21 Interoperability BOM + Reproducible Build | G11, G12, G19, G29, G35 |
 | CF-22 Deterministic TestGen | G24 plus evidence-to-test traceability |
@@ -118,6 +118,8 @@ Extism/Wasmtime are attractive because WebAssembly provides an isolation seam, b
 | CF-26 Transformation Evidence/Certificates | transformation/loss/provenance moat |
 | CF-27 Public Compatibility Observatory | G21, G37 plus standards/vendor drift visibility |
 | CF-28 Bench and Research Convergence | G25, G39 and objective comparative evidence |
+| Existing CF-15 Verified Dry-run Recipes | G18 core migration artifact authority; future CF-19 adds consumer context and CF-22 adds deterministic generated-test verification |
+| Cross-cutting source qualification / future V3 reconciliation gate | G26 plus G28 adoption refresh: no source becomes adopted without qualification schema, exact identity/pin, rights, trust boundary, owning slice, adoption mode, and lifecycle evidence where claimed |
 
 ## Things the plan should explicitly *not* add now
 
