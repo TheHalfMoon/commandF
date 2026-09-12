@@ -24,11 +24,8 @@ pub fn run(
 
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
-    before_cache.verify(&before_locked.sha256)?;
-    after_cache.verify(&after_locked.sha256)?;
-
-    let before_bytes = read_locked_archive(&before_cache, before_locked)?;
-    let after_bytes = read_locked_archive(&after_cache, after_locked)?;
+    let before_bytes = before_cache.read_verified(&before_locked.sha256)?;
+    let after_bytes = after_cache.read_verified(&after_locked.sha256)?;
     let diff = diff_package_archives(
         package_name.to_string(),
         &before_locked.version,
@@ -55,15 +52,6 @@ fn require_lock_v2(lockfile: &Lockfile, side: &'static str) -> io::Result<()> {
             lockfile.schema
         ),
     ))
-}
-
-fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> io::Result<Vec<u8>> {
-    fs::read(
-        cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", locked.sha256)),
-    )
 }
 
 fn select_locked_package<'a>(
