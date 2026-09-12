@@ -65,12 +65,13 @@ A candidate is accepted into a future Spec Kit only if all applicable questions 
 | [FHIR/auto-ig-builder](https://github.com/FHIR/auto-ig-builder) | OFFICIAL_REFERENCE | PATTERN_ONLY | CF-17/21 | Build logs/current output are mutable telemetry, never immutable semantic authority. |
 | [FHIR/packages](https://github.com/FHIR/packages) | OFFICIAL_REFERENCE | PINNED_DATA | CF-17/20 | Useful core/support/cross-version package source. Pin exact artifacts. |
 | [HL7/fhir-extensions](https://github.com/HL7/fhir-extensions) | OFFICIAL_REFERENCE | PINNED_DATA | CF-17/18 | Treat separately from core because extension release cadence and drift differ. |
+| [HL7/fhir-shorthand](https://github.com/HL7/fhir-shorthand) | NORMATIVE | PINNED_DATA | CF-09/21 | Official FHIR Shorthand specification source; pin a published/spec revision separately from SUSHI implementation behavior. |
 | [FHIR/sushi](https://github.com/FHIR/sushi) | OFFICIAL_REFERENCE | PINNED_PROCESS_ORACLE | CF-09/21 | FSH compilation authority for its bounded role, not general FHIR validation authority. |
 | [FHIR/GoFSH](https://github.com/FHIR/GoFSH) | OFFICIAL_REFERENCE | DIFFERENTIAL_ONLY | CF-09/20/21 | Strong source-fidelity and round-trip donor; retain round-trip divergence instead of laundering it. |
 | [FHIR/vscode-fsh](https://github.com/FHIR/vscode-fsh) | OFFICIAL_REFERENCE | PATTERN_ONLY | CF-23 | IDE/source navigation UX donor. Do not duplicate semantic authority in extension code. |
 | [HL7/FHIRPath](https://github.com/HL7/FHIRPath) | NORMATIVE | PINNED_DATA | CF-19/20 | Specification input for expression semantics. |
 | [HL7/fhirpath.js](https://github.com/HL7/fhirpath.js) | OFFICIAL_REFERENCE | DIFFERENTIAL_ONLY | CF-20 | Independent implementation comparison; implementation status is not normative semantics. |
-| [HL7/sql-on-fhir-v2](https://github.com/HL7/sql-on-fhir) | NORMATIVE | PINNED_DATA | CF-19 | Parse supported ViewDefinition contract semantics from published spec. |
+| [HL7/sql-on-fhir](https://github.com/HL7/sql-on-fhir) | NORMATIVE | PINNED_DATA | CF-19 | Parse supported ViewDefinition contract semantics from published spec. |
 | [FHIR/sql-on-fhir.js](https://github.com/FHIR/sql-on-fhir.js) | OFFICIAL_REFERENCE | DIFFERENTIAL_ONLY | CF-19/20 | Shared implementation/tests useful for ViewDefinition differential evidence. |
 
 ## Tier B — validators, servers, SDKs, and differential engines
@@ -100,11 +101,12 @@ A candidate is accepted into a future Spec Kit only if all applicable questions 
 | [microcks/microcks](https://github.com/microcks/microcks) | PATTERN | PATTERN_ONLY | CF-20/22 | Multi-protocol mock/conformance workflow donor. |
 | [AsyncAPI/diff](https://github.com/asyncapi/diff) | PATTERN | PATTERN_ONLY | future eventing | Breaking/non-breaking/unclassified event-contract diff donor for later FHIR subscriptions/eventing. |
 | [fhir-crucible/testscript-generator](https://github.com/fhir-crucible/testscript-generator) | PATTERN | PATTERN_ONLY | CF-22 | Deterministic TestScript generation donor. Validate output independently. |
+| [inferno-framework/inferno-core](https://github.com/inferno-framework/inferno-core) | PATTERN | PATTERN_ONLY | CF-20/22 | Current open-source conformance-test framework architecture and test-kit execution patterns; Inferno DSL is not FHIR TestScript authority. |
 | [inferno-framework/client-fhir-testing](https://github.com/inferno-framework/client-fhir-testing) | PATTERN | PATTERN_ONLY | CF-19/20/22 | Recorded transaction -> validation/replay model; carefully separate recorded data/privacy boundaries. |
 | [onc-healthit/ONCLAIVE](https://github.com/onc-healthit/ONCLAIVE) | RESEARCH | RESEARCH_ONLY | CF-22 | AI-assisted requirements/test generation research only; model output cannot activate commandF authority. |
 | [mitre/ig-summary](https://github.com/mitre/ig-summary) | PATTERN | PATTERN_ONLY | CF-18 | IG/profile normalization/comparison inspiration, not semantic oracle. |
 | [HealthSamurai/fhir-profile-diff](https://github.com/HealthSamurai/fhir-profile-diff) | PATTERN | PATTERN_ONLY | CF-18/23 | UX/normalization study; any AI explanation remains non-authoritative. |
-| [bpacnz/UploadFIG](https://github.com/brianpos/UploadFIG) | PATTERN | PATTERN_ONLY | CF-17 | Important lesson: package closure can exist while canonical references remain unresolved. |
+| [brianpos/UploadFIG](https://github.com/brianpos/UploadFIG) | PATTERN | PATTERN_ONLY | CF-17 | Important lesson: package closure can exist while canonical references remain unresolved. |
 
 ## Tier D — terminology infrastructure and evidence
 
