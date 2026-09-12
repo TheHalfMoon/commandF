@@ -678,3 +678,29 @@ Before a new major architectural plan supersedes V2, the plan review must answer
 - Which new discoveries were added?
 
 No future plan may silently drop a candidate/research track merely because it is not on the immediate build path.
+
+---
+
+## 28. 2026-09-12 deep-research addendum
+
+A new qualification review extends this annex without turning candidates into adopted dependencies:
+
+`docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`
+
+Important newly elevated research inputs include:
+
+- `FHIR/ig-registry` plus its package-feed metadata as the preferred official seed for an immutable ecosystem observatory;
+- `FHIR/fhir-test-cases` and `HL7/fhir-testing-ig` as a distinct official/reference corpus class;
+- `FHIR/fhir-package-loader` for differential package-resolution/cache semantics;
+- `FHIR/GoFSH` round-trip behavior for independent FSH source-fidelity evidence;
+- `oasdiff` change-space coverage as methodology prior art for proving rule-catalog coverage;
+- Buf compatibility modes as prior art for multidimensional compatibility policy;
+- Pact Broker version matrices as prior art for protected consumer/version compatibility decisions;
+- GUAC as evidence-graph normalization prior art;
+- Extism/Wasmtime capability-scoped Wasm patterns for a future bounded plugin seam;
+- SQL-on-FHIR reference tests and independent FHIRPath engines for query-impact and differential compatibility evidence;
+- FHIR TestScript generators/Inferno patterns for deterministic TestGen;
+- current openEHR/FHIR bridge specifications and Whistle/FHIRconnect implementations for mapping-analysis research; and
+- in-toto/SLSA/Sigstore/SBOM tooling for provenance plumbing while keeping a healthcare Interoperability BOM semantically distinct.
+
+The addendum also records lifecycle corrections: archived/deprecated upstream locations, mutable development/CI builds, and `latest` aliases are not acceptable retained evidence identities. Exact lifecycle and rights are reverified at adoption time.
