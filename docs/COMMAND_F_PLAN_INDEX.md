@@ -150,3 +150,30 @@ It may **not** disappear silently.
 Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool/capability is activated only when a concrete CF or AF unit requires it and its provenance/adoption gate is satisfied.
 
 Assurance tooling is not exempt from this rule: naming cargo-fuzz, SLSA, Sigstore, Scorecard, cargo-deny, cargo-audit, zizmor, or any other tool in discovery/program documents is not adoption until the relevant AF plan pins the exact implementation identity and acceptance boundary.
+
+## I. 2026-09-12 V3 strategic planning overlay
+
+The following planning artifacts were produced from a whole-plan review against canonical `main` at `c56d9619758ea3e1075e751bec83ddea6706a81e`:
+
+- `docs/COMMAND_F_MASTER_ARCHITECTURE_V3_CANDIDATE.md`
+- `docs/COMMAND_F_PLAN_GAP_REVIEW_2026-09-12.md`
+- `docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`
+
+They are **planning candidates only**. They do not supersede V2 execution authority, mutate an active AF/CF task frontier, or authorize production implementation by themselves.
+
+The V3 candidate preserves CF-01..CF-16 and AF-01..AF-04 identities and proposes post-CF-16 candidate units for:
+
+- ecosystem observation and historical standards/package drift;
+- machine-verifiable compatibility change-space coverage;
+- consumer contract scanning and protected consumer/version matrices;
+- differential Compatibility Lab execution;
+- Interoperability BOM and reproducible source-to-package build evidence;
+- deterministic TestGen;
+- stable developer platform/API/LSP surfaces;
+- capability-scoped Wasm plugin/policy extensions;
+- terminology federation/gap intelligence;
+- transformation evidence/certificates;
+- public compatibility evidence; and
+- benchmark/research convergence.
+
+No candidate in this overlay may bypass the existing build-order rule. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.
