@@ -229,7 +229,7 @@ Every stable machine finding should eventually bind:
 
 - finding/fingerprint schema version;
 - rule id and rule version;
-- old/new package and artifact identities;
+- old/new package and artifact identities including content digests;
 - normalized changed location plus source-authored location when available;
 - compatibility dimensions and direction;
 - evidence class and evidence references;
@@ -237,7 +237,16 @@ Every stable machine finding should eventually bind:
 - classification and uncertainty/unsupported state;
 - rationale and machine-readable remediation category;
 - baseline/suppression disposition;
-- commandF engine/version identity.
+- commandF engine/version identity;
+- parser and normalizer identities (explicit components of the versioned
+  engine identity, never implicit);
+- configuration/policy identity;
+- oracle/tool identity where an external oracle contributed to the finding.
+
+Each evidence reference must resolve to an immutable record containing every
+classification input above. Changing package content, parser, normalizer,
+engine, rule, configuration/policy, or oracle identity produces a distinct
+stable finding binding and preserves reproducibility.
 
 Human explanation may evolve without changing the stable semantic identity unless the underlying classification changes.
 
