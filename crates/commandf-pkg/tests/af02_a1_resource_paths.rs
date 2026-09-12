@@ -1,7 +1,11 @@
+#[cfg(unix)]
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+#[cfg(unix)]
+use std::process::Command;
+#[cfg(unix)]
+use std::process::Output;
 
 #[allow(dead_code)]
 #[path = "../../../tools/af02-verifier/src/canonical.rs"]
@@ -16,6 +20,7 @@ mod corpus {
     }
 }
 
+#[allow(dead_code)]
 #[path = "../../../tools/af02-verifier/src/replay.rs"]
 mod replay;
 #[rustfmt::skip]
@@ -25,9 +30,13 @@ mod resource;
 
 use corpus::ExpectedOutcome;
 use replay::{HarnessFailure, NormalizedOutcome, ReplayExecution, SurfaceObservation};
-use resource::{parse_resource_policy, ResourcePolicy, RunnerOutcome};
+use resource::RunnerOutcome;
+#[cfg(unix)]
+use resource::{parse_resource_policy, ResourcePolicy};
 
+#[cfg(unix)]
 const RESOURCE_POLICY: &str = "specs/016-af-02-adversarial-test-strength/resource-policy.json";
+#[cfg(unix)]
 const PROPERTY_TESTS: &[&str] = &[
     "adversarial_properties",
     "archive_manifest_properties",
@@ -42,6 +51,7 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+#[cfg(unix)]
 fn canonical_policy(root: &Path) -> ResourcePolicy {
     parse_resource_policy(&fs::read(root.join(RESOURCE_POLICY)).expect("read resource policy"))
         .expect("parse canonical resource policy")
@@ -186,6 +196,7 @@ fn af02_t035_replay_role_is_bound_to_the_canonical_resource_runner() {
     }
 }
 
+#[cfg(unix)]
 fn command_output(command: &mut Command, context: &str) -> Output {
     let output = command
         .output()
