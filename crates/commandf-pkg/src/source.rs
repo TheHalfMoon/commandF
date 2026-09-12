@@ -1,9 +1,12 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use semver::Version;
 
 use crate::{PackageError, PackageName};
+
+pub(crate) const MAX_PACKAGE_ARCHIVE_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackageArchive {
@@ -83,7 +86,7 @@ impl PackageSource for LocalMirrorSource {
             .join(name.as_str())
             .join(version.to_string())
             .join("package.tgz");
-        fs::read(path).map_err(|error| {
+        let file = fs::File::open(path).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 PackageError::PackageNotFound {
                     name: name.to_string(),
@@ -92,6 +95,40 @@ impl PackageSource for LocalMirrorSource {
             } else {
                 PackageError::Io(error)
             }
-        })
+        })?;
+        read_bounded_archive(file, MAX_PACKAGE_ARCHIVE_BYTES)
+    }
+}
+
+fn read_bounded_archive<R: Read>(reader: R, max_bytes: u64) -> Result<Vec<u8>, PackageError> {
+    let mut bytes = Vec::new();
+    reader
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(PackageError::InvalidRequest(format!(
+            "package archive exceeds the maximum supported compressed size of {max_bytes} bytes"
+        )));
+    }
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    #[test]
+    fn bounded_archive_reader_accepts_exact_limit() {
+        let bytes = read_bounded_archive(Cursor::new(b"abcd"), 4).expect("exact bound");
+        assert_eq!(bytes, b"abcd");
+    }
+
+    #[test]
+    fn bounded_archive_reader_rejects_limit_plus_one() {
+        let error = read_bounded_archive(Cursor::new(b"abcde"), 4)
+            .expect_err("limit plus one must fail closed");
+        assert!(matches!(error, PackageError::InvalidRequest(_)));
     }
 }
