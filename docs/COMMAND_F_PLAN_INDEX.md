@@ -50,18 +50,21 @@ These are capability groupings, not authorization to create separate services or
 
 Preserves the 35 interoperability gap hypotheses that motivate the product and research program, and maps them to the commandF response.
 
+Future agent/evidence/source-adoption control gaps are retained separately in `docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md` and `docs/COMMAND_F_AGENT_SECURITY_AND_CONTROL_GAPS_2026-09-08.md` so they do not silently become healthcare-interoperability claims.
+
 ## E. Donor/provenance authority
 
 `docs/PROVENANCE_AND_DONOR_POLICY.md`
 
 Defines adoption modes and the pin/license/permission/source-path requirements that must be satisfied before candidate prior art becomes adopted commandF code/data/mappings.
 
-Current slice-specific donor records remain under `donors/`, including:
+Current slice-specific and architecture-study donor records remain under `donors/`, including:
 
 - `donors/cf-01-package-resolution.yaml`
 - `donors/agent-harness-2026-08-13.yaml`
+- `donors/tencent-agent-knowledge-sources-2026-09-08.yaml`
 
-Future slice plans must add or update donor records rather than relying on conversation memory.
+Future slice plans must add or update donor records rather than relying on conversation memory. A broad Founder authorization to pursue source reuse does not replace the file/artifact-level upstream rights evidence required by the donor policy.
 
 ## F. Research authority
 
@@ -100,14 +103,32 @@ spec.md -> plan.md -> tasks.md -> implementation -> deterministic validation -> 
 
 The same process is used for an `AF-*` Assurance Foundation unit when it creates independently executable verification authority around the repository rather than product semantics.
 
-Current canonical execution truth at the creation of the Assurance Program:
+Historical execution snapshot at the creation of the Assurance Program:
 
 ```text
 CF-13: CLOSED_CANONICAL
 main: 8a45857bf31c4acae57fdfb1e3cdde3d0f7d0361
 next product identity: CF-14
-current cross-cutting planning unit: AF-01
+then-current cross-cutting planning unit: AF-01
 ```
+
+This block is historical context only. It is not the current execution frontier.
+
+### Current execution frontier — verified 2026-09-08
+
+Live repository truth at this planning PR's latest reconciliation:
+
+```text
+canonical main: 83b270893a6ccba7ce911b8d31e186f5c9fb122b
+AF-01: CLOSED_CANONICAL
+AF-02 T021: CLOSED_CANONICAL on current main
+active implementation frontier: AF-02 T022
+active implementation PR: #82
+PR #82 exact base: 83b270893a6ccba7ce911b8d31e186f5c9fb122b
+PR #82 current candidate head at reconciliation: 90481e22e629ed81c5cc61aaea646e0f269f5125
+```
+
+The hashes above are a dated reconciliation record, not a substitute for live verification. Before acting, re-read current `main`, the active AF-02 task ledger, PR #82, and exact-head CI/review/provenance state. Live repository truth overrides this dated block if any identity has moved.
 
 ## H. Assurance-program authority
 
@@ -124,15 +145,56 @@ Program units retained:
 3. **AF-03 Portability and Release Evidence** — Linux/Windows/macOS, MSRV, public API/SemVer guard, SBOM, SLSA-compatible provenance, artifact/signature verification.
 4. **AF-04 Performance and Reliability Evidence** — measured benchmark/resource budgets, large-input stress, external-sentinel separation, retained trends reusable by future commandF Bench.
 
-Immediate authorized planning package once this index update is canonical:
+Historical initial AF-01 planning package:
 
 `specs/015-af-01-trusted-development-baseline/`
 
-Ordering rule:
+AF-01 is now `CLOSED_CANONICAL` according to its canonical task ledger. Its original prerequisite text is therefore historical rather than current authorization. AF-02 is the active assurance execution family at this reconciliation point; AF-03/AF-04 remain retained program units and require their own canonical activation/planning authority before implementation.
 
-- AF-01 must close before a new post-CF-13 product implementation is merged.
-- CF-14 planning may proceed in parallel under its own Spec Kit authority.
-- AF-02/03/04 remain retained program units and require their own planning packages before implementation.
+Current ordering rule:
+
+- complete the active AF-02 dependency-ordered frontier under its canonical package before merging unrelated planning that would invalidate an exact-base qualification;
+- future product/assurance implementation remains subject to the live V2/Spec Kit/Assurance ordering and must be re-read rather than inferred from this index;
+- AF-03/AF-04 naming in this index is retained coverage, not implementation authorization.
+
+## I. Future agent, evidence, and source-adoption planning coverage
+
+`docs/COMMAND_F_AGENT_EVIDENCE_AND_SOURCE_ADOPTION_PLAN_2026-09-08.md`
+
+Refines the optional future agent/Copilot plane without changing current execution authority. It separates six future trust domains:
+
+1. deterministic evidence substrate;
+2. capability/sandbox execution;
+3. resumable workflow orchestration;
+4. bounded durable memory;
+5. protected evaluation/optimization authority;
+6. Copilot/model experience.
+
+The plan also adds a donor-portfolio decision strategy across the repository's existing source inventory and records future-agent/source-adoption gaps discovered through the Tencent source study.
+
+`docs/COMMAND_F_AGENT_SECURITY_AND_CONTROL_GAPS_2026-09-08.md`
+
+Adds the second-pass cross-layer threat-model constraints that are easy to miss when each capability is reviewed separately, including:
+
+- untrusted-context/prompt-injection provenance and trust labels;
+- exact-action approval binding and TOCTOU resistance;
+- replay/idempotency/effect reconciliation;
+- delegated capability attenuation;
+- tenant/workspace/principal isolation;
+- tamper-evident audit evidence;
+- skill/plugin/tool supply-chain controls;
+- retention/deletion/export/privacy lifecycle;
+- concurrency leases/fencing;
+- model/provider routing and fallback identity;
+- cumulative autonomy circuit breakers;
+- human-approval fatigue and semantic previews.
+
+Important ordering rule:
+
+- these future planning documents do **not** alter the active AF-02 contracts or dependency order;
+- no new canonical CF/AF identity is created by these documents;
+- implementation still requires a separately authorized Spec Kit unit and provenance/adoption gate;
+- the deterministic commandF core remains independent of all agent/memory/evaluation runtimes.
 
 ## Coverage rule
 
