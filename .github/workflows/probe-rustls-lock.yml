@@ -6,21 +6,21 @@ on:
       - probe/rustsec-2026-0285-lock-generation
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  generate-lock:
+  generate-and-fast-forward-bootstrap-branch:
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact probe source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
 
-      - name: Generate minimal patched lockfile candidate
+      - name: Generate and verify minimal patched lockfile
         shell: bash
         run: |
           set -euo pipefail
@@ -29,8 +29,6 @@ jobs:
           cargo metadata --locked --format-version 1 >/dev/null
           python3 - <<'PY'
           from pathlib import Path
-          import base64
-          import difflib
           import hashlib
           import sys
 
@@ -55,20 +53,49 @@ jobs:
               raise SystemExit(1)
           expected = before.replace(old, new, 1)
           if after != expected:
-              print('UNEXPECTED_LOCK_DIFF', file=sys.stderr)
-              sys.stderr.writelines(difflib.unified_diff(
-                  before.splitlines(keepends=True),
-                  after.splitlines(keepends=True),
-                  fromfile='Cargo.lock.before',
-                  tofile='Cargo.lock.after',
-              ))
+              print('UNEXPECTED_LOCKFILE_CHANGE', file=sys.stderr)
               raise SystemExit(1)
-
           raw = Path('Cargo.lock').read_bytes()
-          print('LOCK_SHA256=' + hashlib.sha256(raw).hexdigest())
-          print('LOCK_BASE64_BEGIN')
-          encoded = base64.b64encode(raw).decode('ascii')
-          for start in range(0, len(encoded), 120):
-              print(encoded[start:start + 120])
-          print('LOCK_BASE64_END')
+          observed = hashlib.sha256(raw).hexdigest()
+          expected_sha = 'd7e3050b3ff81fc39db61a0345875de6c0b7bc7ca48cc7f432a1f2ba14653648'
+          if observed != expected_sha:
+              print(f'LOCK_SHA256_MISMATCH expected={expected_sha} observed={observed}', file=sys.stderr)
+              raise SystemExit(1)
+          print('LOCK_SHA256=' + observed)
           PY
+          cp Cargo.lock /tmp/Cargo.lock.generated
+
+      - name: Fast-forward exact bootstrap branch with generated lockfile
+        shell: bash
+        env:
+          TARGET_BRANCH: fix/af02-retained-authority-durability
+          EXPECTED_TARGET_HEAD: 29184e424d1915bf457b7a3556970566182d20c7
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')"
+          test "${remote_head}" = "${EXPECTED_TARGET_HEAD}" || {
+            echo "TARGET_HEAD_MOVED expected=${EXPECTED_TARGET_HEAD} observed=${remote_head}" >&2
+            exit 1
+          }
+          git fetch --no-tags origin "${TARGET_BRANCH}"
+          git checkout --detach "${EXPECTED_TARGET_HEAD}"
+          cp /tmp/Cargo.lock.generated Cargo.lock
+          git diff --exit-code -- . ':(exclude)Cargo.lock'
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          raw = Path('Cargo.lock').read_bytes()
+          expected = 'd7e3050b3ff81fc39db61a0345875de6c0b7bc7ca48cc7f432a1f2ba14653648'
+          observed = hashlib.sha256(raw).hexdigest()
+          if observed != expected:
+              raise SystemExit(f'target lock SHA mismatch: {observed}')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git diff --cached --quiet && {
+            echo "NO_LOCKFILE_CHANGE" >&2
+            exit 1
+          }
+          git commit -m "fix(deps): update rustls to patched 0.23.45"
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
