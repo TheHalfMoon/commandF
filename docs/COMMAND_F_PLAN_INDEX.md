@@ -226,3 +226,5 @@ The terminology verified-byte candidate is `specs/020-terminology-verified-cache
 The root-consumer verified-byte candidate is `specs/021-root-verified-cache-bytes/`. It covers issue #40 only. It does not close issues #36, #37, #38, or #100, and it does not authorize CF-17.
 
 The impact and oracle verified-byte candidate is `specs/022-impact-oracle-verified-bytes/`. It covers issue #36 only. It does not close issues #37, #38, or #100, and it does not authorize CF-17.
+
+The bounded lockfile candidate is `specs/023-bounded-lockfile-reads/`. It covers issue #37 only. It does not close issues #38 or #100, and it does not authorize CF-17.

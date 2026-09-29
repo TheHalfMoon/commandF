@@ -1,5 +1,6 @@
 mod gate;
 mod impact;
+mod lock_input;
 mod oracle;
 
 use std::ffi::OsStr;
@@ -295,7 +296,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 );
             }
             PkgCommand::Verify { cache, lock } => {
-                let lockfile = Lockfile::from_slice(&fs::read(&lock)?)?;
+                let lockfile = lock_input::read_lockfile(&lock)?;
                 let cache = PackageCache::new(cache);
                 lockfile.verify_cache(&cache)?;
                 println!("verified {} packages", lockfile.packages.len());
@@ -319,7 +320,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 }
             };
             let package_name = request.name.to_string();
-            let lockfile = Lockfile::from_slice(&fs::read(&lock)?)?;
+            let lockfile = lock_input::read_lockfile(&lock)?;
             let locked = lockfile
                 .packages
                 .iter()
@@ -347,7 +348,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             cache,
             format,
         } => {
-            let lockfile = Lockfile::from_slice(&fs::read(&lock)?)?;
+            let lockfile = lock_input::read_lockfile(&lock)?;
             let cache = PackageCache::new(cache);
             let report = build_context_graph(&lockfile, &cache)?;
             match format {
@@ -625,8 +626,8 @@ fn build_diff_report(
     after_cache: PathBuf,
 ) -> Result<StructuralDiffReport, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
-    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
-    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_lockfile = lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = lock_input::read_lockfile(&after_lock)?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
     let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
 
@@ -653,8 +654,8 @@ fn build_terminology_report(
     after_cache: PathBuf,
 ) -> Result<TerminologyDiffReport, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
-    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
-    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_lockfile = lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = lock_input::read_lockfile(&after_lock)?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
     let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
     let before_cache = PackageCache::new(before_cache);

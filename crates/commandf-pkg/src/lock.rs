@@ -119,6 +119,22 @@ impl Lockfile {
         Ok(bytes)
     }
 
+    /// Maximum persisted lockfile size accepted by [`Lockfile::from_bounded_slice`].
+    ///
+    /// [`Lockfile::from_slice`] parses the slice it is given. Callers that read
+    /// an untrusted file must bound that read, or use [`Lockfile::from_bounded_slice`].
+    pub const MAX_PERSISTED_LOCKFILE_BYTES: usize = 16 * 1024 * 1024;
+
+    pub fn from_bounded_slice(bytes: &[u8]) -> Result<Self, PackageError> {
+        if bytes.len() > Self::MAX_PERSISTED_LOCKFILE_BYTES {
+            return Err(PackageError::InvalidRequest(format!(
+                "lockfile exceeds the maximum supported size of {} bytes",
+                Self::MAX_PERSISTED_LOCKFILE_BYTES
+            )));
+        }
+        Self::from_slice(bytes)
+    }
+
     pub fn from_slice(bytes: &[u8]) -> Result<Self, PackageError> {
         let raw: RawLockfile = serde_json::from_slice(bytes)?;
         match raw.schema {
@@ -320,4 +336,32 @@ fn canonicalize_roots_and_packages(roots: &mut Vec<String>, packages: &mut [Lock
             .cmp(&right.name)
             .then_with(|| left.version.cmp(&right.version))
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_lockfile_accepts_exact_limit_and_rejects_one_extra_byte() {
+        let body = br#"{"schema":1,"roots":[],"packages":[]}"#;
+        let mut exact = body.to_vec();
+        exact.resize(Lockfile::MAX_PERSISTED_LOCKFILE_BYTES, b' ');
+        let lockfile = Lockfile::from_bounded_slice(&exact).expect("exact bound parses");
+        assert_eq!(lockfile.schema, Lockfile::SCHEMA_V1);
+
+        let mut oversized = exact.clone();
+        oversized.push(b' ');
+        let error = Lockfile::from_bounded_slice(&oversized)
+            .expect_err("limit plus one byte must fail before JSON parse");
+        assert!(error
+            .to_string()
+            .contains("lockfile exceeds the maximum supported size"));
+    }
+
+    #[test]
+    fn malformed_lockfile_under_the_limit_remains_a_parse_failure() {
+        let error = Lockfile::from_bounded_slice(b"{").expect_err("malformed lockfile");
+        assert!(matches!(error, PackageError::Json(_)));
+    }
 }

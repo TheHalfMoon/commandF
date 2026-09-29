@@ -1,4 +1,3 @@
-use std::fs;
 use std::io;
 use std::path::PathBuf;
 
@@ -15,8 +14,8 @@ pub fn run(
     after_cache: PathBuf,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
-    let before_lockfile = Lockfile::from_slice(&fs::read(before_lock)?)?;
-    let after_lockfile = Lockfile::from_slice(&fs::read(after_lock)?)?;
+    let before_lockfile = crate::lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = crate::lock_input::read_lockfile(&after_lock)?;
     require_lock_v2(&before_lockfile, "before")?;
     require_lock_v2(&after_lockfile, "after")?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
@@ -86,6 +85,8 @@ fn select_locked_package<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
