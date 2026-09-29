@@ -1,0 +1,69 @@
+name: probe-rustls-lock
+
+on:
+  push:
+    branches:
+      - probe/rustsec-2026-0285-lock-generation
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact probe source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
+        with:
+          toolchain: stable
+
+      - name: Generate minimal patched lockfile candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Cargo.lock /tmp/Cargo.lock.before
+          cargo update -p rustls --precise 0.23.45
+          cargo metadata --locked --format-version 1 >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import difflib
+          import hashlib
+          import sys
+
+          before = Path('/tmp/Cargo.lock.before').read_text(encoding='utf-8')
+          after = Path('Cargo.lock').read_text(encoding='utf-8')
+          diff = list(difflib.unified_diff(
+              before.splitlines(keepends=True),
+              after.splitlines(keepends=True),
+              fromfile='Cargo.lock.before',
+              tofile='Cargo.lock.after',
+          ))
+          allowed_old = {
+              'version = "0.23.43"\n',
+              'checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"\n',
+          }
+          allowed_new = {
+              'version = "0.23.45"\n',
+              'checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"\n',
+          }
+          removed = {line[1:] for line in diff if line.startswith('-') and not line.startswith('---')}
+          added = {line[1:] for line in diff if line.startswith('+') and not line.startswith('+++')}
+          if removed != allowed_old or added != allowed_new:
+              print('UNEXPECTED_LOCK_DIFF', file=sys.stderr)
+              sys.stderr.writelines(diff)
+              raise SystemExit(1)
+
+          raw = Path('Cargo.lock').read_bytes()
+          print('LOCK_SHA256=' + hashlib.sha256(raw).hexdigest())
+          print('LOCK_BASE64_BEGIN')
+          encoded = base64.b64encode(raw).decode('ascii')
+          for start in range(0, len(encoded), 120):
+              print(encoded[start:start + 120])
+          print('LOCK_BASE64_END')
+          PY
