@@ -218,3 +218,5 @@ For any future V3 implementation planning, agents must read **both** `COMMAND_F_
 Known verified-byte and unbounded-input issue families are treated as migration blockers for production-trust claims, not silently ignored debt. Their issue state and applicability must be re-read at migration time rather than assumed from this planning snapshot.
 
 The migration candidate is `specs/018-v3-1-authority-migration/`. It is a Spec Kit candidate. It does not make CF-17 through CF-28 executable, and it does not close issue #100 or issues #35, #36, #37, #38, and #40.
+
+Issue #100's successor candidate is `specs/019-durable-offline-retained-authority/`. The historical artifact identity is known. The historical artifact bytes are unavailable. That candidate does not authorize CF-17.
