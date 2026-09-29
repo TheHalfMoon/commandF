@@ -220,3 +220,5 @@ Known verified-byte and unbounded-input issue families are treated as migration 
 The migration candidate is `specs/018-v3-1-authority-migration/`. It is a Spec Kit candidate. It does not make CF-17 through CF-28 executable, and it does not close issue #100 or issues #35, #36, #37, #38, and #40.
 
 Issue #100's successor candidate is `specs/019-durable-offline-retained-authority/`. The historical artifact identity is known. The historical artifact bytes are unavailable. That candidate does not authorize CF-17.
+
+The terminology verified-byte candidate is `specs/020-terminology-verified-cache-bytes/`. It covers issue #35 only. It does not close issues #36, #37, #38, #40, or #100, and it does not authorize CF-17.
