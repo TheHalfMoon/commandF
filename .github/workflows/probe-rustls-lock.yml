@@ -36,18 +36,20 @@ jobs:
 
           before = Path('/tmp/Cargo.lock.before').read_text(encoding='utf-8')
           after = Path('Cargo.lock').read_text(encoding='utf-8')
-          old = '''[[package]]
-          name = "rustls"
-          version = "0.23.43"
-          source = "registry+https://github.com/rust-lang/crates.io-index"
-          checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
-          '''
-          new = '''[[package]]
-          name = "rustls"
-          version = "0.23.45"
-          source = "registry+https://github.com/rust-lang/crates.io-index"
-          checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
-          '''
+          old = (
+              '[[package]]\n'
+              'name = "rustls"\n'
+              'version = "0.23.43"\n'
+              'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+              'checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"\n'
+          )
+          new = (
+              '[[package]]\n'
+              'name = "rustls"\n'
+              'version = "0.23.45"\n'
+              'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+              'checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"\n'
+          )
           if before.count(old) != 1:
               print('EXPECTED_RUSTLS_BLOCK_NOT_UNIQUE', file=sys.stderr)
               raise SystemExit(1)
