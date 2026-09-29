@@ -25,8 +25,8 @@ pub fn run(
     let package_name = PackageName::parse(package)?;
     validate_hl7_oracle_adapter(&oracle_adapter, oracle_java.as_deref())?;
 
-    let before_lockfile = Lockfile::from_slice(&fs::read(&before_lock)?)?;
-    let after_lockfile = Lockfile::from_slice(&fs::read(&after_lock)?)?;
+    let before_lockfile = crate::lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = crate::lock_input::read_lockfile(&after_lock)?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
     let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
     let before_core = select_oracle_core(&before_lockfile)?;

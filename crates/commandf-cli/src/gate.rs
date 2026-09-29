@@ -5,12 +5,11 @@ use clap::{Args, ValueEnum};
 use commandf_pkg::{
     classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
     evaluate_quality_gate, CheckDirection, CheckFailOn, CheckPolicy, CheckReport, GateSuppressions,
-    Lockfile, PackageCache, PackageName, StructuralDiffReport,
+    PackageCache, PackageName, StructuralDiffReport,
 };
 
 use super::{read_bounded_file, select_locked_package, write_check_output};
 
-const MAX_GATE_LOCKFILE_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_GATE_ARCHIVE_INPUT_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_GATE_BASELINE_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_GATE_SUPPRESSIONS_INPUT_BYTES: u64 = 64 * 1024 * 1024;
@@ -134,14 +133,8 @@ fn build_gate_diff_report(
     after_cache: PathBuf,
 ) -> Result<StructuralDiffReport, Box<dyn std::error::Error>> {
     let package_name = PackageName::parse(package)?;
-    let before_lockfile = Lockfile::from_slice(&read_bounded_file(
-        &before_lock,
-        MAX_GATE_LOCKFILE_INPUT_BYTES,
-    )?)?;
-    let after_lockfile = Lockfile::from_slice(&read_bounded_file(
-        &after_lock,
-        MAX_GATE_LOCKFILE_INPUT_BYTES,
-    )?)?;
+    let before_lockfile = super::lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = super::lock_input::read_lockfile(&after_lock)?;
     let before_locked = select_locked_package(&before_lockfile, package_name.as_str())?;
     let after_locked = select_locked_package(&after_lockfile, package_name.as_str())?;
 
