@@ -734,6 +734,7 @@ Use:
 
 - **GAX**: decision/sufficiency/abstention/calibration/benchmark patterns only;
 - **Ascout**: receipt/status/completeness/source-binding patterns only;
+- **Sentrdel**: evidence-authority/reconciliation, explicit contradiction and coverage-gap semantics, and lower-authority reasoning patterns only;
 - **Kernux**: provider-neutral capability and evidence-before-done patterns only;
 - **Cotra**: bounded capability plus requested/started/completed/verified/failed/cancelled/indeterminate execution-state patterns only.
 
