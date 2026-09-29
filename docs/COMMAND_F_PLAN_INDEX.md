@@ -228,3 +228,5 @@ The root-consumer verified-byte candidate is `specs/021-root-verified-cache-byte
 The impact and oracle verified-byte candidate is `specs/022-impact-oracle-verified-bytes/`. It covers issue #36 only. It does not close issues #37, #38, or #100, and it does not authorize CF-17.
 
 The bounded lockfile candidate is `specs/023-bounded-lockfile-reads/`. It covers issue #37 only. It does not close issues #38 or #100, and it does not authorize CF-17.
+
+The local-mirror archive candidate is `specs/024-local-mirror-archive-bound/`. It covers issue #38 only. It does not close issue #100, and it does not authorize CF-17.

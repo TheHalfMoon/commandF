@@ -5,13 +5,14 @@ use semver::Version;
 use serde::Deserialize;
 use ureq::Agent;
 
+use crate::source::MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES;
 use crate::{PackageArchive, PackageError, PackageName, PackageSource};
 
 const PRIMARY: &str = "https://packages.fhir.org";
 const SECONDARY: &str = "https://packages2.fhir.org/packages";
 const SECONDARY_TARBALL_BASE: &str = "https://packages2.fhir.org/web";
 const METADATA_LIMIT: u64 = 4 * 1024 * 1024;
-const ARCHIVE_LIMIT: u64 = 128 * 1024 * 1024;
+const ARCHIVE_LIMIT: u64 = MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 

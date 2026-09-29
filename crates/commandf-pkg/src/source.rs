@@ -1,9 +1,13 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use semver::Version;
 
 use crate::{PackageError, PackageName};
+
+/// Compressed package archive limit shared with registry acquisition.
+pub const MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackageArchive {
@@ -83,15 +87,71 @@ impl PackageSource for LocalMirrorSource {
             .join(name.as_str())
             .join(version.to_string())
             .join("package.tgz");
-        fs::read(path).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                PackageError::PackageNotFound {
-                    name: name.to_string(),
-                    version: version.to_string(),
+        read_limited_archive(&path, MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES).map_err(|error| {
+            match error {
+                PackageError::Io(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                    PackageError::PackageNotFound {
+                        name: name.to_string(),
+                        version: version.to_string(),
+                    }
                 }
-            } else {
-                PackageError::Io(error)
+                other => other,
             }
         })
+    }
+}
+
+fn read_limited_archive(path: &Path, max_bytes: u64) -> Result<Vec<u8>, PackageError> {
+    let file = File::open(path)?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(PackageError::InvalidRequest(format!(
+            "package archive exceeds the maximum supported size of {max_bytes} bytes"
+        )));
+    }
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_mirror_reads_exact_bound_and_rejects_one_extra_byte() {
+        let directory =
+            std::env::temp_dir().join(format!("commandf-mirror-bound-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("temp directory");
+        let path = directory.join("package.tgz");
+        fs::write(&path, b"abcd").expect("archive");
+
+        let exact = read_limited_archive(&path, 4).expect("exact bound");
+        assert_eq!(exact, b"abcd");
+        let error = read_limited_archive(&path, 3).expect_err("bound plus one");
+        assert!(error
+            .to_string()
+            .contains("package archive exceeds the maximum supported size of 3 bytes"));
+        assert!(!error.to_string().contains(&path.display().to_string()));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn missing_local_mirror_archive_stays_package_not_found() {
+        let directory =
+            std::env::temp_dir().join(format!("commandf-mirror-missing-{}", std::process::id()));
+        let source = LocalMirrorSource::new(&directory);
+        let name = PackageName::parse("acme.subject").expect("name");
+        let version = Version::parse("1.0.0").expect("version");
+        let error = source
+            .archive(&name, &version)
+            .expect_err("missing archive");
+        assert!(matches!(error, PackageError::PackageNotFound { .. }));
+    }
+
+    #[test]
+    fn local_mirror_archive_limit_matches_registry_acquisition() {
+        assert_eq!(MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES, 128 * 1024 * 1024);
     }
 }
