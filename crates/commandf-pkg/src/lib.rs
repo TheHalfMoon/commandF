@@ -22,6 +22,7 @@ mod compatibility_validate;
 mod context;
 mod context_error;
 mod context_model;
+mod durable_retained;
 mod error;
 mod gate;
 mod gate_error;
@@ -78,6 +79,10 @@ pub use context_model::{
     CanonicalReferenceRelation, CanonicalResolutionStatus, ContextArtifactIdentity,
     ContextArtifactNode, ContextCanonicalReferenceEdge, ContextCoverage, ContextGraphReport,
     ContextPackageDependencyEdge, ContextPackageIdentity, ContextPackageNode,
+};
+pub use durable_retained::{
+    classify_regenerated_archive, evaluate_durable_packet, DurableProjection, DurableRetainedError,
+    HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
 };
 pub use error::PackageError;
 pub use gate::{

@@ -1,0 +1,14 @@
+{
+  "artifact_id": 9255732702,
+  "artifact_name": "cf10-real-corpus-evidence",
+  "donor_git_blob_sha1": "566b46f4e6f467a1ccae3ac810b31956309173b6",
+  "durable_bytes_sha256": null,
+  "historical_artifact_byte_state": "HISTORICAL_ARTIFACT_BYTES_UNAVAILABLE",
+  "historical_artifact_identity_state": "HISTORICAL_ARTIFACT_IDENTITY_KNOWN",
+  "manifest_git_blob_sha1": "655949a8a30d67502dffd624a175d2e8e02b1d1f",
+  "recorded_sha256": "9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612",
+  "retained_base": "5cb1a4c3445c0ebd86654cfb467a5e008e801c3e",
+  "retained_head": "5fe10d9859407272acf6649fc3e868d3eb2fbd12",
+  "schema": "commandf.durable-retained-authority/v1",
+  "workflow_run_id": 31916124080
+}
