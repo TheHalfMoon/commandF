@@ -5,7 +5,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use commandf_pkg::{run_hl7_oracle_adapter, Hl7OracleInvocation};
+use commandf_pkg::{
+    run_hl7_oracle_adapter, Hl7OracleInvocation, Hl7OracleStagedArchives,
+};
 
 const GOOD_REPORT: &str = r#"{"schema":1,"oracle":{"project":"hapifhir/org.hl7.fhir.core","release":"6.10.2","source_commit":"d06577dbc5c62c74a2a8823fbc4830a3024d5b0b"},"left":{"url":"http://example.org/StructureDefinition/test","version":null,"id":"test","type":"Patient"},"right":{"url":"http://example.org/StructureDefinition/test","version":null,"id":"test","type":"Patient"},"states":{"metadata":"not_changed","definitions":"not_changed","content":"unknown","content_interpretation":"unknown"},"messages":[]}"#;
 
@@ -69,6 +71,48 @@ fn executable_adapter_accepts_valid_pinned_json() {
         .expect("valid adapter report");
     assert_eq!(report.schema, 1);
     assert!(report.messages.is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn staged_archives_are_independent_of_original_source_after_boundary() {
+    let root = unique_temp_dir("staged-snapshot");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let original = root.join("original-left.tgz");
+    fs::write(&original, b"verified-generation").expect("write original archive");
+    let verified_bytes = fs::read(&original).expect("read verified generation");
+    let staged = Hl7OracleStagedArchives::new(b"core", &verified_bytes, b"right")
+        .expect("stage verified archives");
+
+    fs::write(&original, b"mutated-after-boundary").expect("mutate original cache generation");
+
+    let adapter = root.join("adapter.sh");
+    write_executable(
+        &adapter,
+        &format!(
+            "left=''\nwhile [ \"$#\" -gt 0 ]; do\n  case \"$1\" in\n    --left-package) left=\"$2\"; shift 2 ;;\n    *) shift ;;\n  esac\ndone\ntest \"$(cat \"$left\")\" = 'verified-generation' || exit 9\nprintf '%s\\n' '{}'",
+            GOOD_REPORT
+        ),
+    );
+    let invocation = Hl7OracleInvocation {
+        core_package: staged.core_package(),
+        left_package: staged.left_package(),
+        right_package: staged.right_package(),
+        left_url: "http://example.org/StructureDefinition/test",
+        left_version: None,
+        right_url: "http://example.org/StructureDefinition/test",
+        right_version: None,
+    };
+    let report = run_hl7_oracle_adapter(
+        &adapter,
+        None,
+        &invocation,
+        Duration::from_secs(1),
+    )
+    .expect("adapter must consume the staged verified snapshot");
+
+    assert_eq!(report.schema, 1);
+    assert_eq!(fs::read(&original).unwrap(), b"mutated-after-boundary");
     let _ = fs::remove_dir_all(root);
 }
 
