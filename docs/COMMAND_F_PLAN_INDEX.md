@@ -150,3 +150,69 @@ It may **not** disappear silently.
 Preserving a candidate in the plan does not allow it to bypass the V2 execution sequence. A donor/tool/capability is activated only when a concrete CF or AF unit requires it and its provenance/adoption gate is satisfied.
 
 Assurance tooling is not exempt from this rule: naming cargo-fuzz, SLSA, Sigstore, Scorecard, cargo-deny, cargo-audit, zizmor, or any other tool in discovery/program documents is not adoption until the relevant AF plan pins the exact implementation identity and acceptance boundary.
+
+## I. 2026-09-12 V3 strategic planning overlay
+
+The following planning artifacts were produced from a whole-plan review against canonical `main` at `c56d9619758ea3e1075e751bec83ddea6706a81e`.
+
+The V3 candidate documents are:
+
+- `docs/COMMAND_F_MASTER_ARCHITECTURE_V3_CANDIDATE.md`
+- `docs/COMMAND_F_PLAN_GAP_REVIEW_2026-09-12.md`
+- `docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`
+- `docs/COMMAND_F_V3_EXECUTION_PLAYBOOK.md`
+
+They are **planning candidates only**. They do not supersede V2 execution authority, mutate an active AF/CF task frontier, or authorize production implementation by themselves.
+
+The V3 candidate preserves CF-01..CF-16 and AF-01..AF-04 identities and proposes post-CF-16 candidate units for:
+
+- ecosystem observation and historical standards/package drift;
+- machine-verifiable compatibility change-space coverage;
+- consumer contract scanning and protected consumer/version matrices;
+- differential Compatibility Lab execution;
+- Interoperability BOM and reproducible source-to-package build evidence;
+- deterministic TestGen;
+- stable developer platform/API/LSP surfaces;
+- capability-scoped Wasm plugin/policy extensions;
+- terminology federation/gap intelligence;
+- transformation evidence/certificates;
+- public compatibility evidence; and
+- benchmark/research convergence.
+
+No candidate in this overlay may bypass the existing build-order rule. `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` remains the base implementation-facing navigation document for the V3 candidate roadmap: it defines the dependency DAG, closure contract for every G01-G40 gap, per-slice work packages, acceptance evidence, and agent operating loop. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.
+
+## J. 2026-09-29 V3.1 decision-assurance hardening overlay
+
+The following artifacts strengthen V3 without renumbering existing CF/AF work:
+
+- `docs/COMMAND_F_V3_1_DECISION_ASSURANCE_PLAN.md`
+- `docs/COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`
+- `docs/COMMAND_F_V3_1_COMPLETENESS_AUDIT_2026-09-29.md`
+- `docs/COMMAND_F_V3_1_REVIEW_GOVERNANCE.md`
+- `docs/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+
+The V3.1 overlay adds ten explicit gaps (`G41..G50`) and binds them to existing candidate slice ownership rather than inventing a parallel roadmap. It formalizes:
+
+- proof versus probability/confidence;
+- deterministic truth class versus policy action;
+- evidence completeness and sufficiency;
+- first-class abstention/insufficient/unsupported/indeterminate outcomes;
+- a versioned Decision Envelope;
+- a portable Consumer Contract;
+- selective oracle/runtime escalation;
+- a source/evidence-bound Decision Receipt;
+- counterfactual sensitivity and irrelevant-edit stability;
+- decision-quality evaluation centered on unsafe auto-allow risk at declared coverage;
+- optional provider-neutral model assistance that is technically non-authoritative;
+- evidence-authority/reconciliation patterns where missing or unsupported coverage can never become a clean result by absence; and
+- shared assurance primitives so future product slices reuse evidence/integrity controls instead of forking them.
+
+The V3.1 donor record pins founder-controlled GAX, Ascout, Sentrdel, Kernux, and Cotra revisions as `PATTERN_ONLY` sources. Pinning does not authorize a runtime dependency, model authority, or code copy without the normal slice-specific provenance/license/rights gate.
+
+The completeness audit marks the combined V3 + V3.1 planning package `READY_FOR_SPEC_KIT_SHAPING / NOT EXECUTION AUTHORITY`. This means the plan is detailed enough to shape dependency-eligible Spec Kits without inventing missing architecture; it does not mean any future capability is implemented or proven.
+
+The review-governance candidate records the intended future V3/V3.1 independent-review stack: repository-owned deterministic/assurance gates, Jev, Alibaba Open Code Review, and human disposition/merge authority. CodeRabbit, Qodo, Cubic, and similar hosted reviewer scores/checkmarks are not future V3 qualification evidence unless a later canonical governance change explicitly re-authorizes one. Current canonical governance still controls until the V3 migration gate reconciles it.
+
+For any future V3 implementation planning, agents must read **both** `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` and `COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`. The latter is the mandatory amendment for G41-G50 and decision-assurance semantics. If the two planning candidates conflict, the narrower V3.1 rule controls only the decision-assurance subject it explicitly amends; neither document supersedes V2 until a canonical migration gate says so.
+
+Known verified-byte and unbounded-input issue families are treated as migration blockers for production-trust claims, not silently ignored debt. Their issue state and applicability must be re-read at migration time rather than assumed from this planning snapshot.
