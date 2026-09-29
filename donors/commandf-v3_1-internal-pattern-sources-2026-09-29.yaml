@@ -65,6 +65,33 @@ sources:
       - collapsing omitted work into PASS
       - carrying evidence across different source identities
 
+  - id: sentrdel-evidence-authority-patterns
+    repository: TheHalfMoon/Sentrdel
+    revision: f5747319a50831ef7cee983d253c0ca5503c9a64
+    paths:
+      - README.md
+      - docs/architecture/r1-evidence-control-plane.md
+      - docs/security/threat-model.md
+    authority_class: PATTERN
+    adoption_mode: PATTERN_ONLY
+    target_slices:
+      - CF-18
+      - CF-20
+      - CF-21
+      - CF-24
+    retained_patterns:
+      - explicit separation of fact deterministic inference hypothesis runtime observation contradiction and stronger verification authority
+      - one canonical reconciler for validated evidence rather than parallel finding authorities
+      - missing failed unsupported or unavailable coverage never becomes clean by absence
+      - lower-authority model reasoning cannot weaken canonical findings or policy
+      - monotonic policy where project configuration may tighten but not silently widen authority
+      - enforcement fidelity labeled according to the seam actually controlled
+    forbidden_adoptions:
+      - scanner or model output promoted directly to verified semantic truth
+      - missing coverage serialized as compatibility
+      - project-supplied policy that widens trusted authority
+      - self-promotion of learned candidates into trusted rules
+
   - id: kernux-capability-evidence-patterns
     repository: TheHalfMoon/kernux
     revision: 7e07035d8a29b234273fa84a496539cc685ad03e
