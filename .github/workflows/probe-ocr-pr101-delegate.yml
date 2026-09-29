@@ -1,0 +1,48 @@
+name: probe-ocr-pr101-delegate
+
+on:
+  push:
+    branches:
+      - probe/ocr-pr101-delegate
+
+permissions:
+  contents: read
+
+jobs:
+  ocr-delegation-prep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 6e42d121f25db4b3feddee4ea87e6b2419f3be2e
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Alibaba Open Code Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @alibaba-group/open-code-review@1.12.11
+          ocr version
+
+      - name: Resolve exact review scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          ocr delegate preview \
+            --format json \
+            --from 18819c7fdaee618f4aa86c6c3279b1acb70ec9f2 \
+            --to 6e42d121f25db4b3feddee4ea87e6b2419f3be2e \
+            --background 'Review PR #101 dual-bootstrap repair. Preserve AF-02 retained authority, strict candidate artifact verification, unchanged CF-10 semantic projection, exact authority baseline, and the minimal Cargo-generated rustls 0.23.43 to 0.23.45 security remediation. Look for authority weakening, fail-open behavior, malformed-response handling gaps, hidden dependency drift, nondeterminism, and bootstrap-governance inconsistencies.'
+
+      - name: Resolve review rules for every changed path
+        shell: bash
+        run: |
+          set -euo pipefail
+          ocr delegate rule --format json \
+            Cargo.lock \
+            crates/commandf-pkg/tests/af02_authority_reconstruction.rs \
+            specs/017-af-02-retained-authority-durability/spec.md \
+            specs/017-af-02-retained-authority-durability/plan.md \
+            specs/017-af-02-retained-authority-durability/tasks.md
