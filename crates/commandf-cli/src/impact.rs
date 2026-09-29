@@ -24,9 +24,6 @@ pub fn run(
 
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
-    before_cache.verify(&before_locked.sha256)?;
-    after_cache.verify(&after_locked.sha256)?;
-
     let before_bytes = read_locked_archive(&before_cache, before_locked)?;
     let after_bytes = read_locked_archive(&after_cache, after_locked)?;
     let diff = diff_package_archives(
@@ -57,13 +54,11 @@ fn require_lock_v2(lockfile: &Lockfile, side: &'static str) -> io::Result<()> {
     ))
 }
 
-fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> io::Result<Vec<u8>> {
-    fs::read(
-        cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", locked.sha256)),
-    )
+fn read_locked_archive(
+    cache: &PackageCache,
+    locked: &LockedPackage,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(cache.read_verified(&locked.sha256)?)
 }
 
 fn select_locked_package<'a>(
@@ -87,4 +82,49 @@ fn select_locked_package<'a>(
         ));
     }
     Ok(selected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn impact_reader_returns_verified_bytes() {
+        let directory = unique_dir("impact-verified");
+        let cache = PackageCache::new(&directory);
+        let digest = cache.put(b"impact-archive").expect("cache object");
+        let bytes = read_locked_archive(&cache, &locked(&digest)).expect("verified bytes");
+        assert_eq!(bytes, b"impact-archive");
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn replaced_impact_cache_object_is_rejected() {
+        let directory = unique_dir("impact-replaced");
+        let cache = PackageCache::new(&directory);
+        let digest = cache.put(b"impact-archive").expect("cache object");
+        fs::write(
+            cache.root().join("sha256").join(format!("{digest}.tgz")),
+            b"replaced-impact-archive",
+        )
+        .expect("replace cache object");
+        let error = read_locked_archive(&cache, &locked(&digest))
+            .expect_err("replaced cache object must fail closed");
+        assert!(error.to_string().contains("cache object digest mismatch"));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    fn locked(digest: &str) -> LockedPackage {
+        LockedPackage {
+            name: "acme.subject".to_owned(),
+            version: "1.0.0".to_owned(),
+            sha256: digest.to_owned(),
+            source: "memory".to_owned(),
+            dependencies: Default::default(),
+        }
+    }
+
+    fn unique_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("commandf-{label}-{}", std::process::id()))
+    }
 }
