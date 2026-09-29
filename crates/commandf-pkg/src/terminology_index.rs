@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 
 use serde_json::Value;
 
@@ -32,15 +31,20 @@ impl TerminologyClosure {
         lockfile: &Lockfile,
         cache: &PackageCache,
     ) -> Result<Self, TerminologyError> {
-        lockfile.verify_cache(cache)?;
+        Self::load_consuming(lockfile, |digest| cache.read_verified(digest))
+    }
+
+    fn load_consuming<F>(
+        lockfile: &Lockfile,
+        mut read_verified: F,
+    ) -> Result<Self, TerminologyError>
+    where
+        F: FnMut(&str) -> Result<Vec<u8>, PackageError>,
+    {
         let mut closure = Self::default();
 
         for package in &lockfile.packages {
-            let path = cache
-                .root()
-                .join("sha256")
-                .join(format!("{}.tgz", package.sha256));
-            let bytes = fs::read(path).map_err(PackageError::Io)?;
+            let bytes = read_verified(&package.sha256)?;
             let manifest = read_manifest(&bytes)?;
             if manifest.name != package.name || manifest.version != package.version {
                 return Err(TerminologyError::InvalidField {
@@ -214,5 +218,118 @@ mod tests {
                 Err(TerminologyError::MalformedCanonical { .. })
             ));
         }
+    }
+
+    #[test]
+    fn terminology_closure_uses_the_verified_reader_once_per_package() {
+        let bytes = package_archive(
+            "acme.codes",
+            "1.0.0",
+            "http://example.org/CodeSystem/verified-reader",
+        );
+        let digest = PackageCache::digest(&bytes);
+        let lockfile = sample_lock(&digest);
+        let mut reads = 0_usize;
+        let closure = TerminologyClosure::load_consuming(&lockfile, |observed| {
+            reads += 1;
+            assert_eq!(observed, digest);
+            Ok(bytes.clone())
+        })
+        .expect("verified reader bytes");
+
+        assert_eq!(reads, 1);
+        assert!(closure
+            .by_url
+            .contains_key("http://example.org/CodeSystem/verified-reader"));
+    }
+
+    #[test]
+    fn replaced_cache_object_cannot_supply_terminology_bytes() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = PackageCache::new(directory.path());
+        let bytes = package_archive(
+            "acme.codes",
+            "1.0.0",
+            "http://example.org/CodeSystem/original",
+        );
+        let digest = cache.put(&bytes).expect("cache object");
+        let replacement = package_archive(
+            "acme.codes",
+            "1.0.0",
+            "http://example.org/CodeSystem/replaced",
+        );
+        std::fs::write(
+            cache.root().join("sha256").join(format!("{digest}.tgz")),
+            replacement,
+        )
+        .expect("replace cache object");
+
+        let error = TerminologyClosure::load(&sample_lock(&digest), &cache)
+            .expect_err("replaced cache object must fail closed");
+        assert!(matches!(
+            error,
+            TerminologyError::Package(PackageError::CacheDigestMismatch { .. })
+        ));
+    }
+
+    fn sample_lock(digest: &str) -> Lockfile {
+        Lockfile::new(
+            vec!["acme.codes@1.0.0".to_owned()],
+            vec![crate::LockedPackage {
+                name: "acme.codes".to_owned(),
+                version: "1.0.0".to_owned(),
+                sha256: digest.to_owned(),
+                source: "memory".to_owned(),
+                dependencies: Default::default(),
+            }],
+        )
+    }
+
+    fn package_archive(name: &str, version: &str, url: &str) -> Vec<u8> {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use tar::Builder;
+
+        let manifest = serde_json::json!({
+            "name": name,
+            "version": version
+        });
+        let code_system = serde_json::json!({
+            "resourceType": "CodeSystem",
+            "url": url,
+            "version": "1"
+        });
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        {
+            let mut builder = Builder::new(&mut encoder);
+            append_entry(
+                &mut builder,
+                "package/package.json",
+                &serde_json::to_vec(&manifest).expect("manifest"),
+            );
+            append_entry(
+                &mut builder,
+                "package/CodeSystem-test.json",
+                &serde_json::to_vec(&code_system).expect("code system"),
+            );
+            builder.finish().expect("archive");
+        }
+        encoder.finish().expect("gzip")
+    }
+
+    fn append_entry(
+        builder: &mut tar::Builder<&mut flate2::write::GzEncoder<Vec<u8>>>,
+        path: &str,
+        body: &[u8],
+    ) {
+        use std::io::Cursor;
+        use tar::Header;
+
+        let mut header = Header::new_gnu();
+        header.set_path(path).expect("path");
+        header.set_size(body.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append(&header, Cursor::new(body)).expect("entry");
     }
 }
