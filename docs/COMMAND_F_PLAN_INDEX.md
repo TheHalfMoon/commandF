@@ -216,3 +216,5 @@ The review-governance candidate records the intended future V3/V3.1 independent-
 For any future V3 implementation planning, agents must read **both** `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` and `COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`. The latter is the mandatory amendment for G41-G50 and decision-assurance semantics. If the two planning candidates conflict, the narrower V3.1 rule controls only the decision-assurance subject it explicitly amends; neither document supersedes V2 until a canonical migration gate says so.
 
 Known verified-byte and unbounded-input issue families are treated as migration blockers for production-trust claims, not silently ignored debt. Their issue state and applicability must be re-read at migration time rather than assumed from this planning snapshot.
+
+The migration candidate is `specs/018-v3-1-authority-migration/`. It is a Spec Kit candidate. It does not make CF-17 through CF-28 executable, and it does not close issue #100 or issues #35, #36, #37, #38, and #40.
