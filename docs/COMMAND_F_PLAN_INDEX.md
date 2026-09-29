@@ -60,6 +60,7 @@ Current slice-specific donor records remain under `donors/`, including:
 
 - `donors/cf-01-package-resolution.yaml`
 - `donors/agent-harness-2026-08-13.yaml`
+- `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
 
 Future slice plans must add or update donor records rather than relying on conversation memory.
 
@@ -177,4 +178,33 @@ The V3 candidate preserves CF-01..CF-16 and AF-01..AF-04 identities and proposes
 - public compatibility evidence; and
 - benchmark/research convergence.
 
-No candidate in this overlay may bypass the existing build-order rule. `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` is the single implementation-facing navigation document for the candidate roadmap: it defines the dependency DAG, closure contract for every G01-G40 gap, per-slice work packages, acceptance evidence, and agent operating loop. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.
+No candidate in this overlay may bypass the existing build-order rule. `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` remains the base implementation-facing navigation document for the V3 candidate roadmap: it defines the dependency DAG, closure contract for every G01-G40 gap, per-slice work packages, acceptance evidence, and agent operating loop. A future V3 execution migration requires its own reconciliation/qualification gate after currently governed prerequisites are satisfied.
+
+## J. 2026-09-29 V3.1 decision-assurance hardening overlay
+
+The following artifacts strengthen V3 without renumbering existing CF/AF work:
+
+- `docs/COMMAND_F_V3_1_DECISION_ASSURANCE_PLAN.md`
+- `docs/COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`
+- `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+
+The V3.1 overlay adds ten explicit gaps (`G41..G50`) and binds them to existing candidate slice ownership rather than inventing a parallel roadmap. It formalizes:
+
+- proof versus probability/confidence;
+- deterministic truth class versus policy action;
+- evidence completeness and sufficiency;
+- first-class abstention/insufficient/unsupported/indeterminate outcomes;
+- a versioned Decision Envelope;
+- a portable Consumer Contract;
+- selective oracle/runtime escalation;
+- a source/evidence-bound Decision Receipt;
+- counterfactual sensitivity and irrelevant-edit stability;
+- decision-quality evaluation centered on unsafe auto-allow risk at declared coverage;
+- optional provider-neutral model assistance that is technically non-authoritative; and
+- shared assurance primitives so future product slices reuse evidence/integrity controls instead of forking them.
+
+The V3.1 donor record pins founder-controlled GAX, Ascout, Kernux, and Cotra revisions as `PATTERN_ONLY` sources. Pinning does not authorize a runtime dependency, model authority, or code copy without the normal slice-specific provenance/license/rights gate.
+
+For any future V3 implementation planning, agents must read **both** `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` and `COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`. The latter is the mandatory amendment for G41-G50 and decision-assurance semantics. If the two planning candidates conflict, the narrower V3.1 rule controls only the decision-assurance subject it explicitly amends; neither document supersedes V2 until a canonical migration gate says so.
+
+Known verified-byte and unbounded-input issue families are treated as migration blockers for production-trust claims, not silently ignored debt. Their issue state and applicability must be re-read at migration time rather than assumed from this planning snapshot.
