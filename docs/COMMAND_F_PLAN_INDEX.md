@@ -60,7 +60,6 @@ Current slice-specific donor records remain under `donors/`, including:
 
 - `donors/cf-01-package-resolution.yaml`
 - `donors/agent-harness-2026-08-13.yaml`
-- `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
 
 Future slice plans must add or update donor records rather than relying on conversation memory.
 
@@ -190,7 +189,7 @@ The following artifacts strengthen V3 without renumbering existing CF/AF work:
 - `docs/COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`
 - `docs/COMMAND_F_V3_1_COMPLETENESS_AUDIT_2026-09-29.md`
 - `docs/COMMAND_F_V3_1_REVIEW_GOVERNANCE.md`
-- `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+- `docs/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
 
 The V3.1 overlay adds ten explicit gaps (`G41..G50`) and binds them to existing candidate slice ownership rather than inventing a parallel roadmap. It formalizes:
 

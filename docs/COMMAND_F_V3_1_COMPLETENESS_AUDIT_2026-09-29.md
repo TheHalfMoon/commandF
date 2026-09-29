@@ -13,7 +13,7 @@ Reviewed planning set:
 - `COMMAND_F_V3_1_DECISION_ASSURANCE_PLAN.md`
 - `COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`
 - `COMMAND_F_PLAN_INDEX.md`
-- `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+- `docs/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
 
 Historical execution authority remains `COMMAND_F_MASTER_ARCHITECTURE_V2.md` plus live canonical Spec Kits.
 

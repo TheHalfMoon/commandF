@@ -730,7 +730,9 @@ Each primitive needs independent negative tests.
 
 Pinned record:
 
-`donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+`docs/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
+
+This planning pin lives under `docs/` because `donors/` is an AF-02 authority prefix. Exact-head `af02-base-verifier` on `1c9989614c45aa1828c4dbfc566fb95f458e510c` rejected `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml` as an unknown authority path. A planning-only pattern record must not enter that prefix and must not amend the AF-02 enforcement inventory.
 
 Use:
 

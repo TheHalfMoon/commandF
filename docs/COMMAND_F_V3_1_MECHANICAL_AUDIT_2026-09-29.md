@@ -41,7 +41,7 @@ docs/COMMAND_F_V3_1_DECISION_ASSURANCE_PLAN.md
 docs/COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md
 docs/COMMAND_F_V3_1_REVIEW_GOVERNANCE.md
 docs/COMMAND_F_V3_EXECUTION_PLAYBOOK.md
-donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml
+docs/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml
 ```
 
 This audit adds one further `docs/**` file. No product source, Cargo manifest/lockfile, workflow, runtime dependency, schema implementation, rule implementation, test corpus, or active Spec Kit is changed by this planning package.
