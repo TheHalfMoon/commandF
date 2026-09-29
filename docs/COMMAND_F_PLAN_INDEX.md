@@ -154,7 +154,9 @@ Assurance tooling is not exempt from this rule: naming cargo-fuzz, SLSA, Sigstor
 
 ## I. 2026-09-12 V3 strategic planning overlay
 
-The following planning artifacts were produced from a whole-plan review against canonical `main` at `c56d9619758ea3e1075e751bec83ddea6706a81e`:
+The following planning artifacts were produced from a whole-plan review against canonical `main` at `c56d9619758ea3e1075e751bec83ddea6706a81e`.
+
+The V3 candidate documents are:
 
 - `docs/COMMAND_F_MASTER_ARCHITECTURE_V3_CANDIDATE.md`
 - `docs/COMMAND_F_PLAN_GAP_REVIEW_2026-09-12.md`
