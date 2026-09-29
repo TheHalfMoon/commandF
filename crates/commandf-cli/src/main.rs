@@ -688,10 +688,11 @@ fn build_terminology_report(
     )?)
 }
 
-fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> Result<Vec<u8>, io::Error> {
-    cache
-        .read_verified(&locked.sha256)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
+fn read_locked_archive(
+    cache: &PackageCache,
+    locked: &LockedPackage,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(cache.read_verified(&locked.sha256)?)
 }
 
 fn select_locked_package<'a>(
