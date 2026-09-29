@@ -1,0 +1,125 @@
+schema: commandf.donor-record/v1
+status: PLANNING_CANDIDATE
+recorded_at: 2026-09-29
+purpose: >-
+  Pin founder-controlled repositories used as architecture and verification-pattern
+  inputs for the commandF V3.1 planning hardening. This record does not authorize
+  production dependency adoption, model authority, vendoring, or redistribution.
+
+founder_permission:
+  statement: >-
+    The founder has authorized commandF to study and reuse source from repositories
+    under the founder's GitHub account, including private/public repositories, subject
+    to commandF provenance policy and any third-party/license/content obligations.
+  boundary: >-
+    Founder authorization does not replace third-party license, dataset, model-weight,
+    terminology-content, notice, or redistribution obligations. Exact code copying still
+    requires a slice-specific adoption record with source paths/blobs and destination review.
+
+sources:
+  - id: gax-decision-patterns
+    repository: TheHalfMoon/Gax
+    revision: a1432dc81d48407c551b1b8ddefefa478a2cd33f
+    paths:
+      - docs/architecture/ARCHITECTURE.md
+      - docs/research/GAXBENCH.md
+    authority_class: PATTERN
+    adoption_mode: PATTERN_ONLY
+    target_slices:
+      - CF-18
+      - CF-19
+      - CF-20
+      - CF-28
+    retained_patterns:
+      - explicit finite decision/action vocabulary
+      - sufficiency separated from top-1 confidence
+      - native abstention
+      - calibration separated from deployment threshold
+      - evidence perturbation testing
+      - counterfactual sensitivity plus irrelevant-edit stability
+      - risk-coverage and unsafe-commit-style evaluation
+    forbidden_adoptions:
+      - model output as semantic authority
+      - hidden free-form generation relabeled as typed proof
+      - test-label-driven calibration or threshold selection
+
+  - id: ascout-receipt-patterns
+    repository: TheHalfMoon/Ascout
+    revision: 06b763d8ffb09538b812fc0b007424b482531256
+    paths:
+      - src/receipt/model.ts
+      - specs/001-changed-code-verification-receipt/data-model.md
+    authority_class: PATTERN
+    adoption_mode: PATTERN_ONLY
+    target_slices:
+      - CF-18
+      - CF-21
+      - CF-23
+    retained_patterns:
+      - source-bound receipts
+      - explicit PASS/FAIL/BLOCKED/ERROR/NOT_RUN distinctions
+      - completeness independent from stability
+      - reason codes for non-success and non-execution
+      - canonical evidence references and bounded machine contracts
+    forbidden_adoptions:
+      - collapsing omitted work into PASS
+      - carrying evidence across different source identities
+
+  - id: kernux-capability-evidence-patterns
+    repository: TheHalfMoon/kernux
+    revision: 7e07035d8a29b234273fa84a496539cc685ad03e
+    paths:
+      - README.md
+      - docs/canonical/QUALITY_AND_EVIDENCE.md
+      - docs/canonical/SECURITY_MODEL.md
+    authority_class: PATTERN
+    adoption_mode: PATTERN_ONLY
+    target_slices:
+      - CF-23
+      - CF-24
+    retained_patterns:
+      - provider-neutral versioned contracts
+      - permission before power
+      - typed capabilities before ambient execution
+      - evidence before done
+      - replayable task/evidence concepts
+    forbidden_adoptions:
+      - autonomous approval of protected actions
+      - ambient model authority over policy
+
+  - id: cotra-execution-evidence-patterns
+    repository: TheHalfMoon/Cotra
+    revision: 0b56d8b95f69f5797fb8edf7871ec84b9013321c
+    paths:
+      - README.md
+      - docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md
+      - docs/security/THREAT_MODEL.md
+    authority_class: PATTERN
+    adoption_mode: PATTERN_ONLY
+    target_slices:
+      - CF-20
+      - CF-23
+      - CF-24
+    retained_patterns:
+      - bounded capabilities instead of run-anything authority
+      - workspace/session identity binding
+      - explicit requested/started/completed/verified/failed/cancelled/indeterminate states
+      - local audit evidence and secret-redaction boundaries
+    forbidden_adoptions:
+      - unbounded execution authority
+      - self-approval of consequential actions
+
+qualification_before_code_adoption:
+  required:
+    - exact source path and Git blob identity
+    - applicable license and notice evidence
+    - third-party/data/model/content-rights disposition
+    - destination path and owning CF/AF Spec Kit
+    - copied/ported/pattern-only adoption mode
+    - tests proving commandF-native semantics
+    - security and supply-chain impact review
+    - removal/upgrade path
+  rule: >-
+    No source in this file becomes a runtime dependency or correctness authority merely
+    because it is pinned here. The deterministic commandF core and explicit oracle/policy
+    boundaries remain authoritative.
