@@ -36,6 +36,8 @@ V3/V3.1 status: planning candidate only
 
 Any implementation attempt must re-read live truth. These identities are historical review context, not permanent execution pins.
 
+A later forward merge from canonical `main` `90456dbcda782d95e83c20859ec6b24e3f4f4118` into this planning branch produced merge commit `3fc0878bdd38357052401071360128d0478e3a8b`. That merge brought the already-canonical AF-02 retention bootstrap and `rustls 0.23.45` lockfile onto the planning branch. It did not authorize V3 implementation, did not close issue #100's durable offline retained-authority contract, and did not change the planning-only path set of this PR relative to the merged main.
+
 ## 3. Migration gate before V3 implementation authority
 
 A future migration/reconciliation Spec Kit must be created before V3/V3.1 product implementation becomes execution authority.
