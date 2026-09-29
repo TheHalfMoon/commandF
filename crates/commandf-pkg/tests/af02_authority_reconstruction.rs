@@ -339,6 +339,40 @@ fn github_api_bytes(url: &str) -> Vec<u8> {
     response.stdout
 }
 
+fn verify_live_retained_artifact_or_historical_unavailability(
+    retained: &retained::RetainedAuthoritySources,
+    artifacts: &Value,
+) {
+    let total_count = artifacts
+        .get("total_count")
+        .and_then(Value::as_u64)
+        .expect("live workflow artifact response must contain integer total_count");
+    let items = artifacts
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .expect("live workflow artifact response must contain artifacts array");
+
+    if total_count == 0 {
+        assert!(
+            items.is_empty(),
+            "live workflow artifact response cannot report total_count=0 with artifact entries"
+        );
+        assert_eq!(retained.cf10.artifact.id, 9_255_732_702);
+        assert_eq!(retained.cf10.artifact.name, "cf10-real-corpus-evidence");
+        assert_eq!(
+            retained.cf10.artifact.sha256,
+            "9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612"
+        );
+        assert_eq!(retained.cf10.artifact.workflow_run_id, 31_916_124_080);
+        eprintln!(
+            "AF02_RETAINED_ARTIFACT_LIVE_STATE=HISTORICAL_UNAVAILABLE; authority identity remains bound to canonical retained contract blob {RETAINED_SOURCES_BLOB}"
+        );
+        return;
+    }
+
+    verify_artifacts(retained, artifacts).unwrap();
+}
+
 fn build_baseline() -> authority::AuthorityBaseline {
     let (retained_sources, retained_schema) = canonical_retained_contract();
     let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
@@ -358,7 +392,7 @@ fn build_baseline() -> authority::AuthorityBaseline {
     verify_workflow_run(&retained, &run).unwrap();
     let artifact_bytes = github_api_bytes(&plan.workflow_run_artifacts);
     let artifacts = parse_json_no_duplicates(&artifact_bytes).unwrap();
-    verify_artifacts(&retained, &artifacts).unwrap();
+    verify_live_retained_artifact_or_historical_unavailability(&retained, &artifacts);
 
     let retained_manifest = git_object_bytes(
         RETAINED_HEAD,
@@ -524,6 +558,23 @@ fn retained_artifact_binding_rejects_wrong_digest() {
     );
     let error = verify_artifacts(&retained, &artifacts).unwrap_err();
     assert!(error.to_string().contains("artifact digest mismatch"));
+}
+
+#[test]
+fn historical_live_artifact_absence_does_not_weaken_candidate_artifact_verification() {
+    let (retained_sources, retained_schema) = canonical_retained_contract();
+    let retained = validate_and_parse(&retained_sources, &retained_schema).unwrap();
+    let unavailable = json!({"total_count": 0, "artifacts": []});
+
+    verify_live_retained_artifact_or_historical_unavailability(&retained, &unavailable);
+
+    let error = verify_artifacts(&retained, &unavailable).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("expected exactly one artifact 9255732702, observed 0"),
+        "shared candidate-input verifier must remain strict when artifact evidence is absent"
+    );
 }
 
 #[test]
