@@ -1,0 +1,27 @@
+name: probe-jev-availability
+
+on:
+  push:
+    branches:
+      - probe/ocr-pr101-delegate
+
+permissions:
+  contents: read
+
+jobs:
+  check-credential-presence-without-api-call:
+    runs-on: ubuntu-latest
+    env:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    steps:
+      - name: Check Jev credential availability without consuming credits
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${TYPESAFE_API_KEY:-}" ]]; then
+            echo "JEV_CREDENTIAL_STATE=AVAILABLE"
+          else
+            echo "JEV_CREDENTIAL_STATE=UNAVAILABLE"
+          fi
+          echo "JEV_API_CALL=NOT_RUN"
+          echo "JEV_CREDITS_CONSUMED=NONE"
