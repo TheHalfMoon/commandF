@@ -222,3 +222,5 @@ The migration candidate is `specs/018-v3-1-authority-migration/`. It is a Spec K
 Issue #100's successor candidate is `specs/019-durable-offline-retained-authority/`. The historical artifact identity is known. The historical artifact bytes are unavailable. That candidate does not authorize CF-17.
 
 The terminology verified-byte candidate is `specs/020-terminology-verified-cache-bytes/`. It covers issue #35 only. It does not close issues #36, #37, #38, #40, or #100, and it does not authorize CF-17.
+
+The root-consumer verified-byte candidate is `specs/021-root-verified-cache-bytes/`. It covers issue #40 only. It does not close issues #36, #37, #38, or #100, and it does not authorize CF-17.

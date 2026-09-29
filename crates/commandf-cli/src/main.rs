@@ -331,12 +331,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                     )
                 })?;
             let cache = PackageCache::new(cache);
-            cache.verify(&locked.sha256)?;
-            let archive_path = cache
-                .root()
-                .join("sha256")
-                .join(format!("{}.tgz", locked.sha256));
-            let archive_bytes = fs::read(archive_path)?;
+            let archive_bytes = read_locked_archive(&cache, locked)?;
             let inspection = inspect_package(
                 &locked.name,
                 &locked.version,
@@ -637,21 +632,8 @@ fn build_diff_report(
 
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
-    before_cache.verify(&before_locked.sha256)?;
-    after_cache.verify(&after_locked.sha256)?;
-
-    let before_bytes = fs::read(
-        before_cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", before_locked.sha256)),
-    )?;
-    let after_bytes = fs::read(
-        after_cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", after_locked.sha256)),
-    )?;
+    let before_bytes = read_locked_archive(&before_cache, before_locked)?;
+    let after_bytes = read_locked_archive(&after_cache, after_locked)?;
     Ok(diff_package_archives(
         package_name.to_string(),
         &before_locked.version,
@@ -678,8 +660,6 @@ fn build_terminology_report(
     let before_cache = PackageCache::new(before_cache);
     let after_cache = PackageCache::new(after_cache);
 
-    before_cache.verify(&before_locked.sha256)?;
-    after_cache.verify(&after_locked.sha256)?;
     let before_bytes = read_locked_archive(&before_cache, before_locked)?;
     let after_bytes = read_locked_archive(&after_cache, after_locked)?;
     let diff = diff_package_archives(
@@ -709,12 +689,9 @@ fn build_terminology_report(
 }
 
 fn read_locked_archive(cache: &PackageCache, locked: &LockedPackage) -> Result<Vec<u8>, io::Error> {
-    fs::read(
-        cache
-            .root()
-            .join("sha256")
-            .join(format!("{}.tgz", locked.sha256)),
-    )
+    cache
+        .read_verified(&locked.sha256)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))
 }
 
 fn select_locked_package<'a>(
@@ -738,4 +715,52 @@ fn select_locked_package<'a>(
         ));
     }
     Ok(selected)
+}
+
+#[cfg(test)]
+mod verified_cache_tests {
+    use super::*;
+
+    #[test]
+    fn root_archive_reader_returns_the_verified_bytes() {
+        let directory =
+            std::env::temp_dir().join(format!("commandf-root-verified-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("temp cache");
+        let cache = PackageCache::new(&directory);
+        let digest = cache.put(b"root-archive").expect("cache object");
+        let bytes = read_locked_archive(&cache, &locked(&digest)).expect("verified bytes");
+        assert_eq!(bytes, b"root-archive");
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn replaced_root_archive_cannot_supply_unverified_bytes() {
+        let directory =
+            std::env::temp_dir().join(format!("commandf-root-replaced-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("temp cache");
+        let cache = PackageCache::new(&directory);
+        let digest = cache.put(b"root-archive").expect("cache object");
+        fs::write(
+            cache.root().join("sha256").join(format!("{digest}.tgz")),
+            b"replaced-root-archive",
+        )
+        .expect("replace cache object");
+
+        let error = read_locked_archive(&cache, &locked(&digest))
+            .expect_err("replaced cache object must fail closed");
+        assert!(error.to_string().contains("cache object digest mismatch"));
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    fn locked(digest: &str) -> LockedPackage {
+        LockedPackage {
+            name: "acme.root".to_owned(),
+            version: "1.0.0".to_owned(),
+            sha256: digest.to_owned(),
+            source: "memory".to_owned(),
+            dependencies: Default::default(),
+        }
+    }
 }
