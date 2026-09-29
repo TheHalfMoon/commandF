@@ -186,6 +186,8 @@ The following artifacts strengthen V3 without renumbering existing CF/AF work:
 
 - `docs/COMMAND_F_V3_1_DECISION_ASSURANCE_PLAN.md`
 - `docs/COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`
+- `docs/COMMAND_F_V3_1_COMPLETENESS_AUDIT_2026-09-29.md`
+- `docs/COMMAND_F_V3_1_REVIEW_GOVERNANCE.md`
 - `donors/commandf-v3_1-internal-pattern-sources-2026-09-29.yaml`
 
 The V3.1 overlay adds ten explicit gaps (`G41..G50`) and binds them to existing candidate slice ownership rather than inventing a parallel roadmap. It formalizes:
@@ -200,10 +202,15 @@ The V3.1 overlay adds ten explicit gaps (`G41..G50`) and binds them to existing 
 - a source/evidence-bound Decision Receipt;
 - counterfactual sensitivity and irrelevant-edit stability;
 - decision-quality evaluation centered on unsafe auto-allow risk at declared coverage;
-- optional provider-neutral model assistance that is technically non-authoritative; and
+- optional provider-neutral model assistance that is technically non-authoritative;
+- evidence-authority/reconciliation patterns where missing or unsupported coverage can never become a clean result by absence; and
 - shared assurance primitives so future product slices reuse evidence/integrity controls instead of forking them.
 
-The V3.1 donor record pins founder-controlled GAX, Ascout, Kernux, and Cotra revisions as `PATTERN_ONLY` sources. Pinning does not authorize a runtime dependency, model authority, or code copy without the normal slice-specific provenance/license/rights gate.
+The V3.1 donor record pins founder-controlled GAX, Ascout, Sentrdel, Kernux, and Cotra revisions as `PATTERN_ONLY` sources. Pinning does not authorize a runtime dependency, model authority, or code copy without the normal slice-specific provenance/license/rights gate.
+
+The completeness audit marks the combined V3 + V3.1 planning package `READY_FOR_SPEC_KIT_SHAPING / NOT EXECUTION AUTHORITY`. This means the plan is detailed enough to shape dependency-eligible Spec Kits without inventing missing architecture; it does not mean any future capability is implemented or proven.
+
+The review-governance candidate records the intended future V3/V3.1 independent-review stack: repository-owned deterministic/assurance gates, Jev, Alibaba Open Code Review, and human disposition/merge authority. CodeRabbit, Qodo, Cubic, and similar hosted reviewer scores/checkmarks are not future V3 qualification evidence unless a later canonical governance change explicitly re-authorizes one. Current canonical governance still controls until the V3 migration gate reconciles it.
 
 For any future V3 implementation planning, agents must read **both** `COMMAND_F_V3_EXECUTION_PLAYBOOK.md` and `COMMAND_F_V3_1_IMPLEMENTATION_RUNBOOK.md`. The latter is the mandatory amendment for G41-G50 and decision-assurance semantics. If the two planning candidates conflict, the narrower V3.1 rule controls only the decision-assurance subject it explicitly amends; neither document supersedes V2 until a canonical migration gate says so.
 
