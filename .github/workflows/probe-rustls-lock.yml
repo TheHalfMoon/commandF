@@ -19,8 +19,6 @@ jobs:
 
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@032958afbdc797a9164d3bc0b56325c1308924a5
-        with:
-          toolchain: stable
 
       - name: Generate minimal patched lockfile candidate
         shell: bash
@@ -38,25 +36,30 @@ jobs:
 
           before = Path('/tmp/Cargo.lock.before').read_text(encoding='utf-8')
           after = Path('Cargo.lock').read_text(encoding='utf-8')
-          diff = list(difflib.unified_diff(
-              before.splitlines(keepends=True),
-              after.splitlines(keepends=True),
-              fromfile='Cargo.lock.before',
-              tofile='Cargo.lock.after',
-          ))
-          allowed_old = {
-              'version = "0.23.43"\n',
-              'checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"\n',
-          }
-          allowed_new = {
-              'version = "0.23.45"\n',
-              'checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"\n',
-          }
-          removed = {line[1:] for line in diff if line.startswith('-') and not line.startswith('---')}
-          added = {line[1:] for line in diff if line.startswith('+') and not line.startswith('+++')}
-          if removed != allowed_old or added != allowed_new:
+          old = '''[[package]]
+          name = "rustls"
+          version = "0.23.43"
+          source = "registry+https://github.com/rust-lang/crates.io-index"
+          checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+          '''
+          new = '''[[package]]
+          name = "rustls"
+          version = "0.23.45"
+          source = "registry+https://github.com/rust-lang/crates.io-index"
+          checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+          '''
+          if before.count(old) != 1:
+              print('EXPECTED_RUSTLS_BLOCK_NOT_UNIQUE', file=sys.stderr)
+              raise SystemExit(1)
+          expected = before.replace(old, new, 1)
+          if after != expected:
               print('UNEXPECTED_LOCK_DIFF', file=sys.stderr)
-              sys.stderr.writelines(diff)
+              sys.stderr.writelines(difflib.unified_diff(
+                  before.splitlines(keepends=True),
+                  after.splitlines(keepends=True),
+                  fromfile='Cargo.lock.before',
+                  tofile='Cargo.lock.after',
+              ))
               raise SystemExit(1)
 
           raw = Path('Cargo.lock').read_bytes()
