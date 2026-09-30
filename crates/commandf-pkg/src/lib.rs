@@ -108,8 +108,9 @@ pub use ecosystem_comparison::{
     MAX_COMPARISON_RECORDS, STATUS_ABSENT,
 };
 pub use ecosystem_history::{
-    project_snapshot_history, HistoryError, SnapshotHistory, ECOSYSTEM_HISTORY_SCHEMA,
-    MAX_HISTORY_STEPS,
+    decode_history_machine, encode_history_machine, project_snapshot_history, HistoryError,
+    HistoryMachineBytes, SnapshotHistory, ECOSYSTEM_HISTORY_BYTES_SCHEMA, ECOSYSTEM_HISTORY_SCHEMA,
+    MAX_HISTORY_MACHINE_BYTES, MAX_HISTORY_STEPS,
 };
 pub use ecosystem_lifecycle::{
     project_source_lifecycle, require_current_sources, verify_lifecycle_record, LifecycleError,
