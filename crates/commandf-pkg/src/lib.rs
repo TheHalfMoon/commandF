@@ -25,6 +25,7 @@ mod context_model;
 mod durable_retained;
 mod ecosystem_cache_identity;
 mod ecosystem_closure;
+mod ecosystem_comparison;
 mod ecosystem_lifecycle;
 mod ecosystem_snapshot;
 mod error;
@@ -98,14 +99,20 @@ pub use ecosystem_closure::{
     CANONICAL_RESOLVED, CANONICAL_UNRESOLVED, ECOSYSTEM_CLOSURE_SCHEMA, ECOSYSTEM_QUERY_SCHEMA,
     MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES,
 };
+pub use ecosystem_comparison::{
+    project_snapshot_comparison, require_comparison_replay, ComparisonError, ComparisonWitnesses,
+    LifecycleStateChange, PackageChange, PackageMembership, ResolutionChange, SnapshotComparison,
+    ECOSYSTEM_COMPARISON_SCHEMA, EVIDENCE_ABSENT, EVIDENCE_PRESENT, MAX_COMPARISON_ENGINE_CHARS,
+    MAX_COMPARISON_OUTPUT_BYTES, MAX_COMPARISON_RECORDS, STATUS_ABSENT,
+};
 pub use ecosystem_lifecycle::{
-    project_source_lifecycle, require_current_sources, LifecycleError, LifecycleRecord,
-    SourceLifecycle, ECOSYSTEM_LIFECYCLE_SCHEMA, LIFECYCLE_CURRENT, LIFECYCLE_STALE,
-    LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_SOURCES,
+    project_source_lifecycle, require_current_sources, verify_lifecycle_record, LifecycleError,
+    LifecycleRecord, SourceLifecycle, ECOSYSTEM_LIFECYCLE_SCHEMA, LIFECYCLE_CURRENT,
+    LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_SOURCES,
 };
 pub use ecosystem_snapshot::{
-    project_snapshot, require_published_authority, EcosystemSnapshot, SnapshotError,
-    SnapshotPackage, ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MUTABLE_CI,
+    project_snapshot, require_published_authority, verify_snapshot_identity, EcosystemSnapshot,
+    SnapshotError, SnapshotPackage, ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MUTABLE_CI,
 };
 pub use error::PackageError;
 pub use gate::{
