@@ -13,6 +13,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
 | SRC-SMART | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | declared protocol text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-HL7-FHIR | public git candidate | official repository, not adopted | observed, not pinned | MULTI_LICENSE | not stored | mixed source and specification | none assigned | NOT_ADMITTED_LABEL_UNRESOLVED |
+| SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | not stored | library source | the pinned implementation, if an item is later named | RIGHTS_PROVEN |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -82,6 +83,41 @@ PROVENANCE = GitHub content API at the named commit
 CASE_CLASS = none
 LABEL_AUTHORITY = none
 ADMISSION_STATE = NOT_ADMITTED_LABEL_UNRESOLVED
+EXACT_BYTES_RETAINED = no
+ITEM_COUNT = 0
+```
+
+## HAPI FHIR, rights proven, not admitted
+
+On 2026-10-01 the GitHub API returned `hapifhir/hapi-fhir` commit `e307df6b64ff87c55af1607160f57141dbeb0360` on `master`. The repository license field was `Apache-2.0`. The commit is not a corpus pin. No library bytes were stored.
+
+`LICENSE.txt` blob `261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64` is 11357 bytes. SHA-256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`. It is the Apache License, Version 2.0, January 2004, and it begins: `TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION`.
+
+`NOTICE.txt` blob `35f38a015ed625fddaa925176011609282cf1d77` is 563 bytes. SHA-256 `705d285dc21a348adf3429e6a76e3126f6953f2b4db203ada028714f1f329fae`. It says: `Copyright 2015, University Health Network` and `Licensed under the Apache License, Version 2.0`.
+
+`README.md` blob `3d233bd612dd5de51a6f1402ec09bf00b33bd956` is 2234 bytes. SHA-256 `6ae6179c29dcb33e300ffb080a54d11efafc41b5099ec29e1c685f5b188b29f3`. Line 26 says: `This project is Open Source, licensed under the Apache Software License 2.0.`
+
+`LOINC_NOTES.txt` is developer notes about LOINC import behavior. It is not a second license for the Java source. It is a reason not to treat LOINC-derived terminology bytes as covered by this observation. No terminology bytes were taken.
+
+No test or fixture file was selected, so there is no independent label and no case class. The held-out split is not frozen. `ITEM_COUNT` stays 0.
+
+```text
+SOURCE_ID = SRC-HAPI-FHIR
+REPOSITORY = hapifhir/hapi-fhir
+EXACT_COMMIT = e307df6b64ff87c55af1607160f57141dbeb0360
+ARTIFACT_PATH = not selected
+ARTIFACT_BLOB = none
+ARTIFACT_SHA256 = none
+LICENSE_PATH = LICENSE.txt
+LICENSE_BLOB = 261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64
+LICENSE_SHA256 = c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+LICENSE_IDENTIFIER = Apache-2.0
+LICENSE_QUOTE = This project is Open Source, licensed under the Apache Software License 2.0.
+LICENSE_SCOPE_ANALYSIS = repository license and notice apply to the project source; LOINC notes do not extend that grant to terminology content; a specific source file still needs its own header check before bytes are retained
+PROVENANCE = GitHub content API at the named commit
+CASE_CLASS = none
+LABEL_AUTHORITY = none
+ADMISSION_STATE = RIGHTS_PROVEN
 EXACT_BYTES_RETAINED = no
 ITEM_COUNT = 0
 ```
