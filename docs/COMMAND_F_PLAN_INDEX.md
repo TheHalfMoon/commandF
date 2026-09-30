@@ -261,4 +261,6 @@ The fourteenth CF-17 package is `specs/038-cf17-cache-machine-bytes/`. It emits 
 
 The fifteenth CF-17 package is `specs/039-cf17-workspace-identity/`. It records which snapshot packages belong to one workspace. It merged as `33ac488018c36b538482ddbf8d513d216f0b795a`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The sixteenth CF-17 package is `specs/040-cf17-workspace-machine-bytes/`. It emits canonical bytes for one workspace identity. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The sixteenth CF-17 package is `specs/040-cf17-workspace-machine-bytes/`. It emits canonical bytes for one workspace identity. It merged as `7d38d073286bd72277bb165f42ec30ac0b7f925c`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The seventeenth CF-17 package is `specs/041-cf17-offline-replay/`. It replays one frozen published observation and shows the resulting identities match. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.

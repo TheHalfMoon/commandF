@@ -28,6 +28,7 @@ mod ecosystem_closure;
 mod ecosystem_comparison;
 mod ecosystem_history;
 mod ecosystem_lifecycle;
+mod ecosystem_replay;
 mod ecosystem_snapshot;
 mod ecosystem_workspace;
 mod error;
@@ -123,6 +124,9 @@ pub use ecosystem_lifecycle::{
     LifecycleRecord, SourceLifecycle, ECOSYSTEM_LIFECYCLE_BYTES_SCHEMA, ECOSYSTEM_LIFECYCLE_SCHEMA,
     LIFECYCLE_CURRENT, LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_MACHINE_BYTES,
     MAX_LIFECYCLE_SOURCES, MAX_LIFECYCLE_STRING_BYTES,
+};
+pub use ecosystem_replay::{
+    replay_frozen_observation, ReplayError, ReplayIdentity, ReplayInputs, ECOSYSTEM_REPLAY_SCHEMA,
 };
 pub use ecosystem_snapshot::{
     decode_snapshot_machine, encode_snapshot_machine, project_snapshot,
