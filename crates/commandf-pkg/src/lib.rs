@@ -28,6 +28,7 @@ mod ecosystem_closure;
 mod ecosystem_comparison;
 mod ecosystem_history;
 mod ecosystem_lifecycle;
+mod ecosystem_package_history;
 mod ecosystem_registry;
 mod ecosystem_replay;
 mod ecosystem_snapshot;
@@ -125,6 +126,11 @@ pub use ecosystem_lifecycle::{
     LifecycleRecord, SourceLifecycle, ECOSYSTEM_LIFECYCLE_BYTES_SCHEMA, ECOSYSTEM_LIFECYCLE_SCHEMA,
     LIFECYCLE_CURRENT, LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_MACHINE_BYTES,
     MAX_LIFECYCLE_SOURCES, MAX_LIFECYCLE_STRING_BYTES,
+};
+pub use ecosystem_package_history::{
+    project_package_history, replay_package_history, PackageHistory, PackageHistoryError,
+    PackageHistoryNode, PackageVersionRecord, ECOSYSTEM_PACKAGE_HISTORY_SCHEMA,
+    MAX_PACKAGE_HISTORY_VERSIONS, SUPPLIED_VERSIONS_ONLY,
 };
 pub use ecosystem_registry::{
     acquire_official_package, replay_acquired_package, require_authorized_registry_url,
