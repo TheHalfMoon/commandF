@@ -21,3 +21,9 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-CONSTRUCTED-MALFORMED | fixture not written | none | none | not a clinical record | not acquired | constructed bytes | a recorded adjudication | NOT_ADMITTED |
 
 `ITEM_COUNT` stays 0. Admission still requires the gate in `research/CANDIDATE_CORPUS.md`. This inventory does not download bytes and does not authorize a registry crawl.
+
+## One observed revision, not a pin
+
+On 2026-09-30 the GitHub content API returned `FHIR/ig-registry` `package-feeds.json` at commit `5f9e60bf5c15b091d90f8c914c7f0c0a47768685`. The git blob was `8521f455517e91e2782183d5c6143d272dbadae1`. The decoded body was 20016 bytes. The SHA-256 of those bytes was `787b8440f72bc71787cf798906991d0361683024f90b84bf4dc0404da99626ee`. The repository license field was null. No license text was stored.
+
+Those facts are an observation of one response. They are not a pin, not an admitted source, and not a CF-17 catalog authorization. The default branch can move. The bytes are not in this repository. `SRC-IG-REGISTRY` stays `NOT_ADMITTED`.
