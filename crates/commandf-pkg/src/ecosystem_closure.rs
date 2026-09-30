@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub const ECOSYSTEM_CLOSURE_SCHEMA: &str = "commandf.ecosystem-closure/v1";
+pub const ECOSYSTEM_QUERY_SCHEMA: &str = "commandf.ecosystem-query/v1";
 pub const CANONICAL_RESOLVED: &str = "RESOLVED";
 pub const CANONICAL_UNRESOLVED: &str = "UNRESOLVED";
 pub const CANONICAL_AMBIGUOUS: &str = "AMBIGUOUS";
@@ -54,6 +55,15 @@ pub struct EcosystemClosures {
     pub canonical_closure_sha256: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClosureQuery {
+    pub schema: String,
+    pub snapshot_sha256: String,
+    pub package_closure_sha256: String,
+    pub canonical_closure_sha256: String,
+    pub query_sha256: String,
+}
+
 #[derive(Debug, Error)]
 pub enum ClosureError {
     #[error(transparent)]
@@ -88,6 +98,21 @@ pub enum ClosureError {
 
     #[error("canonical exceeds {MAX_CANONICAL_CHARS} characters")]
     CanonicalTooLong,
+
+    #[error("closure schema is not {ECOSYSTEM_CLOSURE_SCHEMA}")]
+    UnexpectedClosureSchema,
+
+    #[error("closure snapshot identity does not match the published snapshot")]
+    UnboundSnapshot,
+
+    #[error("closure package records do not partition the snapshot")]
+    PackagePartitionMismatch,
+
+    #[error("canonical witness lists overlap or omit a snapshot unresolved canonical")]
+    CanonicalWitnessMismatch,
+
+    #[error("stored closure digest does not match the closure document")]
+    ClosureDigestMismatch,
 }
 
 pub fn project_closures(
@@ -213,25 +238,19 @@ pub fn project_closures(
         }
     }
 
-    let package_body = PackageClosureBody {
-        edges: &package_edges,
-        kind: PACKAGE_KIND,
-        members: &package_members,
-        schema: ECOSYSTEM_CLOSURE_SCHEMA,
-        snapshot_sha256: &snapshot.snapshot_sha256,
-        unrelated_packages: &unrelated_packages,
-    };
-    let canonical_body = CanonicalClosureBody {
-        ambiguous_canonicals: &ambiguous_canonicals,
-        edges: &canonical_edges,
-        kind: CANONICAL_KIND,
-        resolved_canonicals: &resolved_canonicals,
-        schema: ECOSYSTEM_CLOSURE_SCHEMA,
-        snapshot_sha256: &snapshot.snapshot_sha256,
-        unresolved_canonicals: &unresolved_canonicals,
-    };
-    let package_bytes = serde_json::to_vec(&package_body).map_err(PackageError::Json)?;
-    let canonical_bytes = serde_json::to_vec(&canonical_body).map_err(PackageError::Json)?;
+    let package_closure_sha256 = digest_package_closure(
+        &snapshot.snapshot_sha256,
+        &package_members,
+        &package_edges,
+        &unrelated_packages,
+    )?;
+    let canonical_closure_sha256 = digest_canonical_closure(
+        &snapshot.snapshot_sha256,
+        &resolved_canonicals,
+        &unresolved_canonicals,
+        &ambiguous_canonicals,
+        &canonical_edges,
+    )?;
 
     Ok(EcosystemClosures {
         schema: ECOSYSTEM_CLOSURE_SCHEMA.to_owned(),
@@ -243,9 +262,163 @@ pub fn project_closures(
         unresolved_canonicals,
         ambiguous_canonicals,
         canonical_edges,
-        package_closure_sha256: PackageCache::digest(&package_bytes),
-        canonical_closure_sha256: PackageCache::digest(&canonical_bytes),
+        package_closure_sha256,
+        canonical_closure_sha256,
     })
+}
+
+pub fn query_closures(
+    snapshot: &EcosystemSnapshot,
+    closures: &EcosystemClosures,
+) -> Result<ClosureQuery, ClosureError> {
+    if closures.package_edges.len() > MAX_CLOSURE_EDGES
+        || closures.canonical_edges.len() > MAX_CLOSURE_EDGES
+        || closures
+            .package_members
+            .len()
+            .saturating_add(closures.unrelated_packages.len())
+            > MAX_CLOSURE_EDGES
+        || closures.resolved_canonicals.len() > MAX_CLOSURE_EDGES
+        || closures.unresolved_canonicals.len() > MAX_CLOSURE_EDGES
+        || closures.ambiguous_canonicals.len() > MAX_CLOSURE_EDGES
+    {
+        return Err(ClosureError::TooManyEdges);
+    }
+    require_published_authority(snapshot)?;
+    if closures.schema != ECOSYSTEM_CLOSURE_SCHEMA {
+        return Err(ClosureError::UnexpectedClosureSchema);
+    }
+    if closures.snapshot_sha256 != snapshot.snapshot_sha256 {
+        return Err(ClosureError::UnboundSnapshot);
+    }
+
+    let mut snapshot_packages = BTreeMap::new();
+    for package in &snapshot.packages {
+        snapshot_packages.insert(
+            (package.name.as_str(), package.version.as_str()),
+            package.archive_sha256.as_str(),
+        );
+    }
+    let mut closure_packages = BTreeMap::new();
+    for package in closures
+        .package_members
+        .iter()
+        .chain(closures.unrelated_packages.iter())
+    {
+        if closure_packages
+            .insert(
+                (package.name.as_str(), package.version.as_str()),
+                package.archive_sha256.as_str(),
+            )
+            .is_some()
+        {
+            return Err(ClosureError::PackagePartitionMismatch);
+        }
+    }
+    if snapshot_packages != closure_packages {
+        return Err(ClosureError::PackagePartitionMismatch);
+    }
+
+    let resolved: BTreeSet<&str> = closures
+        .resolved_canonicals
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let unresolved: BTreeSet<&str> = closures
+        .unresolved_canonicals
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let ambiguous: BTreeSet<&str> = closures
+        .ambiguous_canonicals
+        .iter()
+        .map(String::as_str)
+        .collect();
+    if !resolved.is_disjoint(&unresolved)
+        || !resolved.is_disjoint(&ambiguous)
+        || !unresolved.is_disjoint(&ambiguous)
+    {
+        return Err(ClosureError::CanonicalWitnessMismatch);
+    }
+    if snapshot
+        .unresolved_canonicals
+        .iter()
+        .any(|canonical| !unresolved.contains(canonical.as_str()))
+    {
+        return Err(ClosureError::CanonicalWitnessMismatch);
+    }
+
+    let package_closure_sha256 = digest_package_closure(
+        &snapshot.snapshot_sha256,
+        &closures.package_members,
+        &closures.package_edges,
+        &closures.unrelated_packages,
+    )?;
+    let canonical_closure_sha256 = digest_canonical_closure(
+        &snapshot.snapshot_sha256,
+        &closures.resolved_canonicals,
+        &closures.unresolved_canonicals,
+        &closures.ambiguous_canonicals,
+        &closures.canonical_edges,
+    )?;
+    if package_closure_sha256 != closures.package_closure_sha256
+        || canonical_closure_sha256 != closures.canonical_closure_sha256
+    {
+        return Err(ClosureError::ClosureDigestMismatch);
+    }
+
+    let body = QueryBody {
+        canonical_closure_sha256: &canonical_closure_sha256,
+        package_closure_sha256: &package_closure_sha256,
+        schema: ECOSYSTEM_QUERY_SCHEMA,
+        snapshot_sha256: &snapshot.snapshot_sha256,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    Ok(ClosureQuery {
+        schema: ECOSYSTEM_QUERY_SCHEMA.to_owned(),
+        snapshot_sha256: snapshot.snapshot_sha256.clone(),
+        package_closure_sha256,
+        canonical_closure_sha256,
+        query_sha256: PackageCache::digest(&bytes),
+    })
+}
+
+fn digest_package_closure(
+    snapshot_sha256: &str,
+    members: &[ClosurePackage],
+    edges: &[PackageDependencyEdge],
+    unrelated_packages: &[ClosurePackage],
+) -> Result<String, ClosureError> {
+    let body = PackageClosureBody {
+        edges,
+        kind: PACKAGE_KIND,
+        members,
+        schema: ECOSYSTEM_CLOSURE_SCHEMA,
+        snapshot_sha256,
+        unrelated_packages,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    Ok(PackageCache::digest(&bytes))
+}
+
+fn digest_canonical_closure(
+    snapshot_sha256: &str,
+    resolved_canonicals: &[String],
+    unresolved_canonicals: &[String],
+    ambiguous_canonicals: &[String],
+    edges: &[CanonicalReferenceEdge],
+) -> Result<String, ClosureError> {
+    let body = CanonicalClosureBody {
+        ambiguous_canonicals,
+        edges,
+        kind: CANONICAL_KIND,
+        resolved_canonicals,
+        schema: ECOSYSTEM_CLOSURE_SCHEMA,
+        snapshot_sha256,
+        unresolved_canonicals,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    Ok(PackageCache::digest(&bytes))
 }
 
 fn observe_status(
@@ -292,6 +465,14 @@ struct CanonicalClosureBody<'a> {
     schema: &'a str,
     snapshot_sha256: &'a str,
     unresolved_canonicals: &'a [String],
+}
+
+#[derive(Serialize)]
+struct QueryBody<'a> {
+    canonical_closure_sha256: &'a str,
+    package_closure_sha256: &'a str,
+    schema: &'a str,
+    snapshot_sha256: &'a str,
 }
 
 #[cfg(test)]
@@ -560,6 +741,92 @@ mod tests {
                 )]
             ),
             Err(ClosureError::CanonicalTooLong)
+        ));
+    }
+
+    #[test]
+    fn query_binds_snapshot_and_both_closure_digests() {
+        let published = snapshot();
+        let closures = project_closures(
+            &published,
+            vec![dep("acme.a", "acme.b")],
+            vec![canonical(
+                "http://example.org/StructureDefinition/src",
+                "http://example.org/StructureDefinition/found",
+                CANONICAL_RESOLVED,
+            )],
+        )
+        .expect("closures");
+        let left = query_closures(&published, &closures).expect("left query");
+        let right = query_closures(&published, &closures).expect("right query");
+        assert_eq!(left, right);
+        assert_eq!(left.snapshot_sha256, published.snapshot_sha256);
+        assert_eq!(left.package_closure_sha256, closures.package_closure_sha256);
+        assert_eq!(
+            left.canonical_closure_sha256,
+            closures.canonical_closure_sha256
+        );
+
+        let changed = project_closures(&published, vec![dep("acme.a", "acme.c")], Vec::new())
+            .expect("changed closures");
+        let changed_query = query_closures(&published, &changed).expect("changed query");
+        assert_ne!(left.query_sha256, changed_query.query_sha256);
+    }
+
+    #[test]
+    fn query_rejects_unbound_tampered_and_overlapping_witnesses() {
+        let published = snapshot();
+        let mut closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        closures.snapshot_sha256 = "ab".repeat(32);
+        assert!(matches!(
+            query_closures(&published, &closures),
+            Err(ClosureError::UnboundSnapshot)
+        ));
+
+        closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        closures.package_closure_sha256 = "cd".repeat(32);
+        assert!(matches!(
+            query_closures(&published, &closures),
+            Err(ClosureError::ClosureDigestMismatch)
+        ));
+
+        closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        closures.unresolved_canonicals.clear();
+        assert!(matches!(
+            query_closures(&published, &closures),
+            Err(ClosureError::CanonicalWitnessMismatch)
+        ));
+
+        closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        closures
+            .resolved_canonicals
+            .push("http://example.org/StructureDefinition/missing".to_owned());
+        assert!(matches!(
+            query_closures(&published, &closures),
+            Err(ClosureError::CanonicalWitnessMismatch)
+        ));
+
+        closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        closures.package_members[0].archive_sha256 = "ef".repeat(32);
+        assert!(matches!(
+            query_closures(&published, &closures),
+            Err(ClosureError::PackagePartitionMismatch)
+        ));
+
+        let mut mutable = published.clone();
+        mutable.packages[0].mutability = MUTABLE_CI.to_owned();
+        let mutable_closures =
+            project_closures(&published, Vec::new(), Vec::new()).expect("immutable projection");
+        assert!(matches!(
+            query_closures(&mutable, &mutable_closures),
+            Err(ClosureError::Snapshot(
+                SnapshotError::MutableSourceIsNotPublished { .. }
+            ))
         ));
     }
 }
