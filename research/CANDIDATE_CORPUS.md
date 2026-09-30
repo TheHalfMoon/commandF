@@ -29,3 +29,5 @@ RIGHTS = NOT_RECORDED
 ```
 
 No package name, version, or fixture is a member. This gate does not authorize a download, a product change, or an experiment.
+
+Label authority is specified in `research/LABEL_AUTHORITY.md`. That specification assigns no labels.
