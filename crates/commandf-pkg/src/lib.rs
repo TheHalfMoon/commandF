@@ -23,6 +23,7 @@ mod context;
 mod context_error;
 mod context_model;
 mod durable_retained;
+mod ecosystem_cache_identity;
 mod ecosystem_closure;
 mod ecosystem_lifecycle;
 mod ecosystem_snapshot;
@@ -86,6 +87,10 @@ pub use context_model::{
 pub use durable_retained::{
     classify_regenerated_archive, evaluate_durable_packet, DurableProjection, DurableRetainedError,
     HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
+};
+pub use ecosystem_cache_identity::{
+    project_cache_identity, require_cache_reuse, CacheIdentity, CacheIdentityError,
+    ECOSYSTEM_CACHE_IDENTITY_SCHEMA, MAX_ENGINE_SCHEMA_CHARS,
 };
 pub use ecosystem_closure::{
     project_closures, query_closures, CanonicalReferenceEdge, ClosureError, ClosurePackage,

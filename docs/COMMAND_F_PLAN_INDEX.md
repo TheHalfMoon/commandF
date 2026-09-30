@@ -237,4 +237,6 @@ The second CF-17 package is `specs/026-cf17-separate-closures/`. It projects sep
 
 The third CF-17 package is `specs/027-cf17-closure-query/`. It binds one published snapshot to the two closure digests and returns a query identity. It merged as `296641b021269adb35506867b186a6b79cfa799a`. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The fourth CF-17 package is `specs/028-cf17-source-lifecycle/`. It records source lifecycle against a published snapshot and refuses stale or withdrawn sources at adoption. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The fourth CF-17 package is `specs/028-cf17-source-lifecycle/`. It records source lifecycle against a published snapshot and refuses stale or withdrawn sources at adoption. It merged as `2384be6483943dd8ba3311bc27c63aefeb98e266`. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The fifth CF-17 package is `specs/029-cf17-cache-identity/`. It keys cache reuse to the snapshot digest and an explicit engine schema. It does not measure scale, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
