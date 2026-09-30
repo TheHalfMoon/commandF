@@ -95,11 +95,12 @@ pub use ecosystem_cache_identity::{
     ECOSYSTEM_CACHE_IDENTITY_SCHEMA, MAX_ENGINE_SCHEMA_CHARS,
 };
 pub use ecosystem_closure::{
-    decode_closure_machine, encode_closure_machine, project_closures, query_closures,
-    CanonicalReferenceEdge, ClosureError, ClosureMachineBytes, ClosurePackage, ClosureQuery,
-    EcosystemClosures, PackageDependencyEdge, CANONICAL_AMBIGUOUS, CANONICAL_RESOLVED,
-    CANONICAL_UNRESOLVED, ECOSYSTEM_CLOSURE_BYTES_SCHEMA, ECOSYSTEM_CLOSURE_SCHEMA,
-    ECOSYSTEM_QUERY_SCHEMA, MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES, MAX_CLOSURE_MACHINE_BYTES,
+    decode_closure_machine, decode_query_machine, encode_closure_machine, encode_query_machine,
+    project_closures, query_closures, CanonicalReferenceEdge, ClosureError, ClosureMachineBytes,
+    ClosurePackage, ClosureQuery, EcosystemClosures, PackageDependencyEdge, QueryMachineBytes,
+    CANONICAL_AMBIGUOUS, CANONICAL_RESOLVED, CANONICAL_UNRESOLVED, ECOSYSTEM_CLOSURE_BYTES_SCHEMA,
+    ECOSYSTEM_CLOSURE_SCHEMA, ECOSYSTEM_QUERY_BYTES_SCHEMA, ECOSYSTEM_QUERY_SCHEMA,
+    MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES, MAX_CLOSURE_MACHINE_BYTES, MAX_QUERY_MACHINE_BYTES,
 };
 pub use ecosystem_comparison::{
     project_snapshot_comparison, require_comparison_replay, verify_comparison_identity,
