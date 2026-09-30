@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub const ECOSYSTEM_COMPARISON_SCHEMA: &str = "commandf.ecosystem-snapshot-comparison/v1";
+pub const ECOSYSTEM_COMPARISON_BYTES_SCHEMA: &str = "commandf.ecosystem-comparison-bytes/v1";
 pub const EVIDENCE_PRESENT: &str = "PRESENT";
 pub const EVIDENCE_ABSENT: &str = "ABSENT";
 pub const STATUS_ABSENT: &str = "ABSENT";
@@ -18,7 +19,8 @@ pub const MAX_COMPARISON_RECORDS: usize = 10_000;
 pub const MAX_COMPARISON_ENGINE_CHARS: usize = 256;
 pub const MAX_COMPARISON_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackageMembership {
     pub archive_sha256: String,
     pub mutability: String,
@@ -27,7 +29,8 @@ pub struct PackageMembership {
     pub version: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackageChange {
     pub after_archive_sha256: String,
     pub after_mutability: String,
@@ -39,14 +42,16 @@ pub struct PackageChange {
     pub version: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResolutionChange {
     pub after_status: String,
     pub before_status: String,
     pub canonical: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LifecycleStateChange {
     pub after_state: String,
     pub before_state: String,
@@ -86,6 +91,13 @@ pub struct SnapshotComparison {
     pub comparison_sha256: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComparisonMachineBytes {
+    pub serialization_schema: String,
+    pub bytes: Vec<u8>,
+    pub machine_sha256: String,
+}
+
 #[derive(Debug, Error)]
 pub enum ComparisonError {
     #[error(transparent)]
@@ -123,6 +135,12 @@ pub enum ComparisonError {
 
     #[error("comparison schema is not {ECOSYSTEM_COMPARISON_SCHEMA}")]
     UnexpectedComparisonSchema,
+
+    #[error("comparison bytes are not the canonical encoding")]
+    NoncanonicalComparison,
+
+    #[error("comparison JSON could not be read as the canonical document")]
+    MalformedComparison,
 }
 
 pub fn project_snapshot_comparison(
@@ -322,6 +340,86 @@ pub fn verify_comparison_identity(comparison: &SnapshotComparison) -> Result<(),
     Ok(())
 }
 
+pub fn encode_comparison_machine(
+    comparison: &SnapshotComparison,
+) -> Result<ComparisonMachineBytes, ComparisonError> {
+    verify_comparison_identity(comparison)?;
+    let bytes = comparison_document_bytes(comparison)?;
+    let machine_sha256 = PackageCache::digest(&bytes);
+    Ok(ComparisonMachineBytes {
+        serialization_schema: ECOSYSTEM_COMPARISON_BYTES_SCHEMA.to_owned(),
+        bytes,
+        machine_sha256,
+    })
+}
+
+pub fn decode_comparison_machine(bytes: &[u8]) -> Result<SnapshotComparison, ComparisonError> {
+    if bytes.len() > MAX_COMPARISON_OUTPUT_BYTES {
+        return Err(ComparisonError::OutputTooLarge);
+    }
+    let document: ComparisonDocument =
+        serde_json::from_slice(bytes).map_err(|_| ComparisonError::MalformedComparison)?;
+    let canonical = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if canonical.as_slice() != bytes {
+        return Err(ComparisonError::NoncanonicalComparison);
+    }
+    let comparison = SnapshotComparison {
+        schema: document.schema,
+        engine_schema: document.engine_schema,
+        before_snapshot_sha256: document.before_snapshot_sha256,
+        after_snapshot_sha256: document.after_snapshot_sha256,
+        added_packages: document.added_packages,
+        removed_packages: document.removed_packages,
+        changed_packages: document.changed_packages,
+        unchanged_packages: document.unchanged_packages,
+        introduced_unresolved_canonicals: document.introduced_unresolved_canonicals,
+        removed_unresolved_canonicals: document.removed_unresolved_canonicals,
+        retained_unresolved_canonicals: document.retained_unresolved_canonicals,
+        closure_evidence: document.closure_evidence,
+        before_package_closure_sha256: document.before_package_closure_sha256,
+        after_package_closure_sha256: document.after_package_closure_sha256,
+        before_canonical_closure_sha256: document.before_canonical_closure_sha256,
+        after_canonical_closure_sha256: document.after_canonical_closure_sha256,
+        resolution_evidence: document.resolution_evidence,
+        resolution_changes: document.resolution_changes,
+        lifecycle_evidence: document.lifecycle_evidence,
+        lifecycle_states: document.lifecycle_states,
+        comparison_sha256: PackageCache::digest(&canonical),
+    };
+    verify_comparison_identity(&comparison)?;
+    Ok(comparison)
+}
+
+fn comparison_document_bytes(comparison: &SnapshotComparison) -> Result<Vec<u8>, ComparisonError> {
+    let body = ComparisonBody {
+        added_packages: &comparison.added_packages,
+        after_canonical_closure_sha256: &comparison.after_canonical_closure_sha256,
+        after_package_closure_sha256: &comparison.after_package_closure_sha256,
+        after_snapshot_sha256: &comparison.after_snapshot_sha256,
+        before_canonical_closure_sha256: &comparison.before_canonical_closure_sha256,
+        before_package_closure_sha256: &comparison.before_package_closure_sha256,
+        before_snapshot_sha256: &comparison.before_snapshot_sha256,
+        changed_packages: &comparison.changed_packages,
+        closure_evidence: &comparison.closure_evidence,
+        engine_schema: &comparison.engine_schema,
+        introduced_unresolved_canonicals: &comparison.introduced_unresolved_canonicals,
+        lifecycle_evidence: &comparison.lifecycle_evidence,
+        lifecycle_states: &comparison.lifecycle_states,
+        removed_packages: &comparison.removed_packages,
+        removed_unresolved_canonicals: &comparison.removed_unresolved_canonicals,
+        resolution_changes: &comparison.resolution_changes,
+        resolution_evidence: &comparison.resolution_evidence,
+        retained_unresolved_canonicals: &comparison.retained_unresolved_canonicals,
+        schema: ECOSYSTEM_COMPARISON_SCHEMA,
+        unchanged_packages: &comparison.unchanged_packages,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if bytes.len() > MAX_COMPARISON_OUTPUT_BYTES {
+        return Err(ComparisonError::OutputTooLarge);
+    }
+    Ok(bytes)
+}
+
 #[derive(Serialize)]
 struct ComparisonBody<'a> {
     added_packages: &'a [PackageMembership],
@@ -344,6 +442,31 @@ struct ComparisonBody<'a> {
     retained_unresolved_canonicals: &'a [String],
     schema: &'a str,
     unchanged_packages: &'a [PackageMembership],
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ComparisonDocument {
+    added_packages: Vec<PackageMembership>,
+    after_canonical_closure_sha256: String,
+    after_package_closure_sha256: String,
+    after_snapshot_sha256: String,
+    before_canonical_closure_sha256: String,
+    before_package_closure_sha256: String,
+    before_snapshot_sha256: String,
+    changed_packages: Vec<PackageChange>,
+    closure_evidence: String,
+    engine_schema: String,
+    introduced_unresolved_canonicals: Vec<String>,
+    lifecycle_evidence: String,
+    lifecycle_states: Vec<LifecycleStateChange>,
+    removed_packages: Vec<PackageMembership>,
+    removed_unresolved_canonicals: Vec<String>,
+    resolution_changes: Vec<ResolutionChange>,
+    resolution_evidence: String,
+    retained_unresolved_canonicals: Vec<String>,
+    schema: String,
+    unchanged_packages: Vec<PackageMembership>,
 }
 
 struct ClosureFacts {
@@ -897,6 +1020,56 @@ mod tests {
             Err(ComparisonError::Snapshot(
                 SnapshotError::MutableSourceIsNotPublished { .. }
             ))
+        ));
+    }
+
+    #[test]
+    fn comparison_machine_bytes_replay_and_reject_noncanonical_input() {
+        let forward = project_snapshot_comparison(
+            &before(),
+            &after(),
+            "commandf.snapshot-comparison/v1",
+            ComparisonWitnesses::default(),
+        )
+        .expect("forward");
+        let encoded = encode_comparison_machine(&forward).expect("encode");
+        let again = encode_comparison_machine(&forward).expect("again");
+        assert_eq!(encoded.bytes, again.bytes);
+        assert_eq!(encoded.machine_sha256, forward.comparison_sha256);
+        assert_eq!(
+            encoded.serialization_schema,
+            ECOSYSTEM_COMPARISON_BYTES_SCHEMA
+        );
+        let decoded = decode_comparison_machine(&encoded.bytes).expect("decode");
+        assert_eq!(decoded, forward);
+        let reverse = project_snapshot_comparison(
+            &after(),
+            &before(),
+            "commandf.snapshot-comparison/v1",
+            ComparisonWitnesses::default(),
+        )
+        .expect("reverse");
+        assert_ne!(
+            encode_comparison_machine(&reverse)
+                .expect("reverse bytes")
+                .machine_sha256,
+            encoded.machine_sha256
+        );
+        let mut spaced = encoded.bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_comparison_machine(&spaced),
+            Err(ComparisonError::NoncanonicalComparison)
+        ));
+        assert!(matches!(
+            decode_comparison_machine(&vec![0; MAX_COMPARISON_OUTPUT_BYTES + 1]),
+            Err(ComparisonError::OutputTooLarge)
+        ));
+        let mut tampered = forward.clone();
+        tampered.comparison_sha256 = "ab".repeat(32);
+        assert!(matches!(
+            encode_comparison_machine(&tampered),
+            Err(ComparisonError::ComparisonMismatch)
         ));
     }
 }

@@ -103,10 +103,11 @@ pub use ecosystem_closure::{
     MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES, MAX_CLOSURE_MACHINE_BYTES, MAX_QUERY_MACHINE_BYTES,
 };
 pub use ecosystem_comparison::{
-    project_snapshot_comparison, require_comparison_replay, verify_comparison_identity,
-    ComparisonError, ComparisonWitnesses, LifecycleStateChange, PackageChange, PackageMembership,
-    ResolutionChange, SnapshotComparison, ECOSYSTEM_COMPARISON_SCHEMA, EVIDENCE_ABSENT,
-    EVIDENCE_PRESENT, MAX_COMPARISON_ENGINE_CHARS, MAX_COMPARISON_OUTPUT_BYTES,
+    decode_comparison_machine, encode_comparison_machine, project_snapshot_comparison,
+    require_comparison_replay, verify_comparison_identity, ComparisonError, ComparisonMachineBytes,
+    ComparisonWitnesses, LifecycleStateChange, PackageChange, PackageMembership, ResolutionChange,
+    SnapshotComparison, ECOSYSTEM_COMPARISON_BYTES_SCHEMA, ECOSYSTEM_COMPARISON_SCHEMA,
+    EVIDENCE_ABSENT, EVIDENCE_PRESENT, MAX_COMPARISON_ENGINE_CHARS, MAX_COMPARISON_OUTPUT_BYTES,
     MAX_COMPARISON_RECORDS, STATUS_ABSENT,
 };
 pub use ecosystem_history::{
