@@ -34,3 +34,5 @@ Each class below is planned. None has a frozen item, a count, or a label produce
 | Correct abstention | The safe output is to refuse a proven verdict | `RESULT_PENDING` |
 
 This table is not a freeze. It does not authorize a product change, a registry download, or an experiment run.
+
+The provenance fields for these classes are inventoried in `research/DATA_PROVENANCE.md`. That inventory does not freeze items, counts, labels, or a split.
