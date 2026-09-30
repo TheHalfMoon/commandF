@@ -6,7 +6,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 
 | SOURCE_ID | SOURCE_TYPE | AUTHORITATIVE_CLASS | EXACT_VERSION_OR_REVISION | RIGHTS_LICENSE | ACQUISITION_METHOD | EXPECTED_ARTIFACT_TYPE | LABEL_AUTHORITY | STATUS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SRC-IG-REGISTRY | public git candidate | OFFICIAL_REFERENCE, not adopted | NOT_PINNED | NOT_VERIFIED | not acquired | package-feed metadata | not a compatibility label | NOT_ADMITTED |
+| SRC-IG-REGISTRY | public git candidate | OFFICIAL_REFERENCE, not adopted | observed, not pinned | CONFLICTING_STATEMENTS | not stored | package-feed metadata | not a compatibility label | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FHIR-TEST-CASES | public git candidate | OFFICIAL_REFERENCE, not adopted | NOT_PINNED | NOT_VERIFIED | not acquired | published test artifacts | the published artifact, if pinned | NOT_ADMITTED |
 | SRC-FHIRPATH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | specification text | the pinned specification text | NOT_ADMITTED |
 | SRC-SQL-ON-FHIR | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | view-definition specification | the pinned specification text | NOT_ADMITTED |
@@ -24,6 +24,8 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 
 ## One observed revision, not a pin
 
-On 2026-09-30 the GitHub content API returned `FHIR/ig-registry` `package-feeds.json` at commit `5f9e60bf5c15b091d90f8c914c7f0c0a47768685`. The git blob was `8521f455517e91e2782183d5c6143d272dbadae1`. The decoded body was 20016 bytes. The SHA-256 of those bytes was `787b8440f72bc71787cf798906991d0361683024f90b84bf4dc0404da99626ee`. The repository license field was null. No license text was stored.
+On 2026-09-30 the GitHub content API returned `FHIR/ig-registry` `package-feeds.json` at commit `5f9e60bf5c15b091d90f8c914c7f0c0a47768685`. The git blob was `8521f455517e91e2782183d5c6143d272dbadae1`. The decoded body was 20016 bytes. The SHA-256 of those bytes was `787b8440f72bc71787cf798906991d0361683024f90b84bf4dc0404da99626ee`. The repository license field was null. The bytes are not in this repository.
 
-Those facts are an observation of one response. They are not a pin, not an admitted source, and not a CF-17 catalog authorization. The default branch can move. The bytes are not in this repository. `SRC-IG-REGISTRY` stays `NOT_ADMITTED`.
+The same commit's root tree has no `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, or `NOTICE`. `README.md` line 27 says: `* License: Content is licensed under Creative Commons Public Domain`. `package.json` says `"license": "MIT"`. Those two statements are not the same grant. Neither file is a standalone license text, and the bytes of `package-feeds.json` contain no rights statement that was recorded here.
+
+`SRC-IG-REGISTRY` is `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The observation is not a pin and not a CF-17 catalog authorization. The default branch can move.
