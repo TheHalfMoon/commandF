@@ -11,6 +11,8 @@ pub const ECOSYSTEM_CLOSURE_SCHEMA: &str = "commandf.ecosystem-closure/v1";
 pub const ECOSYSTEM_CLOSURE_BYTES_SCHEMA: &str = "commandf.ecosystem-closure-bytes/v1";
 pub const MAX_CLOSURE_MACHINE_BYTES: usize = 16 * 1024 * 1024;
 pub const ECOSYSTEM_QUERY_SCHEMA: &str = "commandf.ecosystem-query/v1";
+pub const ECOSYSTEM_QUERY_BYTES_SCHEMA: &str = "commandf.ecosystem-query-bytes/v1";
+pub const MAX_QUERY_MACHINE_BYTES: usize = 1024 * 1024;
 pub const CANONICAL_RESOLVED: &str = "RESOLVED";
 pub const CANONICAL_UNRESOLVED: &str = "UNRESOLVED";
 pub const CANONICAL_AMBIGUOUS: &str = "AMBIGUOUS";
@@ -78,6 +80,13 @@ pub struct ClosureQuery {
     pub query_sha256: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QueryMachineBytes {
+    pub serialization_schema: String,
+    pub bytes: Vec<u8>,
+    pub machine_sha256: String,
+}
+
 #[derive(Debug, Error)]
 pub enum ClosureError {
     #[error(transparent)]
@@ -136,6 +145,15 @@ pub enum ClosureError {
 
     #[error("closure JSON could not be read as the canonical document")]
     MalformedClosure,
+
+    #[error("query machine document exceeds {MAX_QUERY_MACHINE_BYTES} bytes")]
+    QueryMachineTooLarge,
+
+    #[error("query bytes are not the canonical encoding")]
+    NoncanonicalQuery,
+
+    #[error("query JSON could not be read as the canonical document")]
+    MalformedQuery,
 }
 
 pub fn project_closures(
@@ -406,6 +424,74 @@ pub fn query_closures(
     })
 }
 
+pub fn encode_query_machine(
+    snapshot: &EcosystemSnapshot,
+    closures: &EcosystemClosures,
+) -> Result<QueryMachineBytes, ClosureError> {
+    let query = query_closures(snapshot, closures)?;
+    let bytes = query_document_bytes(
+        &query.snapshot_sha256,
+        &query.package_closure_sha256,
+        &query.canonical_closure_sha256,
+    )?;
+    if bytes.len() > MAX_QUERY_MACHINE_BYTES {
+        return Err(ClosureError::QueryMachineTooLarge);
+    }
+    let machine_sha256 = PackageCache::digest(&bytes);
+    if machine_sha256 != query.query_sha256 {
+        return Err(ClosureError::ClosureDigestMismatch);
+    }
+    Ok(QueryMachineBytes {
+        serialization_schema: ECOSYSTEM_QUERY_BYTES_SCHEMA.to_owned(),
+        bytes,
+        machine_sha256,
+    })
+}
+
+pub fn decode_query_machine(
+    snapshot: &EcosystemSnapshot,
+    closures: &EcosystemClosures,
+    bytes: &[u8],
+) -> Result<ClosureQuery, ClosureError> {
+    if bytes.len() > MAX_QUERY_MACHINE_BYTES {
+        return Err(ClosureError::QueryMachineTooLarge);
+    }
+    let document: QueryDocument =
+        serde_json::from_slice(bytes).map_err(|_| ClosureError::MalformedQuery)?;
+    let canonical = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if canonical.as_slice() != bytes {
+        return Err(ClosureError::NoncanonicalQuery);
+    }
+    if document.schema != ECOSYSTEM_QUERY_SCHEMA {
+        return Err(ClosureError::UnexpectedClosureSchema);
+    }
+    let encoded = encode_query_machine(snapshot, closures)?;
+    if encoded.bytes != canonical {
+        return Err(ClosureError::UnboundSnapshot);
+    }
+    Ok(ClosureQuery {
+        schema: document.schema,
+        snapshot_sha256: document.snapshot_sha256,
+        package_closure_sha256: document.package_closure_sha256,
+        canonical_closure_sha256: document.canonical_closure_sha256,
+        query_sha256: PackageCache::digest(&canonical),
+    })
+}
+
+fn query_document_bytes(
+    snapshot_sha256: &str,
+    package_closure_sha256: &str,
+    canonical_closure_sha256: &str,
+) -> Result<Vec<u8>, ClosureError> {
+    let body = QueryBody {
+        canonical_closure_sha256,
+        package_closure_sha256,
+        schema: ECOSYSTEM_QUERY_SCHEMA,
+        snapshot_sha256,
+    };
+    Ok(serde_json::to_vec(&body).map_err(PackageError::Json)?)
+}
+
 pub fn encode_closure_machine(
     snapshot: &EcosystemSnapshot,
     closures: &EcosystemClosures,
@@ -598,6 +684,15 @@ struct QueryBody<'a> {
     package_closure_sha256: &'a str,
     schema: &'a str,
     snapshot_sha256: &'a str,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct QueryDocument {
+    canonical_closure_sha256: String,
+    package_closure_sha256: String,
+    schema: String,
+    snapshot_sha256: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -1047,6 +1142,34 @@ mod tests {
         assert!(matches!(
             encode_closure_machine(&published, &tampered),
             Err(ClosureError::ClosureDigestMismatch)
+        ));
+    }
+
+    #[test]
+    fn query_machine_bytes_replay_the_bound_closure_pair() {
+        let published = snapshot();
+        let closures = project_closures(&published, vec![dep("acme.a", "acme.b")], Vec::new())
+            .expect("closures");
+        let encoded = encode_query_machine(&published, &closures).expect("encode");
+        let again = encode_query_machine(&published, &closures).expect("again");
+        assert_eq!(encoded.bytes, again.bytes);
+        assert_eq!(encoded.serialization_schema, ECOSYSTEM_QUERY_BYTES_SCHEMA);
+        let decoded = decode_query_machine(&published, &closures, &encoded.bytes).expect("decode");
+        assert_eq!(decoded.query_sha256, encoded.machine_sha256);
+        let other = project_closures(&published, Vec::new(), Vec::new()).expect("other");
+        assert!(matches!(
+            decode_query_machine(&published, &other, &encoded.bytes),
+            Err(ClosureError::UnboundSnapshot)
+        ));
+        let mut spaced = encoded.bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_query_machine(&published, &closures, &spaced),
+            Err(ClosureError::NoncanonicalQuery)
+        ));
+        assert!(matches!(
+            decode_query_machine(&published, &closures, &vec![0; MAX_QUERY_MACHINE_BYTES + 1]),
+            Err(ClosureError::QueryMachineTooLarge)
         ));
     }
 }
