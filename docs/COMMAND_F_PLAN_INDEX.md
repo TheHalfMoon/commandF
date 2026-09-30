@@ -267,4 +267,4 @@ The seventeenth CF-17 package is `specs/041-cf17-offline-replay/`. It replays on
 
 The eighteenth CF-17 record is `specs/042-cf17-exit-gap-record/`. It records why official registry acquisition is must-ship and not executable. It is not execution authority. It does not implement acquisition, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The nineteenth CF-17 package is `specs/043-cf17-registry-acquisition/`. It is the later spec that scopes one exact official registry package observation in, and it defers issue #100 for that slice. Merging it authorizes a following implementation package. The authorization record itself does not download a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The nineteenth CF-17 package is `specs/043-cf17-registry-acquisition/`. Its authorization is `fffb09c27179e52105ddc654248ae0fa00adeb02`. The implementation acquires one exact official package through an injected transport, hashes those response bytes, and replays them offline. It does not crawl a catalog, measure scale, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
