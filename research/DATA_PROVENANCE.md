@@ -34,3 +34,5 @@ This inventory names the provenance fields for each planned case class. It does 
 | Correct abstention | a constructed fixture, or a public case whose safe output is refusal | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` |
 
 No row is a corpus member. No row authorizes a registry download, a product change, or an experiment.
+
+Admission of a later item is gated by `research/CANDIDATE_CORPUS.md`. That gate is empty.
