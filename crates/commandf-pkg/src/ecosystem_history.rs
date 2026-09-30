@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -6,7 +6,9 @@ use crate::{
 };
 
 pub const ECOSYSTEM_HISTORY_SCHEMA: &str = "commandf.ecosystem-snapshot-history/v1";
+pub const ECOSYSTEM_HISTORY_BYTES_SCHEMA: &str = "commandf.ecosystem-history-bytes/v1";
 pub const MAX_HISTORY_STEPS: usize = 1_000;
+pub const MAX_HISTORY_MACHINE_BYTES: usize = 1024 * 1024;
 const MAX_ENGINE_CHARS: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,6 +19,13 @@ pub struct SnapshotHistory {
     pub first_before_snapshot_sha256: String,
     pub last_after_snapshot_sha256: String,
     pub history_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HistoryMachineBytes {
+    pub serialization_schema: String,
+    pub bytes: Vec<u8>,
+    pub machine_sha256: String,
 }
 
 #[derive(Debug, Error)]
@@ -38,6 +47,30 @@ pub enum HistoryError {
 
     #[error("comparison step {step} does not continue the previous snapshot identity")]
     BrokenChain { step: usize },
+
+    #[error("history machine document exceeds {MAX_HISTORY_MACHINE_BYTES} bytes")]
+    MachineTooLarge,
+
+    #[error("history schema is not {ECOSYSTEM_HISTORY_SCHEMA}")]
+    UnsupportedHistorySchema,
+
+    #[error("history digest or snapshot identity is not 64 lowercase hex characters")]
+    InvalidIdentity,
+
+    #[error("stored history digest does not match the history document")]
+    HistoryDigestMismatch,
+
+    #[error("history bytes are not the canonical encoding")]
+    NoncanonicalEncoding,
+
+    #[error("duplicate comparison identity {digest}")]
+    DuplicateComparison { digest: String },
+
+    #[error("empty history must not name endpoint snapshots")]
+    EndpointMismatch,
+
+    #[error("history JSON could not be read as the canonical document")]
+    MalformedHistory,
 }
 
 pub fn project_snapshot_history(
@@ -68,14 +101,14 @@ pub fn project_snapshot_history(
         .last()
         .map(|comparison| comparison.after_snapshot_sha256.clone())
         .unwrap_or_default();
-    let body = HistoryBody {
-        comparison_sha256s: &comparison_sha256s,
-        engine_schema,
-        first_before_snapshot_sha256: &first_before,
-        last_after_snapshot_sha256: &last_after,
-        schema: ECOSYSTEM_HISTORY_SCHEMA,
+    let document = HistoryDocument {
+        comparison_sha256s: comparison_sha256s.clone(),
+        engine_schema: engine_schema.to_owned(),
+        first_before_snapshot_sha256: first_before.clone(),
+        last_after_snapshot_sha256: last_after.clone(),
+        schema: ECOSYSTEM_HISTORY_SCHEMA.to_owned(),
     };
-    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    let bytes = serde_json::to_vec(&document).map_err(PackageError::Json)?;
     Ok(SnapshotHistory {
         schema: ECOSYSTEM_HISTORY_SCHEMA.to_owned(),
         engine_schema: engine_schema.to_owned(),
@@ -84,6 +117,56 @@ pub fn project_snapshot_history(
         last_after_snapshot_sha256: last_after,
         history_sha256: PackageCache::digest(&bytes),
     })
+}
+
+pub fn encode_history_machine(
+    history: &SnapshotHistory,
+) -> Result<HistoryMachineBytes, HistoryError> {
+    if history.comparison_sha256s.len() > MAX_HISTORY_STEPS {
+        return Err(HistoryError::TooManySteps);
+    }
+    validate_history_shape(history)?;
+    let document = HistoryDocument::from_history(history);
+    let bytes = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if bytes.len() > MAX_HISTORY_MACHINE_BYTES {
+        return Err(HistoryError::MachineTooLarge);
+    }
+    let machine_sha256 = PackageCache::digest(&bytes);
+    if machine_sha256 != history.history_sha256 {
+        return Err(HistoryError::HistoryDigestMismatch);
+    }
+    Ok(HistoryMachineBytes {
+        serialization_schema: ECOSYSTEM_HISTORY_BYTES_SCHEMA.to_owned(),
+        bytes,
+        machine_sha256,
+    })
+}
+
+pub fn decode_history_machine(bytes: &[u8]) -> Result<SnapshotHistory, HistoryError> {
+    if bytes.len() > MAX_HISTORY_MACHINE_BYTES {
+        return Err(HistoryError::MachineTooLarge);
+    }
+    let document: HistoryDocument =
+        serde_json::from_slice(bytes).map_err(|_| HistoryError::MalformedHistory)?;
+    let canonical = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if canonical.as_slice() != bytes {
+        return Err(HistoryError::NoncanonicalEncoding);
+    }
+    if document.comparison_sha256s.len() > MAX_HISTORY_STEPS
+        || canonical.len() > MAX_HISTORY_MACHINE_BYTES
+    {
+        return Err(HistoryError::TooManySteps);
+    }
+    let history = SnapshotHistory {
+        schema: document.schema,
+        engine_schema: document.engine_schema,
+        comparison_sha256s: document.comparison_sha256s,
+        first_before_snapshot_sha256: document.first_before_snapshot_sha256,
+        last_after_snapshot_sha256: document.last_after_snapshot_sha256,
+        history_sha256: PackageCache::digest(&canonical),
+    };
+    validate_history_shape(&history)?;
+    Ok(history)
 }
 
 fn validate_engine(value: &str) -> Result<(), HistoryError> {
@@ -96,13 +179,66 @@ fn validate_engine(value: &str) -> Result<(), HistoryError> {
     Ok(())
 }
 
-#[derive(Serialize)]
-struct HistoryBody<'a> {
-    comparison_sha256s: &'a [String],
-    engine_schema: &'a str,
-    first_before_snapshot_sha256: &'a str,
-    last_after_snapshot_sha256: &'a str,
-    schema: &'a str,
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryDocument {
+    comparison_sha256s: Vec<String>,
+    engine_schema: String,
+    first_before_snapshot_sha256: String,
+    last_after_snapshot_sha256: String,
+    schema: String,
+}
+
+impl HistoryDocument {
+    fn from_history(history: &SnapshotHistory) -> Self {
+        Self {
+            comparison_sha256s: history.comparison_sha256s.clone(),
+            engine_schema: history.engine_schema.clone(),
+            first_before_snapshot_sha256: history.first_before_snapshot_sha256.clone(),
+            last_after_snapshot_sha256: history.last_after_snapshot_sha256.clone(),
+            schema: history.schema.clone(),
+        }
+    }
+}
+
+fn validate_history_shape(history: &SnapshotHistory) -> Result<(), HistoryError> {
+    if history.schema != ECOSYSTEM_HISTORY_SCHEMA {
+        return Err(HistoryError::UnsupportedHistorySchema);
+    }
+    validate_engine(&history.engine_schema)?;
+    let mut seen = std::collections::BTreeSet::new();
+    for digest in &history.comparison_sha256s {
+        if !is_sha256(digest) {
+            return Err(HistoryError::InvalidIdentity);
+        }
+        if !seen.insert(digest.as_str()) {
+            return Err(HistoryError::DuplicateComparison {
+                digest: digest.clone(),
+            });
+        }
+    }
+    let empty = history.comparison_sha256s.is_empty();
+    let first_ok = if empty {
+        history.first_before_snapshot_sha256.is_empty()
+    } else {
+        is_sha256(&history.first_before_snapshot_sha256)
+    };
+    let last_ok = if empty {
+        history.last_after_snapshot_sha256.is_empty()
+    } else {
+        is_sha256(&history.last_after_snapshot_sha256)
+    };
+    if !first_ok || !last_ok {
+        return Err(HistoryError::EndpointMismatch);
+    }
+    Ok(())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]
@@ -188,5 +324,78 @@ mod tests {
         let empty = project_snapshot_history("commandf.snapshot-history/v1", &[]).expect("empty");
         assert!(empty.comparison_sha256s.is_empty());
         assert!(empty.first_before_snapshot_sha256.is_empty());
+    }
+
+    #[test]
+    fn history_machine_bytes_replay_and_reject_noncanonical_input() {
+        let first = snap("acme.a", 0x11);
+        let second = snap("acme.b", 0x22);
+        let third = snap("acme.c", 0x33);
+        let history = project_snapshot_history(
+            "commandf.snapshot-history/v1",
+            &[step(&first, &second), step(&second, &third)],
+        )
+        .expect("history");
+        let left = encode_history_machine(&history).expect("left");
+        let right = encode_history_machine(&history).expect("right");
+        assert_eq!(left.bytes, right.bytes);
+        assert_eq!(left.machine_sha256, right.machine_sha256);
+        assert_eq!(left.machine_sha256, history.history_sha256);
+        assert_eq!(left.serialization_schema, ECOSYSTEM_HISTORY_BYTES_SCHEMA);
+        let decoded = decode_history_machine(&left.bytes).expect("decode");
+        assert_eq!(decoded, history);
+        let again = encode_history_machine(&decoded).expect("again");
+        assert_eq!(again.bytes, left.bytes);
+
+        let other = project_snapshot_history(
+            "commandf.snapshot-history/v1",
+            &[step(&third, &second), step(&second, &first)],
+        )
+        .expect("other");
+        let other_bytes = encode_history_machine(&other).expect("other bytes");
+        assert_ne!(left.machine_sha256, other_bytes.machine_sha256);
+
+        let mut spaced = left.bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_history_machine(&spaced),
+            Err(HistoryError::NoncanonicalEncoding)
+        ));
+        assert!(matches!(
+            decode_history_machine(b"{"),
+            Err(HistoryError::MalformedHistory)
+        ));
+        assert!(matches!(
+            decode_history_machine(&vec![0; MAX_HISTORY_MACHINE_BYTES + 1]),
+            Err(HistoryError::MachineTooLarge)
+        ));
+
+        let mut tampered = history.clone();
+        tampered.history_sha256 = "ab".repeat(32);
+        assert!(matches!(
+            encode_history_machine(&tampered),
+            Err(HistoryError::HistoryDigestMismatch)
+        ));
+        tampered = history.clone();
+        tampered.schema = "commandf.ecosystem-snapshot-history/v2".to_owned();
+        assert!(matches!(
+            encode_history_machine(&tampered),
+            Err(HistoryError::UnsupportedHistorySchema)
+        ));
+        tampered = history.clone();
+        tampered
+            .comparison_sha256s
+            .push(tampered.comparison_sha256s[0].clone());
+        assert!(matches!(
+            encode_history_machine(&tampered),
+            Err(HistoryError::DuplicateComparison { .. })
+        ));
+        assert!(matches!(
+            project_snapshot_history(
+                "commandf.snapshot-history/v1",
+                &[step(&first, &second), step(&first, &second)]
+            ),
+            Err(HistoryError::BrokenChain { step: 1 })
+        ));
     }
 }
