@@ -22,3 +22,5 @@ AGREEMENT = NOT_COMPUTED
 ```
 
 Disagreement is retained when an adjudication later happens. It is not averaged into a pass. This document does not adjudicate any item, freeze a split, or authorize an experiment.
+
+The procedure for a later adjudication is `research/ADJUDICATION_PROTOCOL.md`. It has not been run.
