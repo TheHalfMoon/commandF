@@ -132,8 +132,10 @@ pub use ecosystem_snapshot::{
     MAX_SNAPSHOT_STRING_BYTES, MUTABLE_CI,
 };
 pub use ecosystem_workspace::{
-    project_workspace, verify_workspace_identity, EcosystemWorkspace, WorkspaceError,
-    WorkspaceMember, ECOSYSTEM_WORKSPACE_SCHEMA, MAX_WORKSPACE_MEMBERS,
+    decode_workspace_machine, encode_workspace_machine, project_workspace,
+    verify_workspace_identity, EcosystemWorkspace, WorkspaceError, WorkspaceMachineBytes,
+    WorkspaceMember, ECOSYSTEM_WORKSPACE_BYTES_SCHEMA, ECOSYSTEM_WORKSPACE_SCHEMA,
+    MAX_WORKSPACE_MACHINE_BYTES, MAX_WORKSPACE_MEMBERS, MAX_WORKSPACE_STRING_BYTES,
 };
 pub use error::PackageError;
 pub use gate::{
