@@ -231,4 +231,6 @@ The bounded lockfile candidate is `specs/023-bounded-lockfile-reads/`. It covers
 
 The local-mirror archive candidate is `specs/024-local-mirror-archive-bound/`. It covers issue #38 only. It does not close issue #100.
 
-The first CF-17 package is `specs/025-cf17-snapshot-identity/`. It freezes snapshot identity only. It does not finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The first CF-17 package is `specs/025-cf17-snapshot-identity/`. It freezes snapshot identity only. It merged as `1f4e45405505406d3d57d47d4773bbb23559f366`. It does not finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The second CF-17 package is `specs/026-cf17-separate-closures/`. It projects separate package-dependency and canonical-reference closures from an already frozen snapshot. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
