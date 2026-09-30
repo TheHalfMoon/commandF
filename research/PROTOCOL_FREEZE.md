@@ -2,7 +2,7 @@
 
 Status: NOT_FROZEN.
 
-A freeze would bind a protocol version, a corpus digest, a label set, an adjudication record, a held-out split, pinned baselines, and a statistics plan to one manifest. None of those binds exist.
+A freeze is the last bind in `research/BENCHMARK_ADMISSION_LIFECYCLE.md`. It would bind a protocol version, a candidate corpus digest, a label set, human adjudication records where those were required, a held-out manifest computed after that digest, pinned baselines, and a statistics plan. None of those binds exist. Corpus membership does not wait for this freeze.
 
 ```text
 PROTOCOL_VERSION = NOT_FROZEN

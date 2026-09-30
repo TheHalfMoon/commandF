@@ -69,6 +69,8 @@ Future slice plans must add or update donor records rather than relying on conve
 
 Preserves the candidate master's thesis, core research question, H1–H3, initial standards/models, baseline families, measurement framework, experiment sequence, reproducibility artifact, and evidence/data governance.
 
+`research/BENCHMARK_ADMISSION_LIFECYCLE.md` orders source evidence, labels, candidate membership, split assignment, and the final freeze so those steps do not wait on each other in a circle. It admits no item.
+
 The broader research inventory remains in Sections 21–23 of `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md` and includes sixteen retained tracks:
 
 1. Semantic Conservation across FHIR/openEHR/OMOP

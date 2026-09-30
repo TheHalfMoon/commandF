@@ -6,12 +6,12 @@ A CommandFBench label is not a commandF result. commandF may be the system under
 
 ## Who may label
 
-A label is admissible only when its authority is one of these, named in the same record as the item:
+A label is admissible only when its authority is one of these, named in the same record as the pre-admission digest:
 
 - an external published artifact whose bytes match the recorded SHA-256, and whose relevant statement is quoted by location inside those bytes;
 - a human adjudication record that names each adjudicator, the item digest, the label, and the disagreement if the adjudicators do not agree.
 
-CommandF output, a model probability, and an unlabeled package listing are not label authorities.
+These are alternatives. An external published label does not also require a human adjudication. Human adjudication, when it is the authority used, is performed on that pre-admission digest and does not wait for corpus membership. CommandF output, a model probability, and an unlabeled package listing are not label authorities.
 
 ## What this record does not contain
 
