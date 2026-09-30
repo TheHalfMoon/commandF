@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -8,6 +8,8 @@ use crate::{
 };
 
 pub const ECOSYSTEM_CLOSURE_SCHEMA: &str = "commandf.ecosystem-closure/v1";
+pub const ECOSYSTEM_CLOSURE_BYTES_SCHEMA: &str = "commandf.ecosystem-closure-bytes/v1";
+pub const MAX_CLOSURE_MACHINE_BYTES: usize = 16 * 1024 * 1024;
 pub const ECOSYSTEM_QUERY_SCHEMA: &str = "commandf.ecosystem-query/v1";
 pub const CANONICAL_RESOLVED: &str = "RESOLVED";
 pub const CANONICAL_UNRESOLVED: &str = "UNRESOLVED";
@@ -18,7 +20,8 @@ pub const MAX_CANONICAL_CHARS: usize = 2_048;
 const PACKAGE_KIND: &str = "package-dependency";
 const CANONICAL_KIND: &str = "canonical-reference";
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackageDependencyEdge {
     pub from_name: String,
     pub from_version: String,
@@ -26,14 +29,16 @@ pub struct PackageDependencyEdge {
     pub to_version: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CanonicalReferenceEdge {
     pub source_canonical: String,
     pub status: String,
     pub target_canonical: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ClosurePackage {
     pub archive_sha256: String,
     pub name: String,
@@ -53,6 +58,15 @@ pub struct EcosystemClosures {
     pub canonical_edges: Vec<CanonicalReferenceEdge>,
     pub package_closure_sha256: String,
     pub canonical_closure_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClosureMachineBytes {
+    pub serialization_schema: String,
+    pub package_bytes: Vec<u8>,
+    pub canonical_bytes: Vec<u8>,
+    pub package_machine_sha256: String,
+    pub canonical_machine_sha256: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -113,6 +127,15 @@ pub enum ClosureError {
 
     #[error("stored closure digest does not match the closure document")]
     ClosureDigestMismatch,
+
+    #[error("closure machine document exceeds {MAX_CLOSURE_MACHINE_BYTES} bytes")]
+    ClosureMachineTooLarge,
+
+    #[error("closure bytes are not the canonical encoding")]
+    NoncanonicalClosure,
+
+    #[error("closure JSON could not be read as the canonical document")]
+    MalformedClosure,
 }
 
 pub fn project_closures(
@@ -383,12 +406,89 @@ pub fn query_closures(
     })
 }
 
-fn digest_package_closure(
+pub fn encode_closure_machine(
+    snapshot: &EcosystemSnapshot,
+    closures: &EcosystemClosures,
+) -> Result<ClosureMachineBytes, ClosureError> {
+    query_closures(snapshot, closures)?;
+    let package_bytes = package_closure_bytes(
+        &snapshot.snapshot_sha256,
+        &closures.package_members,
+        &closures.package_edges,
+        &closures.unrelated_packages,
+    )?;
+    let canonical_bytes = canonical_closure_bytes(
+        &snapshot.snapshot_sha256,
+        &closures.resolved_canonicals,
+        &closures.unresolved_canonicals,
+        &closures.ambiguous_canonicals,
+        &closures.canonical_edges,
+    )?;
+    if package_bytes.len() > MAX_CLOSURE_MACHINE_BYTES
+        || canonical_bytes.len() > MAX_CLOSURE_MACHINE_BYTES
+    {
+        return Err(ClosureError::ClosureMachineTooLarge);
+    }
+    Ok(ClosureMachineBytes {
+        serialization_schema: ECOSYSTEM_CLOSURE_BYTES_SCHEMA.to_owned(),
+        package_machine_sha256: PackageCache::digest(&package_bytes),
+        canonical_machine_sha256: PackageCache::digest(&canonical_bytes),
+        package_bytes,
+        canonical_bytes,
+    })
+}
+
+pub fn decode_closure_machine(
+    snapshot: &EcosystemSnapshot,
+    package_bytes: &[u8],
+    canonical_bytes: &[u8],
+) -> Result<EcosystemClosures, ClosureError> {
+    if package_bytes.len() > MAX_CLOSURE_MACHINE_BYTES
+        || canonical_bytes.len() > MAX_CLOSURE_MACHINE_BYTES
+    {
+        return Err(ClosureError::ClosureMachineTooLarge);
+    }
+    let package: PackageClosureDocument =
+        serde_json::from_slice(package_bytes).map_err(|_| ClosureError::MalformedClosure)?;
+    let canonical: CanonicalClosureDocument =
+        serde_json::from_slice(canonical_bytes).map_err(|_| ClosureError::MalformedClosure)?;
+    let package_canonical = serde_json::to_vec(&package).map_err(PackageError::Json)?;
+    let canonical_canonical = serde_json::to_vec(&canonical).map_err(PackageError::Json)?;
+    if package_canonical.as_slice() != package_bytes
+        || canonical_canonical.as_slice() != canonical_bytes
+    {
+        return Err(ClosureError::NoncanonicalClosure);
+    }
+    if package.kind != PACKAGE_KIND || canonical.kind != CANONICAL_KIND {
+        return Err(ClosureError::MalformedClosure);
+    }
+    let closures = EcosystemClosures {
+        schema: package.schema,
+        snapshot_sha256: package.snapshot_sha256,
+        package_members: package.members,
+        package_edges: package.edges,
+        unrelated_packages: package.unrelated_packages,
+        resolved_canonicals: canonical.resolved_canonicals,
+        unresolved_canonicals: canonical.unresolved_canonicals,
+        ambiguous_canonicals: canonical.ambiguous_canonicals,
+        canonical_edges: canonical.edges,
+        package_closure_sha256: PackageCache::digest(&package_canonical),
+        canonical_closure_sha256: PackageCache::digest(&canonical_canonical),
+    };
+    if closures.schema != canonical.schema || closures.snapshot_sha256 != canonical.snapshot_sha256
+    {
+        return Err(ClosureError::UnboundSnapshot);
+    }
+    query_closures(snapshot, &closures)?;
+    Ok(closures)
+}
+
+fn package_closure_bytes(
     snapshot_sha256: &str,
     members: &[ClosurePackage],
     edges: &[PackageDependencyEdge],
     unrelated_packages: &[ClosurePackage],
-) -> Result<String, ClosureError> {
+) -> Result<Vec<u8>, ClosureError> {
     let body = PackageClosureBody {
         edges,
         kind: PACKAGE_KIND,
@@ -397,7 +497,35 @@ fn digest_package_closure(
         snapshot_sha256,
         unrelated_packages,
     };
-    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    Ok(serde_json::to_vec(&body).map_err(PackageError::Json)?)
+}
+
+fn canonical_closure_bytes(
+    snapshot_sha256: &str,
+    resolved_canonicals: &[String],
+    unresolved_canonicals: &[String],
+    ambiguous_canonicals: &[String],
+    edges: &[CanonicalReferenceEdge],
+) -> Result<Vec<u8>, ClosureError> {
+    let body = CanonicalClosureBody {
+        ambiguous_canonicals,
+        edges,
+        kind: CANONICAL_KIND,
+        resolved_canonicals,
+        schema: ECOSYSTEM_CLOSURE_SCHEMA,
+        snapshot_sha256,
+        unresolved_canonicals,
+    };
+    Ok(serde_json::to_vec(&body).map_err(PackageError::Json)?)
+}
+
+fn digest_package_closure(
+    snapshot_sha256: &str,
+    members: &[ClosurePackage],
+    edges: &[PackageDependencyEdge],
+    unrelated_packages: &[ClosurePackage],
+) -> Result<String, ClosureError> {
+    let bytes = package_closure_bytes(snapshot_sha256, members, edges, unrelated_packages)?;
     Ok(PackageCache::digest(&bytes))
 }
 
@@ -408,16 +536,13 @@ fn digest_canonical_closure(
     ambiguous_canonicals: &[String],
     edges: &[CanonicalReferenceEdge],
 ) -> Result<String, ClosureError> {
-    let body = CanonicalClosureBody {
+    let bytes = canonical_closure_bytes(
+        snapshot_sha256,
+        resolved_canonicals,
+        unresolved_canonicals,
         ambiguous_canonicals,
         edges,
-        kind: CANONICAL_KIND,
-        resolved_canonicals,
-        schema: ECOSYSTEM_CLOSURE_SCHEMA,
-        snapshot_sha256,
-        unresolved_canonicals,
-    };
-    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    )?;
     Ok(PackageCache::digest(&bytes))
 }
 
@@ -473,6 +598,29 @@ struct QueryBody<'a> {
     package_closure_sha256: &'a str,
     schema: &'a str,
     snapshot_sha256: &'a str,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PackageClosureDocument {
+    edges: Vec<PackageDependencyEdge>,
+    kind: String,
+    members: Vec<ClosurePackage>,
+    schema: String,
+    snapshot_sha256: String,
+    unrelated_packages: Vec<ClosurePackage>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CanonicalClosureDocument {
+    ambiguous_canonicals: Vec<String>,
+    edges: Vec<CanonicalReferenceEdge>,
+    kind: String,
+    resolved_canonicals: Vec<String>,
+    schema: String,
+    snapshot_sha256: String,
+    unresolved_canonicals: Vec<String>,
 }
 
 #[cfg(test)]
@@ -827,6 +975,78 @@ mod tests {
             Err(ClosureError::Snapshot(
                 SnapshotError::MutableSourceIsNotPublished { .. }
             ))
+        ));
+    }
+
+    #[test]
+    fn closure_machine_bytes_keep_package_and_canonical_documents_separate() {
+        let published = snapshot();
+        let left = project_closures(
+            &published,
+            vec![dep("acme.b", "acme.a"), dep("acme.a", "acme.b")],
+            vec![canonical(
+                "http://example.org/StructureDefinition/src",
+                "http://example.org/StructureDefinition/found",
+                CANONICAL_RESOLVED,
+            )],
+        )
+        .expect("left");
+        let right = project_closures(
+            &published,
+            vec![dep("acme.a", "acme.b"), dep("acme.b", "acme.a")],
+            vec![canonical(
+                "http://example.org/StructureDefinition/src",
+                "http://example.org/StructureDefinition/found",
+                CANONICAL_RESOLVED,
+            )],
+        )
+        .expect("right");
+        let encoded = encode_closure_machine(&published, &left).expect("encode");
+        let again = encode_closure_machine(&published, &right).expect("again");
+        assert_eq!(encoded.package_bytes, again.package_bytes);
+        assert_eq!(encoded.canonical_bytes, again.canonical_bytes);
+        assert_eq!(encoded.package_machine_sha256, left.package_closure_sha256);
+        assert_eq!(
+            encoded.canonical_machine_sha256,
+            left.canonical_closure_sha256
+        );
+        assert_ne!(encoded.package_bytes, encoded.canonical_bytes);
+        let decoded =
+            decode_closure_machine(&published, &encoded.package_bytes, &encoded.canonical_bytes)
+                .expect("decode");
+        assert_eq!(decoded, left);
+
+        let package_only = project_closures(&published, vec![dep("acme.a", "acme.c")], Vec::new())
+            .expect("package only");
+        let package_bytes = encode_closure_machine(&published, &package_only).expect("package");
+        assert_ne!(
+            package_bytes.package_machine_sha256,
+            encoded.package_machine_sha256
+        );
+        assert_ne!(
+            package_bytes.canonical_machine_sha256,
+            encoded.canonical_machine_sha256
+        );
+
+        let mut spaced = encoded.package_bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_closure_machine(&published, &spaced, &encoded.canonical_bytes),
+            Err(ClosureError::NoncanonicalClosure)
+        ));
+        assert!(matches!(
+            decode_closure_machine(
+                &published,
+                &vec![0; MAX_CLOSURE_MACHINE_BYTES + 1],
+                &encoded.canonical_bytes
+            ),
+            Err(ClosureError::ClosureMachineTooLarge)
+        ));
+        let mut tampered = left.clone();
+        tampered.package_closure_sha256 = "ab".repeat(32);
+        assert!(matches!(
+            encode_closure_machine(&published, &tampered),
+            Err(ClosureError::ClosureDigestMismatch)
         ));
     }
 }
