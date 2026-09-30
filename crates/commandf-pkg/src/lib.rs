@@ -87,9 +87,10 @@ pub use durable_retained::{
     HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
 };
 pub use ecosystem_closure::{
-    project_closures, CanonicalReferenceEdge, ClosureError, ClosurePackage, EcosystemClosures,
-    PackageDependencyEdge, CANONICAL_AMBIGUOUS, CANONICAL_RESOLVED, CANONICAL_UNRESOLVED,
-    ECOSYSTEM_CLOSURE_SCHEMA, MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES,
+    project_closures, query_closures, CanonicalReferenceEdge, ClosureError, ClosurePackage,
+    ClosureQuery, EcosystemClosures, PackageDependencyEdge, CANONICAL_AMBIGUOUS,
+    CANONICAL_RESOLVED, CANONICAL_UNRESOLVED, ECOSYSTEM_CLOSURE_SCHEMA, ECOSYSTEM_QUERY_SCHEMA,
+    MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES,
 };
 pub use ecosystem_snapshot::{
     project_snapshot, require_published_authority, EcosystemSnapshot, SnapshotError,
