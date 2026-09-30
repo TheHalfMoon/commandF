@@ -1,12 +1,16 @@
 use std::collections::BTreeSet;
 
 use semver::Version;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{PackageCache, PackageError, PackageName};
 
 pub const ECOSYSTEM_SNAPSHOT_SCHEMA: &str = "commandf.ecosystem-snapshot/v1";
+pub const ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA: &str = "commandf.ecosystem-snapshot-bytes/v1";
+pub const MAX_SNAPSHOT_RECORDS: usize = 10_000;
+pub const MAX_SNAPSHOT_STRING_BYTES: usize = 8_192;
+pub const MAX_SNAPSHOT_MACHINE_BYTES: usize = 16 * 1024 * 1024;
 pub const IMMUTABLE_RELEASE: &str = "IMMUTABLE_RELEASE";
 pub const MUTABLE_CI: &str = "MUTABLE_CI";
 
@@ -25,6 +29,13 @@ pub struct EcosystemSnapshot {
     pub packages: Vec<SnapshotPackage>,
     pub unresolved_canonicals: Vec<String>,
     pub snapshot_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotMachineBytes {
+    pub serialization_schema: String,
+    pub bytes: Vec<u8>,
+    pub machine_sha256: String,
 }
 
 #[derive(Debug, Error)]
@@ -58,6 +69,21 @@ pub enum SnapshotError {
 
     #[error("stored snapshot digest does not match the snapshot document")]
     SnapshotDigestMismatch,
+
+    #[error("snapshot record count exceeds {MAX_SNAPSHOT_RECORDS}")]
+    TooManySnapshotRecords,
+
+    #[error("snapshot string exceeds {MAX_SNAPSHOT_STRING_BYTES} bytes")]
+    SnapshotStringTooLong,
+
+    #[error("snapshot machine document exceeds {MAX_SNAPSHOT_MACHINE_BYTES} bytes")]
+    SnapshotMachineTooLarge,
+
+    #[error("snapshot bytes are not the canonical encoding")]
+    NoncanonicalSnapshot,
+
+    #[error("snapshot JSON could not be read as the canonical document")]
+    MalformedSnapshot,
 }
 
 pub fn project_snapshot(
@@ -187,6 +213,96 @@ pub fn verify_snapshot_identity(snapshot: &EcosystemSnapshot) -> Result<(), Snap
     Ok(())
 }
 
+pub fn encode_snapshot_machine(
+    snapshot: &EcosystemSnapshot,
+) -> Result<SnapshotMachineBytes, SnapshotError> {
+    if snapshot.packages.len() > MAX_SNAPSHOT_RECORDS
+        || snapshot.unresolved_canonicals.len() > MAX_SNAPSHOT_RECORDS
+    {
+        return Err(SnapshotError::TooManySnapshotRecords);
+    }
+    reject_long_snapshot_strings(snapshot)?;
+    verify_snapshot_identity(snapshot)?;
+    require_published_authority(snapshot)?;
+    let body = SnapshotBody {
+        schema: ECOSYSTEM_SNAPSHOT_SCHEMA,
+        packages: &snapshot.packages,
+        unresolved_canonicals: &snapshot.unresolved_canonicals,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if bytes.len() > MAX_SNAPSHOT_MACHINE_BYTES {
+        return Err(SnapshotError::SnapshotMachineTooLarge);
+    }
+    let machine_sha256 = PackageCache::digest(&bytes);
+    if machine_sha256 != snapshot.snapshot_sha256 {
+        return Err(SnapshotError::SnapshotDigestMismatch);
+    }
+    Ok(SnapshotMachineBytes {
+        serialization_schema: ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA.to_owned(),
+        bytes,
+        machine_sha256,
+    })
+}
+
+pub fn decode_snapshot_machine(bytes: &[u8]) -> Result<EcosystemSnapshot, SnapshotError> {
+    if bytes.len() > MAX_SNAPSHOT_MACHINE_BYTES {
+        return Err(SnapshotError::SnapshotMachineTooLarge);
+    }
+    let document: SnapshotDocument =
+        serde_json::from_slice(bytes).map_err(|_| SnapshotError::MalformedSnapshot)?;
+    if document.packages.len() > MAX_SNAPSHOT_RECORDS
+        || document.unresolved_canonicals.len() > MAX_SNAPSHOT_RECORDS
+    {
+        return Err(SnapshotError::TooManySnapshotRecords);
+    }
+    let canonical = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if canonical.as_slice() != bytes {
+        return Err(SnapshotError::NoncanonicalSnapshot);
+    }
+    let snapshot = EcosystemSnapshot {
+        schema: document.schema,
+        packages: document
+            .packages
+            .into_iter()
+            .map(|package| SnapshotPackage {
+                name: package.name,
+                version: package.version,
+                archive_sha256: package.archive_sha256,
+                source_id: package.source_id,
+                mutability: package.mutability,
+            })
+            .collect(),
+        unresolved_canonicals: document.unresolved_canonicals,
+        snapshot_sha256: PackageCache::digest(&canonical),
+    };
+    reject_long_snapshot_strings(&snapshot)?;
+    verify_snapshot_identity(&snapshot)?;
+    require_published_authority(&snapshot)?;
+    Ok(snapshot)
+}
+
+fn reject_long_snapshot_strings(snapshot: &EcosystemSnapshot) -> Result<(), SnapshotError> {
+    for package in &snapshot.packages {
+        for value in [
+            package.name.as_str(),
+            package.version.as_str(),
+            package.archive_sha256.as_str(),
+            package.source_id.as_str(),
+            package.mutability.as_str(),
+        ] {
+            if value.len() > MAX_SNAPSHOT_STRING_BYTES {
+                return Err(SnapshotError::SnapshotStringTooLong);
+            }
+        }
+    }
+    for canonical in &snapshot.unresolved_canonicals {
+        if canonical.len() > MAX_SNAPSHOT_STRING_BYTES {
+            return Err(SnapshotError::SnapshotStringTooLong);
+        }
+    }
+    Ok(())
+}
+
 pub fn require_published_authority(snapshot: &EcosystemSnapshot) -> Result<(), SnapshotError> {
     for package in &snapshot.packages {
         if package.mutability == MUTABLE_CI {
@@ -210,6 +326,24 @@ struct SnapshotBody<'a> {
     schema: &'a str,
     packages: &'a [SnapshotPackage],
     unresolved_canonicals: &'a [String],
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SnapshotDocument {
+    schema: String,
+    packages: Vec<SnapshotPackageDocument>,
+    unresolved_canonicals: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SnapshotPackageDocument {
+    archive_sha256: String,
+    mutability: String,
+    name: String,
+    source_id: String,
+    version: String,
 }
 
 impl Serialize for SnapshotPackage {
@@ -326,6 +460,91 @@ mod tests {
         assert!(matches!(
             error,
             Err(SnapshotError::DuplicateCanonical { .. })
+        ));
+    }
+
+    #[test]
+    fn snapshot_machine_bytes_replay_and_reject_noncanonical_input() {
+        let published = project_snapshot(
+            vec![
+                package("1.1.0", 0x22, IMMUTABLE_RELEASE),
+                package("1.0.0", 0x11, IMMUTABLE_RELEASE),
+            ],
+            vec![
+                "http://example.org/b".to_owned(),
+                "http://example.org/a".to_owned(),
+            ],
+        )
+        .expect("published");
+        let reordered = project_snapshot(
+            vec![
+                package("1.0.0", 0x11, IMMUTABLE_RELEASE),
+                package("1.1.0", 0x22, IMMUTABLE_RELEASE),
+            ],
+            vec![
+                "http://example.org/a".to_owned(),
+                "http://example.org/b".to_owned(),
+            ],
+        )
+        .expect("reordered");
+        let left = encode_snapshot_machine(&published).expect("left");
+        let right = encode_snapshot_machine(&reordered).expect("right");
+        assert_eq!(left.bytes, right.bytes);
+        assert_eq!(left.machine_sha256, published.snapshot_sha256);
+        assert_eq!(left.serialization_schema, ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA);
+        let decoded = decode_snapshot_machine(&left.bytes).expect("decode");
+        assert_eq!(decoded, published);
+        let again = encode_snapshot_machine(&decoded).expect("again");
+        assert_eq!(again.bytes, left.bytes);
+
+        let changed = project_snapshot(
+            vec![package("1.0.0", 0x12, IMMUTABLE_RELEASE)],
+            vec!["http://example.org/a".to_owned()],
+        )
+        .expect("changed");
+        let changed_bytes = encode_snapshot_machine(&changed).expect("changed bytes");
+        assert_ne!(left.machine_sha256, changed_bytes.machine_sha256);
+
+        let mut spaced = left.bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_snapshot_machine(&spaced),
+            Err(SnapshotError::NoncanonicalSnapshot)
+        ));
+        assert!(matches!(
+            decode_snapshot_machine(
+                br#"{"schema":"x","packages":[],"unresolved_canonicals":[],"extra":1}"#
+            ),
+            Err(SnapshotError::MalformedSnapshot)
+        ));
+        assert!(matches!(
+            decode_snapshot_machine(&vec![0; MAX_SNAPSHOT_MACHINE_BYTES + 1]),
+            Err(SnapshotError::SnapshotMachineTooLarge)
+        ));
+
+        let mut tampered = published.clone();
+        tampered.snapshot_sha256 = "ab".repeat(32);
+        assert!(matches!(
+            encode_snapshot_machine(&tampered),
+            Err(SnapshotError::SnapshotDigestMismatch)
+        ));
+        tampered = published.clone();
+        tampered.schema = "commandf.ecosystem-snapshot/v2".to_owned();
+        assert!(matches!(
+            encode_snapshot_machine(&tampered),
+            Err(SnapshotError::UnexpectedSnapshotSchema)
+        ));
+        tampered = published.clone();
+        tampered.packages.push(tampered.packages[0].clone());
+        assert!(matches!(
+            encode_snapshot_machine(&tampered),
+            Err(SnapshotError::DuplicatePackage { .. })
+        ));
+        let mutable = project_snapshot(vec![package("1.0.0", 0x11, MUTABLE_CI)], Vec::new())
+            .expect("mutable");
+        assert!(matches!(
+            encode_snapshot_machine(&mutable),
+            Err(SnapshotError::MutableSourceIsNotPublished { .. })
         ));
     }
 }

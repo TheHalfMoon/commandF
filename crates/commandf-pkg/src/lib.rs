@@ -118,8 +118,11 @@ pub use ecosystem_lifecycle::{
     LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_SOURCES,
 };
 pub use ecosystem_snapshot::{
-    project_snapshot, require_published_authority, verify_snapshot_identity, EcosystemSnapshot,
-    SnapshotError, SnapshotPackage, ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MUTABLE_CI,
+    decode_snapshot_machine, encode_snapshot_machine, project_snapshot,
+    require_published_authority, verify_snapshot_identity, EcosystemSnapshot, SnapshotError,
+    SnapshotMachineBytes, SnapshotPackage, ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA,
+    ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MAX_SNAPSHOT_MACHINE_BYTES, MAX_SNAPSHOT_RECORDS,
+    MAX_SNAPSHOT_STRING_BYTES, MUTABLE_CI,
 };
 pub use error::PackageError;
 pub use gate::{
