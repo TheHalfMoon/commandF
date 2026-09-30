@@ -29,6 +29,7 @@ mod ecosystem_comparison;
 mod ecosystem_history;
 mod ecosystem_lifecycle;
 mod ecosystem_snapshot;
+mod ecosystem_workspace;
 mod error;
 mod gate;
 mod gate_error;
@@ -129,6 +130,10 @@ pub use ecosystem_snapshot::{
     SnapshotMachineBytes, SnapshotPackage, ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA,
     ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MAX_SNAPSHOT_MACHINE_BYTES, MAX_SNAPSHOT_RECORDS,
     MAX_SNAPSHOT_STRING_BYTES, MUTABLE_CI,
+};
+pub use ecosystem_workspace::{
+    project_workspace, verify_workspace_identity, EcosystemWorkspace, WorkspaceError,
+    WorkspaceMember, ECOSYSTEM_WORKSPACE_SCHEMA, MAX_WORKSPACE_MEMBERS,
 };
 pub use error::PackageError;
 pub use gate::{
