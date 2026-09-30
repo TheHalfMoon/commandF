@@ -24,6 +24,7 @@ mod context_error;
 mod context_model;
 mod durable_retained;
 mod ecosystem_closure;
+mod ecosystem_lifecycle;
 mod ecosystem_snapshot;
 mod error;
 mod gate;
@@ -91,6 +92,11 @@ pub use ecosystem_closure::{
     ClosureQuery, EcosystemClosures, PackageDependencyEdge, CANONICAL_AMBIGUOUS,
     CANONICAL_RESOLVED, CANONICAL_UNRESOLVED, ECOSYSTEM_CLOSURE_SCHEMA, ECOSYSTEM_QUERY_SCHEMA,
     MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES,
+};
+pub use ecosystem_lifecycle::{
+    project_source_lifecycle, require_current_sources, LifecycleError, LifecycleRecord,
+    SourceLifecycle, ECOSYSTEM_LIFECYCLE_SCHEMA, LIFECYCLE_CURRENT, LIFECYCLE_STALE,
+    LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_SOURCES,
 };
 pub use ecosystem_snapshot::{
     project_snapshot, require_published_authority, EcosystemSnapshot, SnapshotError,
