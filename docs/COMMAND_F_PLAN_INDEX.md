@@ -132,7 +132,7 @@ Ordering rule:
 
 - AF-01 must close before a new post-CF-13 product implementation is merged.
 - CF-14 planning may proceed in parallel under its own Spec Kit authority.
-- AF-02/03/04 remain retained program units and require their own planning packages before implementation.
+- AF-02/03/04 remain retained program units and require their own planning packages before implementation. `specs/049-af02-review-gate-block/` records that a review-text edit of `specs/016-af-02-adversarial-test-strength/` was rejected by the AF-02 base gate. AF-02 planning stays a candidate. Stack A0 stays unauthorized.
 
 ## Coverage rule
 
