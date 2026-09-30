@@ -8,7 +8,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SRC-IG-REGISTRY | public git candidate | OFFICIAL_REFERENCE, not adopted | observed, not pinned | CONFLICTING_STATEMENTS | not stored | package-feed metadata | not a compatibility label | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FHIR-TEST-CASES | public git candidate | OFFICIAL_REFERENCE, not adopted | NOT_PINNED | NOT_VERIFIED | not acquired | published test artifacts | the published artifact, if pinned | NOT_ADMITTED |
-| SRC-FHIRPATH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | specification text | the pinned specification text | NOT_ADMITTED |
+| SRC-FHIRPATH-SPEC | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | specification text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-SQL-ON-FHIR | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | view-definition specification | the pinned specification text | NOT_ADMITTED |
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
 | SRC-SMART | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
@@ -29,3 +29,12 @@ On 2026-09-30 the GitHub content API returned `FHIR/ig-registry` `package-feeds.
 The same commit's root tree has no `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, or `NOTICE`. `README.md` line 27 says: `* License: Content is licensed under Creative Commons Public Domain`. `package.json` says `"license": "MIT"`. Those two statements are not the same grant. Neither file is a standalone license text, and the bytes of `package-feeds.json` contain no rights statement that was recorded here.
 
 `SRC-IG-REGISTRY` is `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The observation is not a pin and not a CF-17 catalog authorization. The default branch can move.
+
+## FHIRPath observation, not a pin
+
+On 2026-09-30 the GitHub API returned `HL7/fhirpath` commit `c95ad83b35babc67a383369c96535c39e9487fd3` on `master`. The repository license field was null. The root tree has no `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, or `NOTICE`.
+
+`README.md` blob `a1e9c0be26422203a6ccd1682d2fa8aa86af0080` is 728 bytes. Its opening paragraph is: `FHIRPath Specification - this is the source for the HL7 FHIRPath specification, as published at http://hl7.org/fhirpath`. The file names no license and no copyright holder. `input/includes` contains only `menu.xml`.
+
+`SRC-FHIRPATH-SPEC` stays `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The commit is not a pin. No specification bytes were stored.
+
