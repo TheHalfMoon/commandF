@@ -247,4 +247,6 @@ The seventh CF-17 package is `specs/031-cf17-snapshot-history/`. It chains publi
 
 The eighth CF-17 package is `specs/032-cf17-history-machine-bytes/`. It emits canonical bytes for one qualified history. It merged as `be863ef1ae7e8fa9fde4a734f3430cc307887874`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The ninth CF-17 package is `specs/033-cf17-snapshot-machine-bytes/`. It emits canonical bytes for one published snapshot. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The ninth CF-17 package is `specs/033-cf17-snapshot-machine-bytes/`. It emits canonical bytes for one published snapshot. It merged as `60221fe0de7c0ee003a0fb9a724e9a0cfd7af959`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The tenth CF-17 package is `specs/034-cf17-lifecycle-machine-bytes/`. It emits canonical bytes for one published source-lifecycle record. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.

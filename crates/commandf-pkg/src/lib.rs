@@ -113,9 +113,11 @@ pub use ecosystem_history::{
     MAX_HISTORY_MACHINE_BYTES, MAX_HISTORY_STEPS,
 };
 pub use ecosystem_lifecycle::{
-    project_source_lifecycle, require_current_sources, verify_lifecycle_record, LifecycleError,
-    LifecycleRecord, SourceLifecycle, ECOSYSTEM_LIFECYCLE_SCHEMA, LIFECYCLE_CURRENT,
-    LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_SOURCES,
+    decode_lifecycle_machine, encode_lifecycle_machine, project_source_lifecycle,
+    require_current_sources, verify_lifecycle_record, LifecycleError, LifecycleMachineBytes,
+    LifecycleRecord, SourceLifecycle, ECOSYSTEM_LIFECYCLE_BYTES_SCHEMA, ECOSYSTEM_LIFECYCLE_SCHEMA,
+    LIFECYCLE_CURRENT, LIFECYCLE_STALE, LIFECYCLE_WITHDRAWN, MAX_LIFECYCLE_MACHINE_BYTES,
+    MAX_LIFECYCLE_SOURCES, MAX_LIFECYCLE_STRING_BYTES,
 };
 pub use ecosystem_snapshot::{
     decode_snapshot_machine, encode_snapshot_machine, project_snapshot,
