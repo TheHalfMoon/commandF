@@ -2,7 +2,7 @@
 
 Status: RESEARCH_PLANNING. No adjudication has been run.
 
-This protocol applies only after an item has satisfied `research/CANDIDATE_CORPUS.md` and `research/LABEL_AUTHORITY.md`. No such item exists.
+This protocol applies to a pre-admission item digest from `research/BENCHMARK_ADMISSION_LIFECYCLE.md`. It does not require corpus membership first. It is used when `research/LABEL_AUTHORITY.md` does not already accept an external published label. No human adjudication has been run.
 
 ## Procedure
 
