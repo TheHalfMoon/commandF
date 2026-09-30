@@ -14,6 +14,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-SMART | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | declared protocol text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-HL7-FHIR | public git candidate | official repository, not adopted | observed, not pinned | MULTI_LICENSE | not stored | mixed source and specification | none assigned | NOT_ADMITTED_LABEL_UNRESOLVED |
 | SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | fixture hashed, bytes not stored as a corpus member | validation fixture plus upstream assertion | upstream test assertion, not commandF | NOT_ADMITTED |
+| SRC-HAPI-JSON-PARSE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | malformed JSON literal | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -22,7 +23,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-CONSTRUCTED-IRRELEVANT | fixture not written | none | none | not a clinical record | not acquired | constructed bytes | a recorded adjudication | NOT_ADMITTED |
 | SRC-CONSTRUCTED-MALFORMED | fixture not written | none | none | not a clinical record | not acquired | constructed bytes | a recorded adjudication | NOT_ADMITTED |
 
-`ITEM_COUNT` stays 0. Admission still requires the gate in `research/CANDIDATE_CORPUS.md`. This inventory does not download bytes and does not authorize a registry crawl.
+The candidate count is recorded in `research/CANDIDATE_CORPUS.md`. This inventory does not copy the upstream test file and does not authorize a registry crawl.
 
 ## One observed revision, not a pin
 
@@ -150,4 +151,18 @@ Phase C would accept the upstream assertion as an external published label, beca
 Phase D does not run. The fixture stays out. `ITEM_COUNT` stays 0.
 
 The fixture remains evidence of an independent validator expectation. It is not a scored CommandFBench item.
+
+## Malformed JSON parse, candidate member
+
+`Malformed evidence` asks for input bytes that do not parse as the declared artifact. In `JacksonStructureTest.rejectsMalformedJsonContent` at the same HAPI commit, the input is `{"resourceType":"Patient"} trailing`. The method asserts a `DataFormatException` whose message contains `Failed to parse JSON encoded FHIR content`.
+
+That is a parse rejection, not a successful snapshot. Rights are the Apache-2.0 project grant already recorded. The file states no different license. The input is not a clinical record. The item is member 1 in `research/CANDIDATE_CORPUS.md`. It is not a protocol freeze.
+
+```text
+SOURCE_ID = SRC-HAPI-JSON-PARSE
+CASE_CLASS = Malformed evidence
+STATE = CANDIDATE_CORPUS
+ITEM_COUNT = 1
+```
+
 

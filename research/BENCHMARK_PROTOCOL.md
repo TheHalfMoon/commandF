@@ -27,7 +27,7 @@ Each class below is planned. None has a frozen item, a count, or a label produce
 | Transformations | A declared transform changes an instance or artifact | `RESULT_PENDING` |
 | Adversarial mutations | A change is constructed to resemble a safe edit and is not | `RESULT_PENDING` |
 | Irrelevant mutations | A change is constructed to leave the claimed contract unchanged | `RESULT_PENDING` |
-| Malformed evidence | The input bytes do not parse as the declared artifact | `RESULT_PENDING` |
+| Malformed evidence | The input bytes do not parse as the declared artifact | 1 candidate member, not frozen |
 | Partial evidence | A required evidence class is absent | `RESULT_PENDING` |
 | Unsupported evidence | The declared evidence class is outside the evaluator contract | `RESULT_PENDING` |
 | Conflicting evidence | Two supplied evidence classes do not agree | `RESULT_PENDING` |
