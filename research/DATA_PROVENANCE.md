@@ -35,4 +35,4 @@ This inventory names the provenance fields for each planned case class. It does 
 
 No row is a corpus member. No row authorizes a registry download, a product change, or an experiment.
 
-Admission of a later item is gated by `research/CANDIDATE_CORPUS.md`. That gate is empty.
+Admission of a later item is gated by `research/CANDIDATE_CORPUS.md`. That gate is empty. Candidate sources that are not yet admitted are listed in `research/BENCHMARK_SOURCE_CANDIDATES.md`.
