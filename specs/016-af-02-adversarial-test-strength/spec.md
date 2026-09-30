@@ -267,9 +267,17 @@ Producer-authored green summaries are not authority. Schema digest, raw evidence
 
 AF-02 MUST NOT weaken or reinterpret CF-03/04/05/06/07/09/10/11/12/13 semantics or AF-01 workflow/dependency/source-control policy. Minimal internal test seams are allowed only when public behavior/API remains unchanged and semantic regressions pass.
 
-### FR-016 — reviewer truth
+### FR-016 — review qualification
 
-Every AF-02 planning/design/implementation stack requests CodeRabbit and Qodo when available. Reviewer timeout, quota, summary-only output, or unavailable service is recorded as such and never called PASS. Findings are dispositioned against the exact current head.
+Qualification evidence for every AF-02 planning and implementation stack is the current stack:
+
+1. repository-owned deterministic tests, assurance gates, and exact-head CI;
+2. Jev, run when a zero-cost authorized path exists, otherwise recorded as `BLOCKED_EXTERNAL_NO_ZERO_COST_AUTHORIZED_PATH`, which is not a PASS;
+3. Alibaba Open Code Review on supported files, with an unsupported extension recorded as `UNSUPPORTED_EXT` and not described as reviewed;
+4. disposition of valid findings and zero unresolved substantive findings;
+5. the protected merge rules in the live rulesets.
+
+CodeRabbit, Qodo, Cubic, Greptile, and similar hosted reviewer statuses are not qualification evidence. A status from one of them may be recorded as non-evidence. It is not a required gate and it is never called PASS. Earlier planning text that required those services is superseded by this section.
 
 ## Non-functional requirements
 
@@ -299,6 +307,6 @@ Every external tool, registry package, retained authority source, corpus fixture
 
 ## Planning closure rule
 
-This package becomes canonical only when T006 completes on one exact final planning head: existing CI green, exact required-context provenance proven, Qodo and CodeRabbit findings dispositioned, merge guarded by expected head, and canonical post-merge main/tree plus live AF-01 rulesets re-read.
+This package becomes canonical only when T006 completes on one exact final planning head: existing CI green, exact required-context provenance proven, Jev and Alibaba Open Code Review recorded under FR-016, valid findings dispositioned, merge guarded by expected head, and canonical post-merge main/tree plus live AF-01 rulesets re-read. Hosted reviewer statuses are not that evidence.
 
 Only then is Stack A0 design freeze authorized. No fuzz/property/mutation implementation is authorized directly by this planning PR.

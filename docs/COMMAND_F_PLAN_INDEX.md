@@ -132,7 +132,7 @@ Ordering rule:
 
 - AF-01 must close before a new post-CF-13 product implementation is merged.
 - CF-14 planning may proceed in parallel under its own Spec Kit authority.
-- AF-02/03/04 remain retained program units and require their own planning packages before implementation.
+- AF-02/03/04 remain retained program units and require their own planning packages before implementation. The AF-02 planning candidate still has open tasks T004 through T006. Its review gate is FR-016. Hosted reviewer statuses are not that gate. Stack A0 stays unauthorized until T006.
 
 ## Coverage rule
 

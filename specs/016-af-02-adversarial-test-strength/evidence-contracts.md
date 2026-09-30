@@ -346,4 +346,4 @@ B1 must be canonical before C0.
 C0 must be canonical before C1.
 C1 must be canonical before final convergence.
 
-Every stack uses exact-head CI, fresh reviewers when available, zero unresolved substantive findings, expected-head guarded merge and post-merge authority read-back. No later head inherits earlier-head qualification.
+Every stack uses exact-head CI, the FR-016 review record, zero unresolved substantive findings, expected-head guarded merge and post-merge authority read-back. CodeRabbit, Qodo, Cubic, and Greptile are not that record. No later head inherits earlier-head qualification.

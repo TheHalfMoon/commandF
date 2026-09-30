@@ -20,7 +20,7 @@ Planning closes only when one unchanged exact head:
 1. passes every path-applicable workflow;
 2. has unique successful `assurance-proof`, `rust`, and `scorecard` check-runs on that exact head;
 3. proves those checks against `required-check-policy.json`, including GitHub Actions app id 15368, repository, workflow id/path/base blob, job, run, attempt, head/base and conclusion;
-4. receives fresh Qodo and CodeRabbit review when available, with zero unresolved substantive findings;
+4. records the FR-016 review stack on that exact head: Jev executed or `BLOCKED_EXTERNAL_NO_ZERO_COST_AUTHORIZED_PATH`, Alibaba Open Code Review for supported files with unsupported files named, valid findings dispositioned, and zero unresolved substantive findings. CodeRabbit, Qodo, Cubic, and Greptile are not this evidence;
 5. merges with an expected-head guard; and
 6. survives post-merge `main`/tree plus both AF-01 live-ruleset read-backs.
 
@@ -241,4 +241,4 @@ Fuzz campaigns are observational only. Allowed classes remain `NO_CRASH_OBSERVED
 
 This planning PR grants no implementation authority before T006.
 
-It is mergeable only after one exact final head has green path-applicable CI, unique/provenant required checks, fresh reviewer truth, and zero unresolved substantive findings. Merge uses expected-head protection. Post-merge main/tree and both live AF-01 rulesets are re-read before Stack A0 begins.
+It is mergeable only after one exact final head has green path-applicable CI, unique/provenant required checks, the FR-016 review record, and zero unresolved substantive findings. Merge uses expected-head protection. Post-merge main/tree and both live AF-01 rulesets are re-read before Stack A0 begins. Hosted reviewer statuses do not satisfy this sentence.

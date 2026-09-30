@@ -18,7 +18,7 @@ Status: PLANNING_CANDIDATE
 - [ ] **T002** Confirm planning diff changes no product source, workflow, Cargo input, dependency, live ruleset, CF-06 pin, CF-10 corpus, or product behavior.
 - [ ] **T003** Reconcile `spec.md`, `verification-protocol.md`, machine policies/schemas, `evidence-contracts.md`, `plan.md`, `tasks.md`, `consistency.md`, and donor provenance under one precedence rule.
 - [ ] **T004** Reconstruct AF-01/CF-06/CF-10 expected authority from live/canonical/retained sources; validate `retained-authority-sources.json` against its closed schema.
-- [ ] **T005** Qualify one exact final planning head: all path-applicable workflows green; required contexts unique and proven through `required-check-policy.json` plus `af02-required-check-provenance-v1`; fresh Qodo/CodeRabbit truth; zero unresolved substantive findings.
+- [ ] **T005** Qualify one exact final planning head: all path-applicable workflows green; required contexts unique and proven through `required-check-policy.json` plus `af02-required-check-provenance-v1`; FR-016 review record, with Jev either executed on a zero-cost path or recorded as `BLOCKED_EXTERNAL_NO_ZERO_COST_AUTHORIZED_PATH`, and Alibaba Open Code Review recorded for supported files; zero unresolved substantive findings. Hosted reviewer statuses are not this evidence.
 - [ ] **T006** Merge with expected-head guard; re-read canonical post-merge `main`/tree and both live AF-01 rulesets. Only then set `AF-02 PLANNING: CANONICAL` and authorize Stack A0 only.
 
 ## Stack A0 — design freeze and base-controlled verifier
@@ -42,7 +42,7 @@ A0 contains policy/schema/verifier infrastructure and tests only. New fuzz/prope
 - [ ] **T024** Add canonical-base `pull_request_target` verifier gate with read-only permissions, separate base/candidate trees, candidate-as-data-only and no candidate code execution.
 - [ ] **T025** Prove base workflow/verifier/schema/inventory blob identity, path-trigger universality and fail-closed behavior for unparseable/unknown authority.
 - [ ] **T026** Add anti-forgery negative tests: skip/rename/base-ref swap/candidate verifier substitution/candidate execution/parser exhaustion/symlink/path escape.
-- [ ] **T027** Exact-head A0 CI/security/oracle/assurance + fresh Qodo/CodeRabbit + zero substantive threads.
+- [ ] **T027** Exact-head A0 CI/security/oracle/assurance plus the FR-016 review record and zero unresolved substantive threads. Hosted reviewer statuses are not this evidence.
 - [ ] **T028** Guarded merge A0; re-read main/rulesets/base-verifier topology; authorize A1 only.
 
 ## Stack A1 — fuzz/property/replay
@@ -94,7 +94,7 @@ A0 contains policy/schema/verifier infrastructure and tests only. New fuzz/prope
 - [ ] **T083** Reconstruct AF-01/CF-06/CF-10 authority and compare with baseline v2.
 - [ ] **T084** Reconstruct proof from raw evidence; validate proof-core + extension schemas, semantic contract and cross-object invariants; independently compute final `AF02_ADVERSARIAL_SHA256`.
 - [ ] **T085** Prove exact-head required-check GitHub provenance from API truth and canonical-base workflow blobs.
-- [ ] **T086** Full existing CI/security/oracle/assurance/non-regression gates + fresh Qodo/CodeRabbit.
+- [ ] **T086** Full existing CI/security/oracle/assurance/non-regression gates plus the FR-016 review record. Hosted reviewer statuses are not this evidence.
 - [ ] **T087** Guarded merge C1 and post-merge main/live-policy read-back.
 
 ## Final convergence

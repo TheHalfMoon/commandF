@@ -345,9 +345,22 @@ AF-02 reaches `CLOSED_CANONICAL` only after:
 2. every required corpus/property/nextest/coverage/mutation/proof gate passes on exact final head;
 3. AF-01/CF-06/CF-10 authority is re-derived and unchanged;
 4. required checks retain exact GitHub Actions provenance and uniqueness;
-5. Qodo and CodeRabbit substantive findings are closed or explicitly recorded unavailable without inventing PASS;
+5. the FR-016 review record is complete on the exact final head, including an honest Jev blocker when no zero-cost path exists, and no hosted reviewer status is treated as PASS;
 6. final convergence document records exact final head/tree, runs/checks/artifacts, live policy read-back, waivers, and residual risks;
 7. final PR merges with expected-head guard;
 8. canonical post-merge main/tree and live rulesets are re-read.
 
 AF-02 closure does not authorize a CF-06 production pin change or merge blocked CF-10 work.
+
+## Planning reconciliation observation
+
+Observed before this amendment, on canonical main `94f0ec6a5daa33be697a84c1e7be369ae9beea51`:
+
+- AF-01 remains `CLOSED_CANONICAL` in `specs/015-af-01-trusted-development-baseline/closeout.md`.
+- Live ruleset `21652953` (`commandF main assurance`) is active and requires `rust`, `assurance-proof`, and `scorecard`.
+- Live ruleset `21652974` (`commandF main review governance`) is active.
+- `retained-authority-sources.json` is not in the tree.
+- `schemas/af02-retained-authority-sources-v1.schema.json` is not in the tree.
+- Historical artifact `9255732702` remains identified. Its bytes remain unavailable. They are not reconstructed here.
+
+T001 is the observation above. T002 is this amendment's scope: planning text only. T003 puts the review rule in the verification protocol and FR-016, and removes hosted reviewers as a qualification gate. T004 is `NOT_PROVEN` because the retained source object and its schema are absent. T005 and T006 stay open. This amendment does not set `AF-02 PLANNING` to `CANONICAL` and does not authorize Stack A0.
