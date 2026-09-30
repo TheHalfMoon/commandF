@@ -12,6 +12,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-SQL-ON-FHIR | public git candidate | NORMATIVE candidate | observed, not pinned | HL7_CONTRIBUTION_GRANT_NOT_A_PUBLIC_LICENSE | not stored | view-definition specification | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
 | SRC-SMART | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | declared protocol text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
+| SRC-HL7-FHIR | public git candidate | official repository, not adopted | observed, not pinned | MULTI_LICENSE | not stored | mixed source and specification | none assigned | NOT_ADMITTED_LABEL_UNRESOLVED |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -53,4 +54,35 @@ On 2026-09-30 the GitHub API returned `HL7/smart-app-launch` commit `3aea9cc0576
 `README.md` blob `f9296c89712a00ab163694a524def8af82f50cbb` is 1082 bytes. It says: `The SMART App Launch Framework connects third-party applications to Electronic Health Record data, allowing apps to launch from inside or outside the user interface of an EHR system.` It names no license and no copyright holder.
 
 `SRC-SMART` stays `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The commit is not a pin. No specification bytes were stored.
+
+## HL7 FHIR repository, not a corpus item
+
+On 2026-10-01 the GitHub API returned `HL7/fhir` commit `68b299928d75bc6521624c03213069fd9206bdba` on `master`. The repository license field was `NOASSERTION`. The commit is not a corpus pin. No candidate bytes were stored.
+
+`LICENSE` blob `a9a83cd7e26ade2456383bac3d02128b081db355` is 1971 bytes. SHA-256 `ba2245729ea077c4816d4440279fb014f936aaa3426728476fff27934b29027b`. It says: `This source is covered by multiple licenses and has multiple contributors.` It says some content is covered under other licenses, including Apache, EPL, and Creative Commons, as described in the files themselves. It says: `Note the the FHIR specification itself is covered under a different license, as software licenses are not appropriate.` The general license then permits redistribution of source and binary forms under three conditions: retain the copyright notice and conditions, reproduce them in binary distributions, and do not use the HL7 name to endorse derived products without prior written permission. That general license is not a grant for every file in the tree.
+
+`source/license.html` blob `3334ec9800081af0c7edd3916f34d04010a4b048` is 9106 bytes. SHA-256 `62ee743fb60ee0c345f3c02a6f3c61d49e9f028ee4fdb967256f4265bb233912`. It says the specification, specifically the materials in the `fhir-spec.zip` file, is licensed under Creative Commons CC0. It also says acceptance of those terms grants no rights in third-party intellectual property, and it names SNOMED CT, DICOM, LOINC, ICD, and CPT as examples. Membership of any one git path in `fhir-spec.zip` was not proven. Specification content and terminology content stay out.
+
+`tools/merge-audit.py` blob `0a28c34e81642850ff7ba4e7522dd843345e14cb` is 8271 bytes. SHA-256 `60a5beaa95925acf1f4efca0ff22e7c746cae49dc40ea090ff5cfbc122875b8f`. The file header describes a merge-audit script and does not state a different license. It is a repository tool, not the FHIR specification. The general redistribution license is the applicable text for this file. It is not a compatibility case, and no external label exists for it. The held-out split is not frozen. The file stays out of the corpus.
+
+```text
+SOURCE_ID = SRC-HL7-FHIR
+REPOSITORY = HL7/fhir
+EXACT_COMMIT = 68b299928d75bc6521624c03213069fd9206bdba
+ARTIFACT_PATH = tools/merge-audit.py
+ARTIFACT_BLOB = 0a28c34e81642850ff7ba4e7522dd843345e14cb
+ARTIFACT_SHA256 = 60a5beaa95925acf1f4efca0ff22e7c746cae49dc40ea090ff5cfbc122875b8f
+LICENSE_PATH = LICENSE
+LICENSE_BLOB = a9a83cd7e26ade2456383bac3d02128b081db355
+LICENSE_SHA256 = ba2245729ea077c4816d4440279fb014f936aaa3426728476fff27934b29027b
+LICENSE_IDENTIFIER = multi-license repository; general text is a BSD-style redistribution grant; specification license is separate
+LICENSE_QUOTE = This source is covered by multiple licenses
+LICENSE_SCOPE_ANALYSIS = general grant covers this tool file; CC0 is stated for fhir-spec.zip materials; third-party terminologies are excluded; zip membership of other git paths was not proven
+PROVENANCE = GitHub content API at the named commit
+CASE_CLASS = none
+LABEL_AUTHORITY = none
+ADMISSION_STATE = NOT_ADMITTED_LABEL_UNRESOLVED
+EXACT_BYTES_RETAINED = no
+ITEM_COUNT = 0
+```
 
