@@ -23,6 +23,7 @@ mod context;
 mod context_error;
 mod context_model;
 mod durable_retained;
+mod ecosystem_advertised;
 mod ecosystem_cache_identity;
 mod ecosystem_closure;
 mod ecosystem_comparison;
@@ -93,6 +94,12 @@ pub use context_model::{
 pub use durable_retained::{
     classify_regenerated_archive, evaluate_durable_packet, DurableProjection, DurableRetainedError,
     HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
+};
+pub use ecosystem_advertised::{
+    acquire_advertised_versions, replay_advertised_versions, AdvertisedArchive, AdvertisedError,
+    AdvertisedIdentity, AdvertisedLimits, AdvertisedObservation, AdvertisedRequest,
+    AdvertisedVersionNode, StoredArchive, ADVERTISED_BY_OFFICIAL_SOURCE,
+    ECOSYSTEM_ADVERTISED_VERSIONS_SCHEMA, MAX_ADVERTISED_VERSIONS,
 };
 pub use ecosystem_cache_identity::{
     decode_cache_machine, encode_cache_machine, project_cache_identity, require_cache_reuse,
