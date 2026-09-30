@@ -33,6 +33,7 @@ mod ecosystem_package_history;
 mod ecosystem_registry;
 mod ecosystem_replay;
 mod ecosystem_snapshot;
+mod ecosystem_telemetry;
 mod ecosystem_workspace;
 mod error;
 mod gate;
@@ -155,6 +156,12 @@ pub use ecosystem_snapshot::{
     SnapshotMachineBytes, SnapshotPackage, ECOSYSTEM_SNAPSHOT_BYTES_SCHEMA,
     ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MAX_SNAPSHOT_MACHINE_BYTES, MAX_SNAPSHOT_RECORDS,
     MAX_SNAPSHOT_STRING_BYTES, MUTABLE_CI,
+};
+pub use ecosystem_telemetry::{
+    project_telemetry, replay_telemetry, require_published_telemetry, require_telemetry_schema,
+    TelemetryClass, TelemetryDocument, TelemetryEntry, TelemetryError, TelemetryInput,
+    AVAILABILITY_TELEMETRY_SCHEMA, EXTENSION_TELEMETRY_SCHEMA, MAX_TELEMETRY_ENTRIES,
+    TELEMETRY_MISSING, TELEMETRY_OBSERVED, TELEMETRY_UNSUPPORTED, TERMINOLOGY_TELEMETRY_SCHEMA,
 };
 pub use ecosystem_workspace::{
     decode_workspace_machine, encode_workspace_machine, project_workspace,
