@@ -109,7 +109,7 @@ The selected files are at the same commit `e307df6b64ff87c55af1607160f57141dbeb0
 
 The independent expectation is in that test, method `testExtensionUrlWithHl7Url`, lines 548-553. It loads `/bug872-ext-with-hl7-url.json`, validates it, and asserts `assertThat(nonInfo).isEmpty()` after dropping informational messages. The comment above the method says `See #872`. That assertion is the upstream expected result. commandF did not label it. The test was not executed in this record, so the assertion is a recorded expectation, not a reproduced run.
 
-The planned case classes describe a change between versions, a constructed mutation, or a refusal. This artifact is one successful validation snapshot. It does not match those classes. `research/CANDIDATE_CORPUS.md` also requires an adjudication state and a split assignment that exists only after the held-out split is frozen. `research/PROTOCOL_FREEZE.md` records `HELD_OUT_SPLIT = NOT_FROZEN` and `ADJUDICATION_RUNS = 0`. Those fields are missing, so the fixture stays out.
+The planned case classes describe a change between versions, a constructed mutation, or a refusal. This artifact is one successful validation snapshot. It does not match those classes. The next section applies the corrected admission order.
 
 ```text
 SOURCE_ID = SRC-HAPI-FHIR
@@ -136,4 +136,18 @@ ADMISSION_STATE = NOT_ADMITTED
 EXACT_BYTES_RETAINED = no
 ITEM_COUNT = 0
 ```
+
+## HAPI fixture under the corrected lifecycle
+
+`research/BENCHMARK_ADMISSION_LIFECYCLE.md` is the order used here. The digest above is unchanged. The upstream test was not re-downloaded.
+
+Phase A is already recorded: `SRC-HAPI-FHIR` is a public source and is not a corpus member.
+
+Phase B binds the commit, the fixture blob, the SHA-256, the Apache-2.0 project grant, GitHub provenance, `NO_PHI = true`, and the replay procedure `testExtensionUrlWithHl7Url`. The bytes are identified and are not copied into this repository. The case class is not bound, because no row in `research/BENCHMARK_PROTOCOL.md` describes one successful validation snapshot. Pairing the fixture with a second version was not done. No new class is added.
+
+Phase C would accept the upstream assertion as an external published label, because it is quoted inside the pinned test file and commandF did not write it. Human adjudication is not required for that label. It is not used for corpus membership while the case class is missing.
+
+Phase D does not run. The fixture stays out. `ITEM_COUNT` stays 0.
+
+The fixture remains evidence of an independent validator expectation. It is not a scored CommandFBench item.
 
