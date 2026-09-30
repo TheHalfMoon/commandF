@@ -91,8 +91,9 @@ pub use durable_retained::{
     HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
 };
 pub use ecosystem_cache_identity::{
-    project_cache_identity, require_cache_reuse, CacheIdentity, CacheIdentityError,
-    ECOSYSTEM_CACHE_IDENTITY_SCHEMA, MAX_ENGINE_SCHEMA_CHARS,
+    decode_cache_machine, encode_cache_machine, project_cache_identity, require_cache_reuse,
+    CacheIdentity, CacheIdentityError, CacheMachineBytes, ECOSYSTEM_CACHE_BYTES_SCHEMA,
+    ECOSYSTEM_CACHE_IDENTITY_SCHEMA, MAX_CACHE_MACHINE_BYTES, MAX_ENGINE_SCHEMA_CHARS,
 };
 pub use ecosystem_closure::{
     decode_closure_machine, decode_query_machine, encode_closure_machine, encode_query_machine,

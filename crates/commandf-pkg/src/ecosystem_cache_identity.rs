@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -6,7 +6,9 @@ use crate::{
 };
 
 pub const ECOSYSTEM_CACHE_IDENTITY_SCHEMA: &str = "commandf.ecosystem-cache-identity/v1";
+pub const ECOSYSTEM_CACHE_BYTES_SCHEMA: &str = "commandf.ecosystem-cache-bytes/v1";
 pub const MAX_ENGINE_SCHEMA_CHARS: usize = 256;
+pub const MAX_CACHE_MACHINE_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CacheIdentity {
@@ -14,6 +16,13 @@ pub struct CacheIdentity {
     pub snapshot_sha256: String,
     pub engine_schema: String,
     pub cache_sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CacheMachineBytes {
+    pub serialization_schema: String,
+    pub bytes: Vec<u8>,
+    pub machine_sha256: String,
 }
 
 #[derive(Debug, Error)]
@@ -32,6 +41,15 @@ pub enum CacheIdentityError {
 
     #[error("cache identity does not match the snapshot and engine schema")]
     CacheInvalid,
+
+    #[error("cache machine document exceeds {MAX_CACHE_MACHINE_BYTES} bytes")]
+    CacheMachineTooLarge,
+
+    #[error("cache bytes are not the canonical encoding")]
+    NoncanonicalCache,
+
+    #[error("cache JSON could not be read as the canonical document")]
+    MalformedCache,
 }
 
 pub fn project_cache_identity(
@@ -66,6 +84,62 @@ pub fn require_cache_reuse(
     Ok(())
 }
 
+pub fn encode_cache_machine(
+    snapshot: &EcosystemSnapshot,
+    identity: &CacheIdentity,
+) -> Result<CacheMachineBytes, CacheIdentityError> {
+    require_cache_reuse(snapshot, &identity.engine_schema, identity)?;
+    let bytes = cache_document_bytes(&identity.engine_schema, &identity.snapshot_sha256)?;
+    let machine_sha256 = PackageCache::digest(&bytes);
+    if machine_sha256 != identity.cache_sha256 {
+        return Err(CacheIdentityError::CacheInvalid);
+    }
+    Ok(CacheMachineBytes {
+        serialization_schema: ECOSYSTEM_CACHE_BYTES_SCHEMA.to_owned(),
+        bytes,
+        machine_sha256,
+    })
+}
+
+pub fn decode_cache_machine(
+    snapshot: &EcosystemSnapshot,
+    bytes: &[u8],
+) -> Result<CacheIdentity, CacheIdentityError> {
+    if bytes.len() > MAX_CACHE_MACHINE_BYTES {
+        return Err(CacheIdentityError::CacheMachineTooLarge);
+    }
+    let document: CacheIdentityDocument =
+        serde_json::from_slice(bytes).map_err(|_| CacheIdentityError::MalformedCache)?;
+    let canonical = serde_json::to_vec(&document).map_err(PackageError::Json)?;
+    if canonical.as_slice() != bytes {
+        return Err(CacheIdentityError::NoncanonicalCache);
+    }
+    let identity = CacheIdentity {
+        schema: document.schema,
+        snapshot_sha256: document.snapshot_sha256,
+        engine_schema: document.engine_schema,
+        cache_sha256: PackageCache::digest(&canonical),
+    };
+    require_cache_reuse(snapshot, &identity.engine_schema, &identity)?;
+    Ok(identity)
+}
+
+fn cache_document_bytes(
+    engine_schema: &str,
+    snapshot_sha256: &str,
+) -> Result<Vec<u8>, CacheIdentityError> {
+    let body = CacheIdentityBody {
+        engine_schema,
+        schema: ECOSYSTEM_CACHE_IDENTITY_SCHEMA,
+        snapshot_sha256,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if bytes.len() > MAX_CACHE_MACHINE_BYTES {
+        return Err(CacheIdentityError::CacheMachineTooLarge);
+    }
+    Ok(bytes)
+}
+
 fn validate_engine_schema(value: &str) -> Result<(), CacheIdentityError> {
     if value.chars().count() > MAX_ENGINE_SCHEMA_CHARS {
         return Err(CacheIdentityError::EngineSchemaTooLong);
@@ -81,6 +155,14 @@ struct CacheIdentityBody<'a> {
     engine_schema: &'a str,
     schema: &'a str,
     snapshot_sha256: &'a str,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CacheIdentityDocument {
+    engine_schema: String,
+    schema: String,
+    snapshot_sha256: String,
 }
 
 #[cfg(test)]
@@ -149,6 +231,34 @@ mod tests {
         assert!(matches!(
             project_cache_identity(&published, &long),
             Err(CacheIdentityError::EngineSchemaTooLong)
+        ));
+    }
+
+    #[test]
+    fn cache_machine_bytes_replay_and_reject_noncanonical_input() {
+        let published = snapshot(0x11);
+        let identity = project_cache_identity(&published, "commandf.closure/v1").expect("identity");
+        let encoded = encode_cache_machine(&published, &identity).expect("encode");
+        let again = encode_cache_machine(&published, &identity).expect("again");
+        assert_eq!(encoded.bytes, again.bytes);
+        assert_eq!(encoded.machine_sha256, identity.cache_sha256);
+        assert_eq!(encoded.serialization_schema, ECOSYSTEM_CACHE_BYTES_SCHEMA);
+        let decoded = decode_cache_machine(&published, &encoded.bytes).expect("decode");
+        assert_eq!(decoded, identity);
+        let other = snapshot(0x22);
+        assert!(matches!(
+            decode_cache_machine(&other, &encoded.bytes),
+            Err(CacheIdentityError::CacheInvalid)
+        ));
+        let mut spaced = encoded.bytes.clone();
+        spaced.insert(1, b' ');
+        assert!(matches!(
+            decode_cache_machine(&published, &spaced),
+            Err(CacheIdentityError::NoncanonicalCache)
+        ));
+        assert!(matches!(
+            decode_cache_machine(&published, &vec![0; MAX_CACHE_MACHINE_BYTES + 1]),
+            Err(CacheIdentityError::CacheMachineTooLarge)
         ));
     }
 }
