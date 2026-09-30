@@ -263,4 +263,6 @@ The fifteenth CF-17 package is `specs/039-cf17-workspace-identity/`. It records 
 
 The sixteenth CF-17 package is `specs/040-cf17-workspace-machine-bytes/`. It emits canonical bytes for one workspace identity. It merged as `7d38d073286bd72277bb165f42ec30ac0b7f925c`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The seventeenth CF-17 package is `specs/041-cf17-offline-replay/`. It replays one frozen published observation and shows the resulting identities match. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The seventeenth CF-17 package is `specs/041-cf17-offline-replay/`. It replays one frozen published observation and shows the resulting identities match. It merged as `eb83dce4a7e4430c8adc2a9ae37a9ecf8ba84648`. It does not ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The eighteenth CF-17 record is `specs/042-cf17-exit-gap-record/`. It records why official registry acquisition is must-ship and not executable. It is not execution authority. It does not implement acquisition, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
