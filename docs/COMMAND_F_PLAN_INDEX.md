@@ -253,4 +253,6 @@ The tenth CF-17 package is `specs/034-cf17-lifecycle-machine-bytes/`. It emits c
 
 The eleventh CF-17 package is `specs/035-cf17-closure-machine-bytes/`. It emits separate canonical bytes for one published package-dependency closure and one canonical-reference closure. It merged as `ef10a306d0b42a772ad8f69e9d4f3bae83db1a3e`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The twelfth CF-17 package is `specs/036-cf17-query-machine-bytes/`. It emits canonical bytes for one closure query. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The twelfth CF-17 package is `specs/036-cf17-query-machine-bytes/`. It emits canonical bytes for one closure query. It merged as `17aed3d7c3d97fc2b8987e9f066e470bc5424d97`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The thirteenth CF-17 package is `specs/037-cf17-comparison-machine-bytes/`. It emits canonical bytes for one published snapshot comparison. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
