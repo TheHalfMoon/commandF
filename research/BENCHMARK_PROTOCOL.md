@@ -35,4 +35,4 @@ Each class below is planned. None has a frozen item, a count, or a label produce
 
 This table is not a freeze. It does not authorize a product change, a registry download, or an experiment run.
 
-The provenance fields for these classes are inventoried in `research/DATA_PROVENANCE.md`. That inventory does not freeze items, counts, labels, or a split. `research/CANDIDATE_CORPUS.md` is the admission gate. Its item count is zero.
+The provenance fields for these classes are inventoried in `research/DATA_PROVENANCE.md`. That inventory does not freeze items, counts, labels, or a split. `research/CANDIDATE_CORPUS.md` is the admission gate. Its item count is zero. `research/PROTOCOL_FREEZE.md` records that the protocol is not frozen.
