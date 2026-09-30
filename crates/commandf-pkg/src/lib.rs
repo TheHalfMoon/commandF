@@ -26,6 +26,7 @@ mod durable_retained;
 mod ecosystem_cache_identity;
 mod ecosystem_closure;
 mod ecosystem_comparison;
+mod ecosystem_history;
 mod ecosystem_lifecycle;
 mod ecosystem_snapshot;
 mod error;
@@ -100,10 +101,15 @@ pub use ecosystem_closure::{
     MAX_CANONICAL_CHARS, MAX_CLOSURE_EDGES,
 };
 pub use ecosystem_comparison::{
-    project_snapshot_comparison, require_comparison_replay, ComparisonError, ComparisonWitnesses,
-    LifecycleStateChange, PackageChange, PackageMembership, ResolutionChange, SnapshotComparison,
-    ECOSYSTEM_COMPARISON_SCHEMA, EVIDENCE_ABSENT, EVIDENCE_PRESENT, MAX_COMPARISON_ENGINE_CHARS,
-    MAX_COMPARISON_OUTPUT_BYTES, MAX_COMPARISON_RECORDS, STATUS_ABSENT,
+    project_snapshot_comparison, require_comparison_replay, verify_comparison_identity,
+    ComparisonError, ComparisonWitnesses, LifecycleStateChange, PackageChange, PackageMembership,
+    ResolutionChange, SnapshotComparison, ECOSYSTEM_COMPARISON_SCHEMA, EVIDENCE_ABSENT,
+    EVIDENCE_PRESENT, MAX_COMPARISON_ENGINE_CHARS, MAX_COMPARISON_OUTPUT_BYTES,
+    MAX_COMPARISON_RECORDS, STATUS_ABSENT,
+};
+pub use ecosystem_history::{
+    project_snapshot_history, HistoryError, SnapshotHistory, ECOSYSTEM_HISTORY_SCHEMA,
+    MAX_HISTORY_STEPS,
 };
 pub use ecosystem_lifecycle::{
     project_source_lifecycle, require_current_sources, verify_lifecycle_record, LifecycleError,
