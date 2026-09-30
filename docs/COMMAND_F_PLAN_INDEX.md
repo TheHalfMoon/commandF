@@ -229,4 +229,6 @@ The impact and oracle verified-byte candidate is `specs/022-impact-oracle-verifi
 
 The bounded lockfile candidate is `specs/023-bounded-lockfile-reads/`. It covers issue #37 only. It does not close issues #38 or #100, and it does not authorize CF-17.
 
-The local-mirror archive candidate is `specs/024-local-mirror-archive-bound/`. It covers issue #38 only. It does not close issue #100, and it does not authorize CF-17.
+The local-mirror archive candidate is `specs/024-local-mirror-archive-bound/`. It covers issue #38 only. It does not close issue #100.
+
+The first CF-17 package is `specs/025-cf17-snapshot-identity/`. It freezes snapshot identity only. It does not finish the observatory, close issue #100 or issue #15, or authorize CF-18.

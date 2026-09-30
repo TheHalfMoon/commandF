@@ -23,6 +23,7 @@ mod context;
 mod context_error;
 mod context_model;
 mod durable_retained;
+mod ecosystem_snapshot;
 mod error;
 mod gate;
 mod gate_error;
@@ -83,6 +84,10 @@ pub use context_model::{
 pub use durable_retained::{
     classify_regenerated_archive, evaluate_durable_packet, DurableProjection, DurableRetainedError,
     HistoricalByteState, LiveArtifactObservation, RegenerationClass, TrustedRetainedBinding,
+};
+pub use ecosystem_snapshot::{
+    project_snapshot, require_published_authority, EcosystemSnapshot, SnapshotError,
+    SnapshotPackage, ECOSYSTEM_SNAPSHOT_SCHEMA, IMMUTABLE_RELEASE, MUTABLE_CI,
 };
 pub use error::PackageError;
 pub use gate::{
