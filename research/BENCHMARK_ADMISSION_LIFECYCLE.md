@@ -2,7 +2,7 @@
 
 Status: RESEARCH_PLANNING. Not execution authority. Not a corpus freeze. Not an experiment.
 
-This record removes a circular sequence among the research planning files. It does not admit an item. `ITEM_COUNT` stays 0. Results stay `RESULT_PENDING`.
+This record removes a circular sequence among the research planning files. It does not admit an item. Current membership is the manifest in `research/CANDIDATE_CORPUS.md`. Results stay `RESULT_PENDING`.
 
 ## Dependency graph before this record
 
@@ -46,7 +46,7 @@ After the candidate corpus digest is fixed:
 SPLIT_POLICY = NOT_FROZEN
 SPLIT_ASSIGNMENT = NOT_ASSIGNED
 HELD_OUT_MANIFEST = NOT_BOUND
-ITEM_COUNT = 0
+ITEM_COUNT = recorded in research/CANDIDATE_CORPUS.md
 ```
 
 ## What this record does not decide

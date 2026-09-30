@@ -29,10 +29,10 @@ This inventory names the provenance fields for each planned case class. It does 
 | Irrelevant mutations | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
 | Malformed evidence | one upstream parser test literal | pinned at the named commit | Apache-2.0 project grant | upstream assertion in that test | `RESULT_PENDING` |
 | Partial evidence | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
-| Unsupported evidence | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
+| Unsupported evidence | one upstream in-memory matcher test literal | pinned at the named commit | Apache-2.0 project grant | upstream assertion in that test | `RESULT_PENDING` |
 | Conflicting evidence | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
 | Correct abstention | a constructed fixture, or a public case whose safe output is refusal | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` |
 
 No row is a corpus member. No row authorizes a registry download, a product change, or an experiment.
 
-Admission of a later item is gated by `research/CANDIDATE_CORPUS.md`. That gate is empty. Candidate sources that are not yet admitted are listed in `research/BENCHMARK_SOURCE_CANDIDATES.md`.
+Admission of a later item is gated by `research/CANDIDATE_CORPUS.md`. The current count is the manifest in that file. Candidate sources that are not yet admitted are listed in `research/BENCHMARK_SOURCE_CANDIDATES.md`.

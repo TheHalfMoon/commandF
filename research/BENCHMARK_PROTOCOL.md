@@ -29,10 +29,10 @@ Each class below is planned. None has a frozen item, a count, or a label produce
 | Irrelevant mutations | A change is constructed to leave the claimed contract unchanged | `RESULT_PENDING` |
 | Malformed evidence | The input bytes do not parse as the declared artifact | 1 candidate member, not frozen |
 | Partial evidence | A required evidence class is absent | `RESULT_PENDING` |
-| Unsupported evidence | The declared evidence class is outside the evaluator contract | `RESULT_PENDING` |
+| Unsupported evidence | The declared evidence class is outside the evaluator contract | 1 candidate member, not frozen |
 | Conflicting evidence | Two supplied evidence classes do not agree | `RESULT_PENDING` |
 | Correct abstention | The safe output is to refuse a proven verdict | `RESULT_PENDING` |
 
 This table is not a freeze. It does not authorize a product change, a registry download, or an experiment run.
 
-The provenance fields for these classes are inventoried in `research/DATA_PROVENANCE.md`. That inventory does not freeze items, counts, labels, or a split. `research/CANDIDATE_CORPUS.md` is the admission gate. Its item count is zero. `research/PROTOCOL_FREEZE.md` records that the protocol is not frozen.
+The provenance fields for these classes are inventoried in `research/DATA_PROVENANCE.md`. That inventory does not freeze items, counts, labels, or a split. `research/CANDIDATE_CORPUS.md` is the admission gate. Its current item count is the manifest in that file. `research/PROTOCOL_FREEZE.md` records that the protocol is not frozen.

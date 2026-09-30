@@ -1,8 +1,8 @@
 # Benchmark Source Candidates
 
-Status: RESEARCH_PLANNING. No source is admitted.
+Status: RESEARCH_PLANNING. Membership is recorded in `research/CANDIDATE_CORPUS.md`.
 
-These rows name public sources already listed as candidates in `docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`, plus constructed-fixture classes that have no generator yet. A row is not a corpus item. No revision is pinned. A row stays `NOT_VERIFIED` until a later section records the exact revision that was read.
+These rows name public sources already listed as candidates in `docs/COMMAND_F_OPEN_SOURCE_QUALIFICATION_2026-09-12.md`, plus constructed-fixture classes that have no generator yet. A row is not a corpus item by itself. A row stays `NOT_VERIFIED` until a later section records the exact revision that was read. Revisions already recorded below stay pinned to those sections.
 
 | SOURCE_ID | SOURCE_TYPE | AUTHORITATIVE_CLASS | EXACT_VERSION_OR_REVISION | RIGHTS_LICENSE | ACQUISITION_METHOD | EXPECTED_ARTIFACT_TYPE | LABEL_AUTHORITY | STATUS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -15,6 +15,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-HL7-FHIR | public git candidate | official repository, not adopted | observed, not pinned | MULTI_LICENSE | not stored | mixed source and specification | none assigned | NOT_ADMITTED_LABEL_UNRESOLVED |
 | SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | fixture hashed, bytes not stored as a corpus member | validation fixture plus upstream assertion | upstream test assertion, not commandF | NOT_ADMITTED |
 | SRC-HAPI-JSON-PARSE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | malformed JSON literal | upstream test assertion, not commandF | CANDIDATE_CORPUS |
+| SRC-HAPI-UNSUPPORTED-IN | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | in-memory search qualifier | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -183,6 +184,22 @@ LABEL_AUTHORITY = upstream method rejectsArrayRootWhenNotAllowed
 LABEL_STATEMENT = DataFormatException containing must be '{'
 UPSTREAM_TEST_REPRODUCED = no
 STATE = NOT_ADMITTED
+```
+
+## Unsupported search qualifier, candidate member
+
+`Unsupported evidence` asks for a declared evidence class outside the evaluator contract. `testUnsupportedIn` in `InMemoryResourceMatcherConfigurationR5Test.java` at the same HAPI commit calls the in-memory matcher with `code:in=http://hl7.org/some-vs`. The method asserts that the result is unsupported and that the reason is `Parameter: <code:in> Reason: Qualified parameter not supported`.
+
+That is a contract refusal, not a JSON parse failure, and not the array-root shape rejection already kept out of `Malformed evidence`. `:in` is `TokenParamModifier.IN` at this commit. The value-set URI is a constant in the test. The same method passes a synthetic Observation. Those fields are not imported terminology. The item is member 2 in `research/CANDIDATE_CORPUS.md`. It is not a protocol freeze.
+
+`testUnsupportedNotIn` uses `:not-in` and the same reason shape. It is not a second member.
+
+```text
+SOURCE_ID = SRC-HAPI-UNSUPPORTED-IN
+CASE_CLASS = Unsupported evidence
+STATE = CANDIDATE_CORPUS
+ITEM_COUNT = 2
+UPSTREAM_TEST_REPRODUCED = no
 ```
 
 
