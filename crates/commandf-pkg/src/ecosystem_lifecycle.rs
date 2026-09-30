@@ -55,6 +55,18 @@ pub enum LifecycleError {
 
     #[error("source {source_id} is {state} and cannot be adopted")]
     SourceNotCurrent { source_id: String, state: String },
+
+    #[error("lifecycle schema is not {ECOSYSTEM_LIFECYCLE_SCHEMA}")]
+    UnexpectedLifecycleSchema,
+
+    #[error("lifecycle snapshot identity does not match the published snapshot")]
+    UnboundLifecycle,
+
+    #[error("lifecycle source set does not match the snapshot")]
+    LifecycleSourceMismatch,
+
+    #[error("stored lifecycle digest does not match the lifecycle document")]
+    LifecycleDigestMismatch,
 }
 
 pub fn project_source_lifecycle(
@@ -123,6 +135,49 @@ pub fn project_source_lifecycle(
         sources,
         lifecycle_sha256: PackageCache::digest(&bytes),
     })
+}
+
+pub fn verify_lifecycle_record(
+    snapshot: &EcosystemSnapshot,
+    record: &LifecycleRecord,
+) -> Result<(), LifecycleError> {
+    if record.schema != ECOSYSTEM_LIFECYCLE_SCHEMA {
+        return Err(LifecycleError::UnexpectedLifecycleSchema);
+    }
+    if record.snapshot_sha256 != snapshot.snapshot_sha256 {
+        return Err(LifecycleError::UnboundLifecycle);
+    }
+    let mut seen_sources = BTreeSet::new();
+    for source in &record.sources {
+        if !seen_sources.insert(source.source_id.as_str()) {
+            return Err(LifecycleError::DuplicateSource {
+                source_id: source.source_id.clone(),
+            });
+        }
+    }
+    let snapshot_sources: BTreeSet<&str> = snapshot
+        .packages
+        .iter()
+        .map(|package| package.source_id.as_str())
+        .collect();
+    let recorded_sources: BTreeSet<&str> = record
+        .sources
+        .iter()
+        .map(|source| source.source_id.as_str())
+        .collect();
+    if recorded_sources != snapshot_sources {
+        return Err(LifecycleError::LifecycleSourceMismatch);
+    }
+    let body = LifecycleBody {
+        schema: ECOSYSTEM_LIFECYCLE_SCHEMA,
+        snapshot_sha256: &snapshot.snapshot_sha256,
+        sources: &record.sources,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if PackageCache::digest(&bytes) != record.lifecycle_sha256 {
+        return Err(LifecycleError::LifecycleDigestMismatch);
+    }
+    Ok(())
 }
 
 pub fn require_current_sources(record: &LifecycleRecord) -> Result<(), LifecycleError> {

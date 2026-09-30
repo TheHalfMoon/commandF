@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use semver::Version;
 use serde::Serialize;
 use thiserror::Error;
@@ -50,6 +52,12 @@ pub enum SnapshotError {
 
     #[error("mutable CI source cannot be published authority: {source_id}")]
     MutableSourceIsNotPublished { source_id: String },
+
+    #[error("snapshot schema is not {ECOSYSTEM_SNAPSHOT_SCHEMA}")]
+    UnexpectedSnapshotSchema,
+
+    #[error("stored snapshot digest does not match the snapshot document")]
+    SnapshotDigestMismatch,
 }
 
 pub fn project_snapshot(
@@ -122,6 +130,61 @@ pub fn project_snapshot(
         unresolved_canonicals,
         snapshot_sha256: PackageCache::digest(&bytes),
     })
+}
+
+pub fn verify_snapshot_identity(snapshot: &EcosystemSnapshot) -> Result<(), SnapshotError> {
+    if snapshot.schema != ECOSYSTEM_SNAPSHOT_SCHEMA {
+        return Err(SnapshotError::UnexpectedSnapshotSchema);
+    }
+    let mut package_ids = BTreeSet::new();
+    for package in &snapshot.packages {
+        PackageName::parse(&package.name)?;
+        Version::parse(&package.version).map_err(|error| {
+            PackageError::InvalidRequest(format!(
+                "snapshot package {} has invalid version {}: {error}",
+                package.name, package.version
+            ))
+        })?;
+        if !is_sha256(&package.archive_sha256) {
+            return Err(SnapshotError::InvalidDigest);
+        }
+        if package.source_id.trim() != package.source_id.as_str() || package.source_id.is_empty() {
+            return Err(SnapshotError::EmptySource);
+        }
+        if package.mutability != IMMUTABLE_RELEASE && package.mutability != MUTABLE_CI {
+            return Err(SnapshotError::InvalidMutability);
+        }
+        if !package_ids.insert((package.name.as_str(), package.version.as_str())) {
+            return Err(SnapshotError::DuplicatePackage {
+                name: package.name.clone(),
+                version: package.version.clone(),
+            });
+        }
+    }
+    let mut canonicals = BTreeSet::new();
+    for canonical in &snapshot.unresolved_canonicals {
+        if canonical.is_empty()
+            || canonical.trim() != canonical.as_str()
+            || canonical.chars().any(char::is_whitespace)
+        {
+            return Err(SnapshotError::InvalidCanonical);
+        }
+        if !canonicals.insert(canonical.as_str()) {
+            return Err(SnapshotError::DuplicateCanonical {
+                canonical: canonical.clone(),
+            });
+        }
+    }
+    let body = SnapshotBody {
+        schema: ECOSYSTEM_SNAPSHOT_SCHEMA,
+        packages: &snapshot.packages,
+        unresolved_canonicals: &snapshot.unresolved_canonicals,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if PackageCache::digest(&bytes) != snapshot.snapshot_sha256 {
+        return Err(SnapshotError::SnapshotDigestMismatch);
+    }
+    Ok(())
 }
 
 pub fn require_published_authority(snapshot: &EcosystemSnapshot) -> Result<(), SnapshotError> {
