@@ -11,7 +11,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-FHIRPATH-SPEC | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | specification text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-SQL-ON-FHIR | public git candidate | NORMATIVE candidate | observed, not pinned | HL7_CONTRIBUTION_GRANT_NOT_A_PUBLIC_LICENSE | not stored | view-definition specification | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
-| SRC-SMART | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
+| SRC-SMART | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | declared protocol text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -45,4 +45,12 @@ On 2026-09-30 the GitHub API returned `HL7/sql-on-fhir` commit `e3e1d3c7efa6541a
 `LICENSE.md` blob `3c3c3eb104801e4ef6f671525450702161d09a26` is 8543 bytes. It says the specification was contributed to HL7 under section 09.01.02 of the HL7 Governance and Operations Manual, and that each contributor grants HL7 a free, irrevocable licence to "permit others, at HL7's sole discretion, to reproduce the resulting Protocol Specifications in whole or in part." That sentence gives the reproduction choice to HL7. It is not a public license for CommandF to copy the specification into a benchmark.
 
 `SRC-SQL-ON-FHIR` stays `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The commit is not a pin. No specification bytes were stored. `ITEM_COUNT` stays 0.
+
+## SMART App Launch observation, not a pin
+
+On 2026-09-30 the GitHub API returned `HL7/smart-app-launch` commit `3aea9cc057629a437e1fefda433660aed60abc80` on `master`. The repository license field was null. The root tree has no `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, or `NOTICE`.
+
+`README.md` blob `f9296c89712a00ab163694a524def8af82f50cbb` is 1082 bytes. It says: `The SMART App Launch Framework connects third-party applications to Electronic Health Record data, allowing apps to launch from inside or outside the user interface of an EHR system.` It names no license and no copyright holder.
+
+`SRC-SMART` stays `NOT_ADMITTED_RIGHTS_UNRESOLVED`. The commit is not a pin. No specification bytes were stored.
 
