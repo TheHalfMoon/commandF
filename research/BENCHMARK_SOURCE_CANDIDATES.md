@@ -165,4 +165,24 @@ STATE = CANDIDATE_CORPUS
 ITEM_COUNT = 1
 ```
 
+## Array root, not malformed evidence
+
+The same pinned file, blob `ec074d00c7a756e201f89006f81d42e7d7954636`, SHA-256 `ec3d8c0947d473c326a926f28c9acb853e9675bc33976ac4b124e2430ffba201`, contains `rejectsArrayRootWhenNotAllowed`. The input text is `[1, 2, 3]`. That text is 9 UTF-8 bytes. SHA-256 `a36b1f2c3f84522dd1005145646617d7054c0851e97c72a039c0bdfac9fa07f3`. The method asserts `DataFormatException` with a message containing `must be '{'`. The test was not executed here.
+
+`[1, 2, 3]` is well-formed JSON. The rejection is that this parser, when an array root is not allowed, requires an object. That is a root-shape constraint. `Malformed evidence` is for bytes that do not parse as the declared artifact. The already admitted item fails because a token follows the object and the message is `Failed to parse JSON encoded FHIR content`. This input does not fail that way. It is not added to that class. It is not assigned to another class. No further method in this file is being taken as a near-duplicate.
+
+The Apache-2.0 project grant still covers the file. The input is not a clinical record. Human adjudication is not required, because there is no membership decision that needs a new label. `ITEM_COUNT` stays 1.
+
+```text
+SOURCE_ID = SRC-HAPI-ARRAY-ROOT
+CASE_CLASS = none matched
+INPUT_TEXT = [1, 2, 3]
+INPUT_BYTE_COUNT = 9
+INPUT_SHA256 = a36b1f2c3f84522dd1005145646617d7054c0851e97c72a039c0bdfac9fa07f3
+LABEL_AUTHORITY = upstream method rejectsArrayRootWhenNotAllowed
+LABEL_STATEMENT = DataFormatException containing must be '{'
+UPSTREAM_TEST_REPRODUCED = no
+STATE = NOT_ADMITTED
+```
+
 
