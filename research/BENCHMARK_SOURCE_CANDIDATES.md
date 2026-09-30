@@ -13,7 +13,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
 | SRC-SMART | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | declared protocol text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-HL7-FHIR | public git candidate | official repository, not adopted | observed, not pinned | MULTI_LICENSE | not stored | mixed source and specification | none assigned | NOT_ADMITTED_LABEL_UNRESOLVED |
-| SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | not stored | library source | the pinned implementation, if an item is later named | RIGHTS_PROVEN |
+| SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | fixture hashed, bytes not stored as a corpus member | validation fixture plus upstream assertion | upstream test assertion, not commandF | NOT_ADMITTED |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -99,25 +99,40 @@ On 2026-10-01 the GitHub API returned `hapifhir/hapi-fhir` commit `e307df6b64ff8
 
 `LOINC_NOTES.txt` is developer notes about LOINC import behavior. It is not a second license for the Java source. It is a reason not to treat LOINC-derived terminology bytes as covered by this observation. No terminology bytes were taken.
 
-No test or fixture file was selected, so there is no independent label and no case class. The held-out split is not frozen. `ITEM_COUNT` stays 0.
+## One HAPI validation fixture, not a corpus member
+
+The selected files are at the same commit `e307df6b64ff87c55af1607160f57141dbeb0360`.
+
+`hapi-fhir-validation/src/test/resources/bug872-ext-with-hl7-url.json` blob `0aa5d2e6ebfab82103c650ca1e6a512034476067` is 256 bytes. SHA-256 `f74627045e309cb265bc37b015d4a81f12db70f6df9d7aa92b2003e6be9b5b31`. The file has no license header. It is a Patient resource whose narrative is `HELLO` and whose one extension uses `http://hl7.org/fhir/ValueSet/v3-ActInvoiceGroupCode` with `valueString` `test`. It contains no LOINC code, no SNOMED code, and no personal name, identifier, or clinical note. The JSON is not stored in this repository. The git blob and digest identify the bytes.
+
+`hapi-fhir-validation/src/test/java/org/hl7/fhir/r4/validation/FhirInstanceValidatorR4Test.java` blob `c5c5689553436a9fde6d29fd5c428e44f107e15a` is 80918 bytes. SHA-256 `7fe6a7bae58d25e0f881caf530ecff967cfdcdb4415ccc15eef033a87699641b`. The first lines are the package declaration and imports. The examined file has no license header of its own. The repository `LICENSE.txt` and `NOTICE.txt` remain the applicable project grant. The Java file is not stored here.
+
+The independent expectation is in that test, method `testExtensionUrlWithHl7Url`, lines 548-553. It loads `/bug872-ext-with-hl7-url.json`, validates it, and asserts `assertThat(nonInfo).isEmpty()` after dropping informational messages. The comment above the method says `See #872`. That assertion is the upstream expected result. commandF did not label it. The test was not executed in this record, so the assertion is a recorded expectation, not a reproduced run.
+
+The planned case classes describe a change between versions, a constructed mutation, or a refusal. This artifact is one successful validation snapshot. It does not match those classes. `research/CANDIDATE_CORPUS.md` also requires an adjudication state and a split assignment that exists only after the held-out split is frozen. `research/PROTOCOL_FREEZE.md` records `HELD_OUT_SPLIT = NOT_FROZEN` and `ADJUDICATION_RUNS = 0`. Those fields are missing, so the fixture stays out.
 
 ```text
 SOURCE_ID = SRC-HAPI-FHIR
 REPOSITORY = hapifhir/hapi-fhir
 EXACT_COMMIT = e307df6b64ff87c55af1607160f57141dbeb0360
-ARTIFACT_PATH = not selected
-ARTIFACT_BLOB = none
-ARTIFACT_SHA256 = none
+ARTIFACT_PATH = hapi-fhir-validation/src/test/resources/bug872-ext-with-hl7-url.json
+ARTIFACT_BLOB = 0aa5d2e6ebfab82103c650ca1e6a512034476067
+ARTIFACT_SHA256 = f74627045e309cb265bc37b015d4a81f12db70f6df9d7aa92b2003e6be9b5b31
+FILE_HEADER_LICENSE = absent
+REPOSITORY_LICENSE = Apache-2.0
 LICENSE_PATH = LICENSE.txt
 LICENSE_BLOB = 261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64
 LICENSE_SHA256 = c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
 LICENSE_IDENTIFIER = Apache-2.0
 LICENSE_QUOTE = This project is Open Source, licensed under the Apache Software License 2.0.
-LICENSE_SCOPE_ANALYSIS = repository license and notice apply to the project source; LOINC notes do not extend that grant to terminology content; a specific source file still needs its own header check before bytes are retained
+LICENSE_SCOPE_ANALYSIS = project Apache-2.0 grant; fixture and test file state no different license; LOINC terminology was not selected
 PROVENANCE = GitHub content API at the named commit
-CASE_CLASS = none
-LABEL_AUTHORITY = none
-ADMISSION_STATE = RIGHTS_PROVEN
+EXPECTED_RESULT_SOURCE = FhirInstanceValidatorR4Test.java lines 548-553, method testExtensionUrlWithHl7Url
+LABEL_AUTHORITY = upstream assertion that non-informational validation messages are empty
+CASE_CLASS = none matched
+REPLAY_PROCEDURE = execute testExtensionUrlWithHl7Url at the named commit against the named blob
+NO_PHI = true for the examined fixture
+ADMISSION_STATE = NOT_ADMITTED
 EXACT_BYTES_RETAINED = no
 ITEM_COUNT = 0
 ```
