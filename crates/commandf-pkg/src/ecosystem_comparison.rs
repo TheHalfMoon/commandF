@@ -120,6 +120,9 @@ pub enum ComparisonError {
 
     #[error("stored comparison does not match the recomputed comparison")]
     ComparisonMismatch,
+
+    #[error("comparison schema is not {ECOSYSTEM_COMPARISON_SCHEMA}")]
+    UnexpectedComparisonSchema,
 }
 
 pub fn project_snapshot_comparison(
@@ -277,6 +280,43 @@ pub fn require_comparison_replay(
 ) -> Result<(), ComparisonError> {
     let projected = project_snapshot_comparison(before, after, engine_schema, witnesses)?;
     if &projected != comparison {
+        return Err(ComparisonError::ComparisonMismatch);
+    }
+    Ok(())
+}
+
+pub fn verify_comparison_identity(comparison: &SnapshotComparison) -> Result<(), ComparisonError> {
+    if comparison.schema != ECOSYSTEM_COMPARISON_SCHEMA {
+        return Err(ComparisonError::UnexpectedComparisonSchema);
+    }
+    validate_engine_schema(&comparison.engine_schema)?;
+    let body = ComparisonBody {
+        added_packages: &comparison.added_packages,
+        after_canonical_closure_sha256: &comparison.after_canonical_closure_sha256,
+        after_package_closure_sha256: &comparison.after_package_closure_sha256,
+        after_snapshot_sha256: &comparison.after_snapshot_sha256,
+        before_canonical_closure_sha256: &comparison.before_canonical_closure_sha256,
+        before_package_closure_sha256: &comparison.before_package_closure_sha256,
+        before_snapshot_sha256: &comparison.before_snapshot_sha256,
+        changed_packages: &comparison.changed_packages,
+        closure_evidence: &comparison.closure_evidence,
+        engine_schema: &comparison.engine_schema,
+        introduced_unresolved_canonicals: &comparison.introduced_unresolved_canonicals,
+        lifecycle_evidence: &comparison.lifecycle_evidence,
+        lifecycle_states: &comparison.lifecycle_states,
+        removed_packages: &comparison.removed_packages,
+        removed_unresolved_canonicals: &comparison.removed_unresolved_canonicals,
+        resolution_changes: &comparison.resolution_changes,
+        resolution_evidence: &comparison.resolution_evidence,
+        retained_unresolved_canonicals: &comparison.retained_unresolved_canonicals,
+        schema: ECOSYSTEM_COMPARISON_SCHEMA,
+        unchanged_packages: &comparison.unchanged_packages,
+    };
+    let bytes = serde_json::to_vec(&body).map_err(PackageError::Json)?;
+    if bytes.len() > MAX_COMPARISON_OUTPUT_BYTES {
+        return Err(ComparisonError::OutputTooLarge);
+    }
+    if PackageCache::digest(&bytes) != comparison.comparison_sha256 {
         return Err(ComparisonError::ComparisonMismatch);
     }
     Ok(())

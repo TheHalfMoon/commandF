@@ -241,4 +241,6 @@ The fourth CF-17 package is `specs/028-cf17-source-lifecycle/`. It records sourc
 
 The fifth CF-17 package is `specs/029-cf17-cache-identity/`. It keys cache reuse to the snapshot digest and an explicit engine schema. It merged as `11e3bf80bf8ac168cd1c85b9ffce5958c8fbe87d`. It does not measure scale, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
 
-The sixth CF-17 package is `specs/030-cf17-snapshot-comparison/`. It compares two published snapshot identities. It records membership and identity facts only. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+The sixth CF-17 package is `specs/030-cf17-snapshot-comparison/`. It compares two published snapshot identities. It records membership and identity facts only. It merged as `4ca49836e7f1419f7555eb3504ee3694af494025`. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
+
+The seventh CF-17 package is `specs/031-cf17-snapshot-history/`. It chains published snapshot comparisons in order. It does not classify compatibility, ingest a registry, finish the observatory, close issue #100 or issue #15, or authorize CF-18.
