@@ -26,7 +26,7 @@ Automation coverage is the count of held-out items with a bound `ALLOW` or `DENY
 
 ## Secondary endpoints
 
-These are descriptive. They are not a second confirmatory family. The only predeclared paired comparison is below, and it is also descriptive. No multiplicity adjustment is applied. A later confirmatory family, if one is added, must be named in a new plan version while results are still `RESULT_PENDING`.
+These are descriptive. They are not a second confirmatory family. sap-1 names no paired comparison, so no multiplicity adjustment is applied. A later confirmatory family, if one is added, must be named in a new plan version while results are still `RESULT_PENDING`.
 
 - Automation coverage, defined above.
 - Brier score and expected calibration error. When a probability in the closed unit interval is emitted, that probability is the system's forecast that the external label says the item is not acceptable. The binary event is that label outcome. B7 is `NOT_IMPLEMENTED` and emits no probability, so both scores are `NOT_APPLICABLE` until such a forecast exists. The error uses ten equal-width bins on `[0, 1]`. An empty bin is omitted from the weighted sum and the omission count is reported. The estimator is the frequency of the event in the bin, not a fitted recalibration.
@@ -42,9 +42,9 @@ If the leakage-group count is below two, the interval is `NOT_APPLICABLE`. Versi
 
 ## Paired comparison
 
-One descriptive comparison is predeclared: B0 against B2, and only after both have been executed on the same held-out items. No other pair is part of this version.
+A descriptive paired test of the unsafe-auto-allow indicator requires two families that both emit a bound decision class. B0 is `commandf diff`. It does not emit `ALLOW`, `DENY`, or `ABSTAIN`. No second decision-producing family is implemented. The test is `NOT_APPLICABLE`. It is not reported as `RESULT_PENDING`.
 
-The paired quantity is not the primary rate. The primary rate is conditional on an auto-allow. The paired quantity is the unconditional indicator that the item's decision was an unsafe auto-allow. McNemar's exact two-sided binomial test is applied to discordant item pairs of that indicator. The pair key is the item digest. The null is equal marginal probability of the indicator. A p-value from that test is descriptive. If the discordant-pair count is zero, the test is `UNDEFINED`. It is not given a p-value. B0 and B2 are both `NOT_EXECUTED`, so the test stays `RESULT_PENDING`.
+A later plan version may name one pair only when both identities emit those classes, and only while results are still `RESULT_PENDING`. The paired quantity would still not be the primary rate. The primary rate is conditional on an auto-allow. The paired quantity would be the unconditional indicator that the item's decision was an unsafe auto-allow. McNemar's exact two-sided binomial test would apply to discordant item pairs of that indicator. The pair key is the item digest. The null is equal marginal probability of the indicator. A p-value from that test is descriptive. If the discordant-pair count is zero, the test is `UNDEFINED`. It is not given a p-value. sap-1 names no such pair.
 
 ## Zero denominators
 
