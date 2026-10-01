@@ -19,7 +19,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 15. Performance — `RESULT_PENDING`
 16. Threats to Validity — `research/manuscript/threats-to-validity.md`; empirical residual `RESULT_PENDING`
 17. Limitations — `research/manuscript/limitations.md`
-18. Discussion
+18. Discussion — `research/manuscript/discussion.md`; measured claims `RESULT_PENDING`
 19. Reproducibility — `research/manuscript/reproducibility.md`; no reproduction package
 20. Conclusion
 
