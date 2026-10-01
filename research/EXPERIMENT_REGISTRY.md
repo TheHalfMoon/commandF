@@ -8,4 +8,4 @@ This registry does not authorize product execution, including CF-17. It records 
 | --- | --- | --- | --- |
 | E0 | None registered | NOT_RUN | RESULT_PENDING |
 
-Registered baselines B0 through B7, ablations, and the safety metric `unsafe_auto_allow_rate` at declared coverage remain defined in the planning files. They have no measured values.
+Registered baselines B0 through B7, ablations, and the safety metric `unsafe_auto_allow_rate` at declared coverage remain defined in the planning files. The calculation rules are `research/STATISTICAL_ANALYSIS_PLAN.md` version `sap-1`. They have no measured values.
