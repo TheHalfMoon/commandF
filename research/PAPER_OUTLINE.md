@@ -4,7 +4,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 
 1. Abstract — `RESULT_PENDING`
 2. Introduction — `research/manuscript/introduction.md`; no measured claim
-3. Motivation
+3. Motivation — `research/manuscript/motivation.md`; no measured benefit
 4. Related Work
 5. Problem Definition — `research/manuscript/problem-definition.md`; not a measurement
 6. Compatibility Model — `research/manuscript/compatibility-model.md`; not a measurement
