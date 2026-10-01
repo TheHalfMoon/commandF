@@ -17,7 +17,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 13. Ablation Study — `RESULT_PENDING`
 14. Calibration and Abstention — `RESULT_PENDING`
 15. Performance — `RESULT_PENDING`
-16. Threats to Validity
+16. Threats to Validity — `research/manuscript/threats-to-validity.md`; empirical residual `RESULT_PENDING`
 17. Limitations
 18. Discussion
 19. Reproducibility
