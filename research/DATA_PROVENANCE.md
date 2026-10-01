@@ -4,7 +4,7 @@ Status: RESEARCH_PLANNING.
 
 Each future benchmark item should record source, revision, version, acquisition date, digest, rights, transformations, split, label provenance, adjudication, disagreement, and uncertainty where those facts exist.
 
-Public interoperability artifacts and synthetic adversarial changes are preferred. Private clinical data is not authorized for a public benchmark. Current corpus assignment is `RESULT_PENDING`. A split value in the table below is filled after candidate-corpus membership, not before it.
+Public interoperability artifacts and synthetic adversarial changes are preferred. Private clinical data is not authorized for a public benchmark. Current split assignment is `NOT_ASSIGNED`, under `research/SPLIT_POLICY.md` version `sp-1`. A split value in the table below is filled after candidate-corpus membership, not before it.
 
 ## Provenance inventory
 
