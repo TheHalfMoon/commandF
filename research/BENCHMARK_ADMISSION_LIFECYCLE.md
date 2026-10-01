@@ -32,7 +32,7 @@ Exact bytes, SHA-256, rights, provenance, a named case class, an independent lab
 
 ## Split invariants
 
-The split policy is not frozen by this record. When a later record freezes it, assignment is a function of the item SHA-256 and that policy version. It is not a function of a commandF score.
+The split policy is not frozen by this record. The assignment function is specified in `research/SPLIT_POLICY.md` as version `sp-1`. Assignment is a function of the item SHA-256, the leakage group defined in that policy, and that policy version. It is not a function of a commandF score. That specification does not assign the current corpus and does not bind a held-out manifest.
 
 After the candidate corpus digest is fixed:
 
@@ -43,7 +43,7 @@ After the candidate corpus digest is fixed:
 - commandF output is not an input to the assignment.
 
 ```text
-SPLIT_POLICY = NOT_FROZEN
+SPLIT_POLICY = specified in research/SPLIT_POLICY.md as sp-1
 SPLIT_ASSIGNMENT = NOT_ASSIGNED
 HELD_OUT_MANIFEST = NOT_BOUND
 ITEM_COUNT = recorded in research/CANDIDATE_CORPUS.md

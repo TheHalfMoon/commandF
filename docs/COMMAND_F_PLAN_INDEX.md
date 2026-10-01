@@ -69,7 +69,7 @@ Future slice plans must add or update donor records rather than relying on conve
 
 Preserves the candidate master's thesis, core research question, H1–H3, initial standards/models, baseline families, measurement framework, experiment sequence, reproducibility artifact, and evidence/data governance.
 
-`research/BENCHMARK_ADMISSION_LIFECYCLE.md` orders source evidence, labels, candidate membership, split assignment, and the final freeze so those steps do not wait on each other in a circle. It admits no item by itself. `research/CANDIDATE_CORPUS.md` records candidate membership. Membership is not a protocol freeze. `research/CASE_CLASS_MATRIX.md` records which remaining classes are blocked. It does not admit an item.
+`research/BENCHMARK_ADMISSION_LIFECYCLE.md` orders source evidence, labels, candidate membership, split assignment, and the final freeze so those steps do not wait on each other in a circle. It admits no item by itself. `research/CANDIDATE_CORPUS.md` records candidate membership. Membership is not a protocol freeze. `research/CASE_CLASS_MATRIX.md` records which remaining classes are blocked. It does not admit an item. `research/SPLIT_POLICY.md` specifies the assignment function. It does not assign the current corpus.
 
 The broader research inventory remains in Sections 21–23 of `docs/COMMAND_F_DISCOVERY_COVERAGE_2026-08-13.md` and includes sixteen retained tracks:
 
