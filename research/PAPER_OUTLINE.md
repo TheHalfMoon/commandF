@@ -11,7 +11,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 7. Consumer Contract Model
 8. Evidence and Decision Assurance
 9. Selective Oracle Escalation
-10. CommandFBench
+10. CommandFBench — methods text in `research/manuscript/commandfbench-methods.md`; results stay `RESULT_PENDING`
 11. Experimental Design
 12. Results — `RESULT_PENDING`
 13. Ablation Study — `RESULT_PENDING`
