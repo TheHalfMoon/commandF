@@ -10,7 +10,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 6. Compatibility Model — `research/manuscript/compatibility-model.md`; not a measurement
 7. Consumer Contract Model — `research/manuscript/consumer-contract-model.md`; CF-19 stays planned
 8. Evidence and Decision Assurance — `research/manuscript/evidence-and-decision-assurance.md`; receipt not implemented
-9. Selective Oracle Escalation
+9. Selective Oracle Escalation — `research/manuscript/selective-oracle-escalation.md`; no oracle result
 10. CommandFBench — methods text in `research/manuscript/commandfbench-methods.md`; results stay `RESULT_PENDING`
 11. Experimental Design
 12. Results — `RESULT_PENDING`
