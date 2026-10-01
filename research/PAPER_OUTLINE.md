@@ -12,7 +12,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 8. Evidence and Decision Assurance — `research/manuscript/evidence-and-decision-assurance.md`; receipt not implemented
 9. Selective Oracle Escalation — `research/manuscript/selective-oracle-escalation.md`; no oracle result
 10. CommandFBench — methods text in `research/manuscript/commandfbench-methods.md`; results stay `RESULT_PENDING`
-11. Experimental Design
+11. Experimental Design — `research/manuscript/experimental-design.md`; experiments `NOT_RUN`
 12. Results — `RESULT_PENDING`
 13. Ablation Study — `RESULT_PENDING`
 14. Calibration and Abstention — `RESULT_PENDING`
