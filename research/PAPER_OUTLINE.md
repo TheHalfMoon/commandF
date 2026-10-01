@@ -18,7 +18,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 14. Calibration and Abstention — `RESULT_PENDING`
 15. Performance — `RESULT_PENDING`
 16. Threats to Validity — `research/manuscript/threats-to-validity.md`; empirical residual `RESULT_PENDING`
-17. Limitations
+17. Limitations — `research/manuscript/limitations.md`
 18. Discussion
 19. Reproducibility
 20. Conclusion
