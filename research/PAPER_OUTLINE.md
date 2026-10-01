@@ -21,6 +21,6 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 17. Limitations — `research/manuscript/limitations.md`
 18. Discussion — `research/manuscript/discussion.md`; measured claims `RESULT_PENDING`
 19. Reproducibility — `research/manuscript/reproducibility.md`; no reproduction package
-20. Conclusion
+20. Conclusion — `research/manuscript/conclusion.md`; empirical conclusion `RESULT_PENDING`
 
 This outline does not authorize product implementation.
