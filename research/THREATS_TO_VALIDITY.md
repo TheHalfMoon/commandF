@@ -10,4 +10,4 @@ Known threats before measurement:
 - Missing evidence labeled as verification is a construct-validity failure.
 - External tools compared without pinned versions would be an unfair baseline.
 
-Empirical residual threats are `RESULT_PENDING`.
+Empirical residual threats are `RESULT_PENDING`. The manuscript section is `research/manuscript/threats-to-validity.md`.
