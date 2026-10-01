@@ -6,7 +6,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 2. Introduction
 3. Motivation
 4. Related Work
-5. Problem Definition
+5. Problem Definition — `research/manuscript/problem-definition.md`; not a measurement
 6. Compatibility Model
 7. Consumer Contract Model
 8. Evidence and Decision Assurance

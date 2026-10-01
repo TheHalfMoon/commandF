@@ -2,7 +2,7 @@
 
 Status: RESEARCH_PLANNING. Not product execution authority.
 
-No scientific claim is ready for an abstract.
+No scientific claim is ready for an abstract. Definitional manuscript text is not an experiment row.
 
 | Claim ID | Wording | Experiment | Status |
 | --- | --- | --- | --- |
