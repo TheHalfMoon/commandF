@@ -7,7 +7,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 3. Motivation
 4. Related Work
 5. Problem Definition — `research/manuscript/problem-definition.md`; not a measurement
-6. Compatibility Model
+6. Compatibility Model — `research/manuscript/compatibility-model.md`; not a measurement
 7. Consumer Contract Model
 8. Evidence and Decision Assurance
 9. Selective Oracle Escalation
