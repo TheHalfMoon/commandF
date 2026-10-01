@@ -28,7 +28,7 @@ This inventory names the provenance fields for each planned case class. It does 
 | Adversarial mutations | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
 | Irrelevant mutations | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
 | Malformed evidence | one upstream parser test literal | pinned at the named commit | Apache-2.0 project grant | upstream assertion in that test | `RESULT_PENDING` |
-| Partial evidence | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
+| Partial evidence | one upstream client response literal | pinned at the named commit | Apache-2.0 project grant | upstream assertion in that test | `RESULT_PENDING` |
 | Unsupported evidence | one upstream in-memory matcher test literal | pinned at the named commit | Apache-2.0 project grant | upstream assertion in that test | `RESULT_PENDING` |
 | Conflicting evidence | a constructed fixture; not yet written | `RESULT_PENDING` | not a clinical record | `RESULT_PENDING` | `RESULT_PENDING` |
 | Correct abstention | a constructed fixture, or a public case whose safe output is refusal | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` | `RESULT_PENDING` |
