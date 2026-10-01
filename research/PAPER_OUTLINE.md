@@ -3,7 +3,7 @@
 Status: RESEARCH_PLANNING. Not a completed manuscript.
 
 1. Abstract — `RESULT_PENDING`
-2. Introduction
+2. Introduction — `research/manuscript/introduction.md`; no measured claim
 3. Motivation
 4. Related Work
 5. Problem Definition — `research/manuscript/problem-definition.md`; not a measurement
