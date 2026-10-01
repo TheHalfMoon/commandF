@@ -2,4 +2,4 @@
 
 Status: RESEARCH_PLANNING
 
-The CommandFBench methods text is `research/manuscript/commandfbench-methods.md`. The problem definition is `research/manuscript/problem-definition.md`. The compatibility model is `research/manuscript/compatibility-model.md`. The consumer contract model is `research/manuscript/consumer-contract-model.md`. None reports a measurement. Headline claims stay `RESULT_PENDING` until `research/RESULTS_LEDGER.md` records one. This directory does not authorize CF-17.
+The CommandFBench methods text is `research/manuscript/commandfbench-methods.md`. The problem definition is `research/manuscript/problem-definition.md`. The compatibility model is `research/manuscript/compatibility-model.md`. The consumer contract model is `research/manuscript/consumer-contract-model.md`. Evidence and decision assurance are `research/manuscript/evidence-and-decision-assurance.md`. None reports a measurement. Headline claims stay `RESULT_PENDING` until `research/RESULTS_LEDGER.md` records one. This directory does not authorize CF-17.
