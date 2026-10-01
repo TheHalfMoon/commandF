@@ -7,7 +7,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SOURCE_ID | SOURCE_TYPE | AUTHORITATIVE_CLASS | EXACT_VERSION_OR_REVISION | RIGHTS_LICENSE | ACQUISITION_METHOD | EXPECTED_ARTIFACT_TYPE | LABEL_AUTHORITY | STATUS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | SRC-IG-REGISTRY | public git candidate | OFFICIAL_REFERENCE, not adopted | observed, not pinned | CONFLICTING_STATEMENTS | not stored | package-feed metadata | not a compatibility label | NOT_ADMITTED_RIGHTS_UNRESOLVED |
-| SRC-FHIR-TEST-CASES | public git candidate | OFFICIAL_REFERENCE, not adopted | NOT_PINNED | NOT_VERIFIED | not acquired | published test artifacts | the published artifact, if pinned | NOT_ADMITTED |
+| SRC-FHIR-TEST-CASES | public git candidate | OFFICIAL_REFERENCE, not adopted | 0dd8336f3c584f7b9491b74be23721d1edf58eaa | CONFLICTING_STATEMENTS | not stored | published test artifacts | not assigned | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FHIRPATH-SPEC | public git candidate | NORMATIVE candidate | observed, not pinned | NO_LICENSE_FILE_AT_ROOT | not stored | specification text | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-SQL-ON-FHIR | public git candidate | NORMATIVE candidate | observed, not pinned | HL7_CONTRIBUTION_GRANT_NOT_A_PUBLIC_LICENSE | not stored | view-definition specification | the pinned specification text | NOT_ADMITTED_RIGHTS_UNRESOLVED |
 | SRC-FSH-SPEC | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | shorthand specification | the pinned specification text | NOT_ADMITTED |
@@ -26,6 +26,23 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-CONSTRUCTED-MALFORMED | fixture not written | none | none | not a clinical record | not acquired | constructed bytes | a recorded adjudication | NOT_ADMITTED |
 
 The candidate count is recorded in `research/CANDIDATE_CORPUS.md`. This inventory does not copy the upstream test file and does not authorize a registry crawl.
+
+## FHIR test cases, rights unresolved
+
+On 2026-10-01 the GitHub API returned `FHIR/fhir-test-cases` commit `0dd8336f3c584f7b9491b74be23721d1edf58eaa`. The repository license field was `Apache-2.0`. `LICENSE.txt` at that commit is blob `261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64`, 11357 bytes, the same standard Apache-2.0 text already recorded for HAPI. `README.md` at that commit is blob `6cbfce9119d72bb0504b0856f0646f9f21174136`, 6555 bytes, SHA-256 `0472e87131218991b1c4c29d813eae0bb75a360187c4128d23f3b338979ee37d`. It says: `* License: The contents in here are covered by Creative Commons Public Domain`.
+
+Those two grants are not the same. The root tree also contains `snomed` and `ucum`. No example from this repository is stored. No case class is assigned. `ITEM_COUNT` is unchanged.
+
+```text
+SOURCE_ID = SRC-FHIR-TEST-CASES
+REPOSITORY = FHIR/fhir-test-cases
+SOURCE_COMMIT = 0dd8336f3c584f7b9491b74be23721d1edf58eaa
+RIGHTS_STATE = NOT_ADMITTED_RIGHTS_UNRESOLVED
+RIGHTS_AUTHORITY = LICENSE.txt Apache-2.0 AND README Creative Commons Public Domain
+LICENSE_PATH = LICENSE.txt
+LICENSE_BLOB = 261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64
+STATE = NOT_ADMITTED_RIGHTS_UNRESOLVED
+```
 
 ## One observed revision, not a pin
 
