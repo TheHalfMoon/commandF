@@ -1,6 +1,6 @@
 # Baselines
 
-Status: RESEARCH_PLANNING. Versions are not yet pinned by a measured run.
+Status: RESEARCH_PLANNING. Versions are not yet pinned by a measured run. Command identities for these families are `research/BASELINE_IDENTITIES.md`. That record does not run them.
 
 Planned comparison families, not results:
 
@@ -13,4 +13,4 @@ Planned comparison families, not results:
 - B6 plus sufficiency and abstention
 - B7 plus calibrated advisory layer
 
-Exact tool commits and fair configuration are `RESULT_PENDING`. No baseline is claimed to lack a capability.
+The implementation commit and the missing families are recorded in `research/BASELINE_IDENTITIES.md`. Execution and scores stay `RESULT_PENDING`. No baseline is claimed to lack a capability.
