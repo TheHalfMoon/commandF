@@ -2,7 +2,7 @@
 
 Status: RESEARCH_PLANNING. Not a completed manuscript.
 
-1. Abstract — `RESULT_PENDING`
+1. Abstract — `research/manuscript/abstract.md`; measured clauses `RESULT_PENDING`
 2. Introduction — `research/manuscript/introduction.md`; no measured claim
 3. Motivation — `research/manuscript/motivation.md`; no measured benefit
 4. Related Work — `research/manuscript/related-work.md`; no verified citation
@@ -13,10 +13,10 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 9. Selective Oracle Escalation — `research/manuscript/selective-oracle-escalation.md`; no oracle result
 10. CommandFBench — methods text in `research/manuscript/commandfbench-methods.md`; results stay `RESULT_PENDING`
 11. Experimental Design — `research/manuscript/experimental-design.md`; experiments `NOT_RUN`
-12. Results — `RESULT_PENDING`
-13. Ablation Study — `RESULT_PENDING`
-14. Calibration and Abstention — `RESULT_PENDING`
-15. Performance — `RESULT_PENDING`
+12. Results — `RESULT_PENDING` in `research/manuscript/result-pending.md`
+13. Ablation Study — `RESULT_PENDING` in `research/manuscript/result-pending.md`
+14. Calibration and Abstention — `RESULT_PENDING` in `research/manuscript/result-pending.md`
+15. Performance — `RESULT_PENDING` in `research/manuscript/result-pending.md`
 16. Threats to Validity — `research/manuscript/threats-to-validity.md`; empirical residual `RESULT_PENDING`
 17. Limitations — `research/manuscript/limitations.md`
 18. Discussion — `research/manuscript/discussion.md`; measured claims `RESULT_PENDING`
