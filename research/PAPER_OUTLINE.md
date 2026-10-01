@@ -20,7 +20,7 @@ Status: RESEARCH_PLANNING. Not a completed manuscript.
 16. Threats to Validity — `research/manuscript/threats-to-validity.md`; empirical residual `RESULT_PENDING`
 17. Limitations — `research/manuscript/limitations.md`
 18. Discussion
-19. Reproducibility
+19. Reproducibility — `research/manuscript/reproducibility.md`; no reproduction package
 20. Conclusion
 
 This outline does not authorize product implementation.
