@@ -17,8 +17,9 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-HAPI-JSON-PARSE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | malformed JSON literal | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-HAPI-UNSUPPORTED-IN | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | in-memory search qualifier | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-HAPI-PARTIAL-RESOURCE-TYPE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | FHIR JSON object missing resourceType | upstream test assertion, not commandF | CANDIDATE_CORPUS |
-| SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
-| SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
+| SRC-BULK-DATA | public git candidate | NORMATIVE candidate | 1939654c9c11cfe9ec83f649ba457be4cd4510c6 | FHIR_LICENSE_POINTER_AND_CC0_NAME | not stored | declared protocol text | not assigned | NOT_ADMITTED_RIGHTS_UNRESOLVED |
+| SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | 643617f2e4a17283350aa24c5999edfc0a51f124 | Apache-2.0 | not stored | pinned validator behavior | not assigned | NOT_ADMITTED |
+| SRC-MICROSOFT-FHIR | public git candidate | independent implementation candidate | e164d39f1eff719bf0fd1f8ece559f52c93c1c9b | MIT | not stored | search-parameter validator test | upstream test, class not matched | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-PACKAGE-HOST | already authorized product host | packages.fhir.org or packages2.fhir.org | per package, not a corpus member | NOT_VERIFIED for benchmark reuse | one exact package only, already specified for product acquisition | package archive bytes | not commandF | NOT_ADMITTED |
 | SRC-CONSTRUCTED-ADVERSARIAL | fixture not written | none | none | not a clinical record | not acquired | constructed bytes | a recorded adjudication | NOT_ADMITTED |
@@ -237,6 +238,47 @@ INPUT_SHA256 = b68aeeeccfe2b45dd5dde91f331e0dfa53fc7ca112e1de2209d8a4bcfc4e3255
 STATE = CANDIDATE_CORPUS
 ITEM_COUNT = 3
 UPSTREAM_TEST_REPRODUCED = no
+```
+
+## Validator core, rights recorded, no item
+
+On 2026-10-01 the GitHub API returned `hapifhir/org.hl7.fhir.core` commit `643617f2e4a17283350aa24c5999edfc0a51f124`. `LICENSE.txt` is blob `261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64`, 11357 bytes, the same Apache-2.0 text already hashed for HAPI. `license/README.md` is blob `aa1944857a0a1e2b9cbac1195dcfbc9fc2199b6e`, 4133 bytes, SHA-256 `984a008e03fce6b0412b13f3fe4f49e4adfea338005cb2c282a4f03ac4d698ef`. It says this project uses an Apache 2.0 license. The root README does not name a second grant. No test bytes are stored.
+
+`FHIRPathTests.testEvaluate_JoinOnEmptyInput` evaluates `Patient.name.given.join(',')` on an empty Patient and expects an empty list. That is one successful evaluation. `FHIRPath` in the protocol asks for an expression that changes its accepted or rejected inputs. This method does not show that change. An empty result is also not a refused verdict, so it is not `Correct abstention`.
+
+```text
+SOURCE_ID = SRC-VALIDATOR-CORE
+REPOSITORY = hapifhir/org.hl7.fhir.core
+SOURCE_COMMIT = 643617f2e4a17283350aa24c5999edfc0a51f124
+RIGHTS_STATE = Apache-2.0 project grant
+STATE = NOT_ADMITTED
+```
+
+## Microsoft FHIR server, conflict test does not match
+
+On 2026-10-01 the GitHub API returned `microsoft/fhir-server` commit `e164d39f1eff719bf0fd1f8ece559f52c93c1c9b`. `LICENSE` is blob `21071075c24599ee98254f702bcfc504cdc275a6`, 1162 bytes, SHA-256 `27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0`. The file contains `MIT License` and `Copyright (c) Microsoft Corporation`. The README does not name a different grant. The GitHub license field was `MIT`.
+
+`SearchParameterValidatorTests.GivenSearchParameter_WhenValidatingProperties_ThenConflictingPropertiesShouldBeReported` builds one `SearchParameter` and stubs `CompareExpression` and `CompareComponent` with integers. The assertion depends on `int.MinValue`. It does not supply two evidence classes and it does not quote a disagreement between them. It is not `Conflicting evidence`. No bytes from this test are stored.
+
+```text
+SOURCE_ID = SRC-MICROSOFT-FHIR
+REPOSITORY = microsoft/fhir-server
+SOURCE_COMMIT = e164d39f1eff719bf0fd1f8ece559f52c93c1c9b
+CASE_CLASS = none matched
+RIGHTS_STATE = MIT
+STATE = NOT_ADMITTED
+```
+
+## Bulk Data license pointer
+
+On 2026-10-01 the GitHub API returned `HL7/bulk-data` commit `1939654c9c11cfe9ec83f649ba457be4cd4510c6`. The repository license field was `NOASSERTION`. `LICENSE` is blob `d8ffe253d1e0d83b3d5531df2c4f02ae5ca378a3`, 167 bytes, SHA-256 `4bbeba0e466d6f2a941fe67bd33dfc551d2434f6c7f7a4d57c9f20d2580a60ea`. The whole file names the HL7 FHIR license at `http://hl7.org/fhir/license.html` and also names Creative Commons CC0. It is not a standalone license text. The FHIR repository license record is already `MULTI_LICENSE`. No specification example is stored.
+
+```text
+SOURCE_ID = SRC-BULK-DATA
+REPOSITORY = HL7/bulk-data
+SOURCE_COMMIT = 1939654c9c11cfe9ec83f649ba457be4cd4510c6
+RIGHTS_STATE = NOT_ADMITTED_RIGHTS_UNRESOLVED
+STATE = NOT_ADMITTED_RIGHTS_UNRESOLVED
 ```
 
 
