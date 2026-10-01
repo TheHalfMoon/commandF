@@ -13,4 +13,4 @@ Planned comparison families, not results:
 - B6 plus sufficiency and abstention
 - B7 plus calibrated advisory layer
 
-The implementation commit and the missing families are recorded in `research/BASELINE_IDENTITIES.md`. Execution and scores stay `RESULT_PENDING`. No baseline is claimed to lack a capability.
+The implementation commit and the missing families are recorded in `research/BASELINE_IDENTITIES.md`. Execution stays `NOT_EXECUTED` and scores stay `RESULT_PENDING`. No baseline is claimed to lack a capability.

@@ -11,7 +11,7 @@ BUILT_BINARY_DIGEST = NOT_RECORDED
 RESULT = RESULT_PENDING
 ```
 
-## Commands that exist at that commit
+## Baseline-relevant commands at that commit
 
 | Command | What the source calls | Default flags in the CLI |
 | --- | --- | --- |
@@ -23,12 +23,14 @@ RESULT = RESULT_PENDING
 
 `diff`, `classify`, `check`, and `oracle` take a package name plus a before lock, a before cache, an after lock, and an after cache. Their stdout is JSON. `check` returns process status 0 when `decision.passed` is true and 2 otherwise. This record does not treat either status as a benchmark label. CommandF output is not a label.
 
+Other commands at that commit, including `inspect`, `impact`, `terminology`, `gate`, `source-map`, and `github-annotations`, are not a B0–B7 identity.
+
 ## Family map
 
 | Family | Identity at this commit | Capability boundary |
 | --- | --- | --- |
 | B0 structural diff only | `commandf diff` | archive structural diff JSON. It does not call `evaluate_compatibility_policy`. `classify` is a later structural classification of that diff. It is not B0 and it is not B2. |
-| B1 FHIR validation only | not pinned | `commandf oracle` is not validation-only. It requires a caller-supplied adapter path and an optional Java path. |
+| B1 FHIR validation only | `NOT_PINNED` | `commandf oracle` is not validation-only. It requires a caller-supplied adapter path and an optional Java path. |
 | B2 deterministic compatibility rules | `commandf check` with the defaults above | policy over the structural classification, including the diff those functions read. |
 | B3 rules plus context graph | `NOT_IMPLEMENTED` | `context` is a separate command. No command feeds that graph into `check`. |
 | B4 rules plus graph plus consumer contracts | `NOT_IMPLEMENTED` | `--direction consumer` is a check direction. It is not a consumer-contract document, and the crates do not contain one. |
