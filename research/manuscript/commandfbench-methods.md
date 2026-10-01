@@ -4,7 +4,7 @@ Status: RESEARCH_PLANNING. This is the methods text for the admission and analys
 
 ## Admission
 
-Membership follows `research/BENCHMARK_ADMISSION_LIFECYCLE.md`. A source name is not membership. A pre-admission digest is not membership. An item enters `research/CANDIDATE_CORPUS.md` only after exact bytes, a SHA-256, rights, a named case class, and a label that commandF did not mint. Human adjudication is required only when no external published label exists. No adjudication has been run.
+Membership follows `research/BENCHMARK_ADMISSION_LIFECYCLE.md`. A source name is not membership. A pre-admission digest is not membership. An item enters `research/CANDIDATE_CORPUS.md` only after a named case class, exact bytes or an exact generator and its inputs, a SHA-256, source identity and rights, a label that commandF did not mint, a statement that the bytes are not private clinical data, and a replay procedure. Human adjudication is required only when no external published label exists. No adjudication has been run.
 
 The current candidate corpus has three members, all from `hapifhir/hapi-fhir` at commit `e307df6b64ff87c55af1607160f57141dbeb0360`, under Apache-2.0. The classes are malformed evidence, unsupported evidence, and partial evidence. CommandF minted no label.
 
