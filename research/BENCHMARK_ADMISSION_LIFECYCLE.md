@@ -43,7 +43,8 @@ After the candidate corpus digest is fixed:
 - commandF output is not an input to the assignment.
 
 ```text
-SPLIT_POLICY = specified in research/SPLIT_POLICY.md as sp-1
+SPLIT_POLICY = SPECIFIED
+SPLIT_POLICY_VERSION = sp-1
 SPLIT_ASSIGNMENT = NOT_ASSIGNED
 HELD_OUT_MANIFEST = NOT_BOUND
 ITEM_COUNT = recorded in research/CANDIDATE_CORPUS.md

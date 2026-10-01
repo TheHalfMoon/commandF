@@ -19,7 +19,7 @@ An item may be added only after a later record supplies all of the following:
 - a statement that the bytes are not private clinical data;
 - a replay procedure.
 
-A split assignment is not required to enter this corpus. It is computed later from a candidate digest under `research/SPLIT_POLICY.md`, and the held-out manifest is bound at the protocol freeze. The current three members share one source repository, so that policy does not assign them. A missing field above keeps the item out. CommandF output cannot fill the label. A registry response is not a corpus item until its bytes are the bytes that were hashed.
+A split assignment is not required to enter this corpus. It is computed later from a candidate digest under `research/SPLIT_POLICY.md`, and the held-out manifest is bound at the protocol freeze. The current three members share one source repository, so version `sp-1` does not assign them. A missing field above keeps the item out. CommandF output cannot fill the label. A registry response is not a corpus item until its bytes are the bytes that were hashed.
 
 ## Current manifest
 
@@ -29,7 +29,8 @@ CORPUS_DIGEST = e92d734ab2981691322074f9d963bcf6ffc9058dace3875fdea64d2558b417aa
 LABELS = 3 external published labels
 LABELS_MINTED_BY_COMMANDF = 0
 HELD_OUT_SPLIT = NOT_FROZEN
-SPLIT_POLICY = specified in research/SPLIT_POLICY.md
+SPLIT_POLICY = SPECIFIED
+SPLIT_POLICY_VERSION = sp-1
 SPLIT_ASSIGNMENT = NOT_ASSIGNED
 RIGHTS = Apache-2.0 for all three members
 ```

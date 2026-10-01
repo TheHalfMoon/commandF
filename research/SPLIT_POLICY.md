@@ -69,7 +69,7 @@ Those three digests are one group. The group id is `648e748c3dd5d3f71724bb543a99
 
 ## Role rule, not applied here
 
-When the conditions above hold, each group is assigned once. The input is the UTF-8 bytes of `sp-1`, a newline, and the group id. Let `n` be the integer formed by the first eight bytes of the SHA-256 of that input, big-endian. The role is `held_out` when `n` modulo 5 is 0. Otherwise the role is `development`.
+When the conditions above hold, each group is assigned once. The input is the UTF-8 bytes of the literal `sp-1`, one byte `0x0A`, and the lowercase hexadecimal group id, with no byte after the group id. Let `n` be the integer formed by the first eight bytes of the SHA-256 of that input, big-endian. The role is `held_out` when `n` modulo 5 is 0. Otherwise the role is `development`.
 
 Every item in a group receives that group's role. One item receives one role. The same digest and the same policy version produce the same roles. The modulus 5 is a constant of version sp-1. It was not fit to a score and it was not fit to this three-item digest.
 
