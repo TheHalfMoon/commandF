@@ -1,6 +1,6 @@
 # Candidate Corpus
 
-Status: RESEARCH_PLANNING. Two candidate members. Not frozen.
+Status: RESEARCH_PLANNING. Three candidate members. Not frozen.
 
 This document is the admission gate for CommandFBench items. Membership here is not a protocol freeze and not an experiment.
 
@@ -24,12 +24,12 @@ A split assignment is not required to enter this corpus. It is computed later fr
 ## Current manifest
 
 ```text
-ITEM_COUNT = 2
-CORPUS_DIGEST = 255a361db47e2e4a1e0e19e26589893c5b3458e235c82c59c2483adbb865bf7b
-LABELS = 2 external published labels
+ITEM_COUNT = 3
+CORPUS_DIGEST = e92d734ab2981691322074f9d963bcf6ffc9058dace3875fdea64d2558b417aa
+LABELS = 3 external published labels
 LABELS_MINTED_BY_COMMANDF = 0
 HELD_OUT_SPLIT = NOT_FROZEN
-RIGHTS = Apache-2.0 for both members
+RIGHTS = Apache-2.0 for all three members
 ```
 
 The digest of one item is the SHA-256 of the UTF-8 canonical JSON in that item record, with keys sorted and no insignificant whitespace. The corpus digest is the SHA-256 of those item lines in item order, joined by a single newline and with no trailing newline.
@@ -67,4 +67,20 @@ The test file is blob `e2f2e5fb97af0d12c96fb77fd4844beadef6de6e`, 6345 bytes, SH
 `testUnsupportedNotIn` is the same shape with `:not-in`. It is not a second item.
 
 This item does not assign a split. It does not freeze the protocol. It does not authorize an experiment or a product change.
+
+## Item 3
+
+Case class: Partial evidence. The input is well-formed JSON. The key is `resourceTypeeeee`, so the required FHIR element `resourceType` is absent. The upstream client test expects that absence.
+
+```text
+{"case_class":"Partial evidence","input_sha256":"b68aeeeccfe2b45dd5dde91f331e0dfa53fc7ca112e1de2209d8a4bcfc4e3255","input_text":"{\"resourceTypeeeee\":\"Patient\"}","label_method":"testReadWithUnparseableResponse","label_statement":"FhirClientConnectionException containing missing required element: 'resourceType'","source_blob":"1bd9b98c060c43b5afa07ad557016f662eafc1ad","source_commit":"e307df6b64ff87c55af1607160f57141dbeb0360","source_path":"hapi-fhir-structures-r4/src/test/java/ca/uhn/fhir/rest/client/GenericClientR4Test.java","source_repository":"hapifhir/hapi-fhir","source_sha256":"94b987a0a8dd9dfb3948cf40260080c8bbe590ebc02413dd7ed9122b95e491fd"}
+```
+
+The input is 30 UTF-8 bytes. SHA-256 `b68aeeeccfe2b45dd5dde91f331e0dfa53fc7ca112e1de2209d8a4bcfc4e3255`. It names a resource type only as a misspelled key and a string value. It names no person, identifier, or clinical note.
+
+`GenericClientR4Test.java` at the same HAPI commit is blob `1bd9b98c060c43b5afa07ad557016f662eafc1ad`, 185964 bytes, SHA-256 `94b987a0a8dd9dfb3948cf40260080c8bbe590ebc02413dd7ed9122b95e491fd`. The file starts with `package ca.uhn.fhir.rest.client;` and states no license of its own. The repository grant is the same Apache-2.0 `LICENSE.txt` already recorded for `SRC-HAPI-FHIR`. The Java file is not copied here.
+
+`testReadWithUnparseableResponse` supplies that exact string as the HTTP response body with content type `Constants.CT_FHIR_JSON`. It asserts `FhirClientConnectionException` and `assertEquals` against a message built with `Msg.code(1359)` and `Msg.code(1838)`. The string literals in that assertion include `Failed to parse response from server when performing GET to URL http://example.com/fhir/Patient/123?_elements=identifier%2Cname` and `Invalid JSON content detected, missing required element: 'resourceType'`. The hashed label keeps the required-element fragment. The test was not executed here, so this record does not store an expanded runtime message. Replay is to run that method at the named commit.
+
+The method name says unparseable. The bytes are still one JSON object. The published failure is a missing required element, not a trailing token and not an array root. `Malformed evidence` stays the trailing-token item. This item does not assign a split. It does not freeze the protocol. It does not authorize an experiment or a product change.
 

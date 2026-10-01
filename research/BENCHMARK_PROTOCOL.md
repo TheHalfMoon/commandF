@@ -28,7 +28,7 @@ Each class below is planned. None has a frozen item, a count, or a label produce
 | Adversarial mutations | A change is constructed to resemble a safe edit and is not | `RESULT_PENDING` |
 | Irrelevant mutations | A change is constructed to leave the claimed contract unchanged | `RESULT_PENDING` |
 | Malformed evidence | The input bytes do not parse as the declared artifact | 1 candidate member, not frozen |
-| Partial evidence | A required evidence class is absent | `RESULT_PENDING` |
+| Partial evidence | A required evidence class is absent | 1 candidate member, not frozen |
 | Unsupported evidence | The declared evidence class is outside the evaluator contract | 1 candidate member, not frozen |
 | Conflicting evidence | Two supplied evidence classes do not agree | `RESULT_PENDING` |
 | Correct abstention | The safe output is to refuse a proven verdict | `RESULT_PENDING` |

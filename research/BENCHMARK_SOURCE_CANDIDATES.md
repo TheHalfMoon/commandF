@@ -16,6 +16,7 @@ These rows name public sources already listed as candidates in `docs/COMMAND_F_O
 | SRC-HAPI-FHIR | public git candidate | independent implementation, not adopted | observed, not pinned | Apache-2.0 | fixture hashed, bytes not stored as a corpus member | validation fixture plus upstream assertion | upstream test assertion, not commandF | NOT_ADMITTED |
 | SRC-HAPI-JSON-PARSE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | malformed JSON literal | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-HAPI-UNSUPPORTED-IN | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | in-memory search qualifier | upstream test assertion, not commandF | CANDIDATE_CORPUS |
+| SRC-HAPI-PARTIAL-RESOURCE-TYPE | public git candidate | independent implementation, not adopted | e307df6b64ff87c55af1607160f57141dbeb0360 | Apache-2.0 | input quoted; test file not copied | FHIR JSON object missing resourceType | upstream test assertion, not commandF | CANDIDATE_CORPUS |
 | SRC-BULK-DATA | public git candidate | NORMATIVE candidate | NOT_PINNED | NOT_VERIFIED | not acquired | declared protocol text | the pinned specification text | NOT_ADMITTED |
 | SRC-VALIDATOR-CORE | public git candidate | process-oracle candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned validator behavior | the pinned tool, not commandF | NOT_ADMITTED |
 | SRC-FIRELY-SDK | public git candidate | independent implementation candidate | NOT_PINNED | NOT_VERIFIED | not acquired | pinned independent behavior | the pinned tool, not commandF | NOT_ADMITTED |
@@ -199,6 +200,25 @@ SOURCE_ID = SRC-HAPI-UNSUPPORTED-IN
 CASE_CLASS = Unsupported evidence
 STATE = CANDIDATE_CORPUS
 ITEM_COUNT = 2
+UPSTREAM_TEST_REPRODUCED = no
+```
+
+## Missing resourceType, candidate member
+
+`Partial evidence` asks for a required evidence class that is absent. `testReadWithUnparseableResponse` in `GenericClientR4Test.java` at the same HAPI commit sets the response body to `{"resourceTypeeeee":"Patient"}`. That text is 30 UTF-8 bytes. SHA-256 `b68aeeeccfe2b45dd5dde91f331e0dfa53fc7ca112e1de2209d8a4bcfc4e3255`. The method asserts `FhirClientConnectionException` and a message that contains `missing required element: 'resourceType'`.
+
+The bytes are one JSON object. The required FHIR element is absent because the key is misspelled. That is not the trailing-token parse failure and not the array-root rejection. The method name says unparseable. The class follows the assertion, which names a missing required element. The item is member 3 in `research/CANDIDATE_CORPUS.md`. The test was not executed here.
+
+`testEncodeWithInvalidExtensionMissingUrl` in `JsonParserR4Test.java` at the same commit also reports a missing required `url`. Its input is a Java object graph, and the test does not bind the encoded bytes. It is not a corpus member.
+
+```text
+SOURCE_ID = SRC-HAPI-PARTIAL-RESOURCE-TYPE
+CASE_CLASS = Partial evidence
+INPUT_TEXT = {"resourceTypeeeee":"Patient"}
+INPUT_BYTE_COUNT = 30
+INPUT_SHA256 = b68aeeeccfe2b45dd5dde91f331e0dfa53fc7ca112e1de2209d8a4bcfc4e3255
+STATE = CANDIDATE_CORPUS
+ITEM_COUNT = 3
 UPSTREAM_TEST_REPRODUCED = no
 ```
 
