@@ -603,12 +603,12 @@ fn review_preview_bytes(check: &[u8], impact: &[u8]) -> io::Result<Vec<u8>> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "report size overflow"))?,
     );
     output.extend_from_slice(
-        b"{\\n  \\"schema\\": 1,\\n  \\"scope\\": \\"structural-and-declared-graph-preview\\",\\n  \\"complete_consumer_contract_review\\": false,\\n  \\"atomic_cross_step_snapshot\\": false,\\n  \\"signed_receipt\\": false,\\n  \\"check\\": ",
+        b"{\n  \"schema\": 1,\n  \"scope\": \"structural-and-declared-graph-preview\",\n  \"complete_consumer_contract_review\": false,\n  \"atomic_cross_step_snapshot\": false,\n  \"signed_receipt\": false,\n  \"check\": ",
     );
-    output.extend_from_slice(check.strip_suffix(b"\\n").unwrap_or(check));
-    output.extend_from_slice(b",\\n  \\"impact\\": ");
-    output.extend_from_slice(impact.strip_suffix(b"\\n").unwrap_or(impact));
-    output.extend_from_slice(b"\\n}\\n");
+    output.extend_from_slice(check.strip_suffix(b"\n").unwrap_or(check));
+    output.extend_from_slice(b",\n  \"impact\": ");
+    output.extend_from_slice(impact.strip_suffix(b"\n").unwrap_or(impact));
+    output.extend_from_slice(b"\n}\n");
     Ok(output)
 }
 
