@@ -60,11 +60,19 @@ fn github_http_status(stderr: &[u8]) -> Option<u16> {
 #[test]
 fn github_authority_http_observation_does_not_mistake_403_for_success() {
     assert_eq!(
-        github_http_status(b"curl: (22) The requested URL returned error: 403\nCOMMANDF_GITHUB_HTTP_STATUS=403\n"),
+        github_http_status(
+            b"curl: (22) The requested URL returned error: 403\nCOMMANDF_GITHUB_HTTP_STATUS=403\n"
+        ),
         Some(403)
     );
-    assert_eq!(github_http_status(b"COMMANDF_GITHUB_HTTP_STATUS=000\n"), None);
-    assert_eq!(github_http_status(b"curl: (28) Connection timed out\n"), None);
+    assert_eq!(
+        github_http_status(b"COMMANDF_GITHUB_HTTP_STATUS=000\n"),
+        None
+    );
+    assert_eq!(
+        github_http_status(b"curl: (28) Connection timed out\n"),
+        None
+    );
     assert_eq!(
         github_http_status(b"COMMANDF_GITHUB_HTTP_STATUS=200\n"),
         Some(200)
