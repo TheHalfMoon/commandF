@@ -24,6 +24,7 @@ use commandf_pkg::{
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_SUSHI_INDEX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_RUNTIME_DIAGNOSTIC_CHARS: usize = 4_096;
+const MAX_REVIEW_PREVIEW_PART_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -118,6 +119,24 @@ enum Command {
         output: Option<PathBuf>,
     },
     Gate(gate::GateArgs),
+    /// Partial preview: existing deterministic check + graph impact, not consumer-contract review.
+    ReviewPreview {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "both")]
+        direction: CheckDirectionArg,
+        #[arg(long, value_enum, default_value = "breaking")]
+        fail_on: CheckFailOnArg,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     Terminology {
         package: String,
         #[arg(long)]
@@ -243,7 +262,9 @@ fn main() -> ExitCode {
     let command = std::env::args_os().nth(1);
     let normalize_usage_exit = matches!(
         command.as_deref(),
-        Some(value) if value == OsStr::new("check") || value == OsStr::new("gate")
+        Some(value) if value == OsStr::new("check")
+                || value == OsStr::new("gate")
+                || value == OsStr::new("review-preview")
     );
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
@@ -429,6 +450,44 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             return Ok(ExitCode::from(2));
         }
         Command::Gate(args) => return gate::run(args),
+        Command::ReviewPreview {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            direction,
+            fail_on,
+            output,
+        } => {
+            // Preview is explicitly non-atomic across the two read paths. Both
+            // subreports verify cached archive bytes, but they are not a signed
+            // receipt or a frozen consumer-contract judgment.
+            let diff = build_diff_report(
+                package.clone(),
+                before_lock.clone(),
+                before_cache.clone(),
+                after_lock.clone(),
+                after_cache.clone(),
+            )?;
+            let classification = classify_structural_diff(&diff)?;
+            let check = evaluate_compatibility_policy(
+                &classification,
+                CheckPolicy {
+                    direction: direction.into(),
+                    fail_on: fail_on.into(),
+                },
+            )?;
+            let check_bytes = check.to_json_bytes()?;
+            let impact_bytes =
+                impact::run(package, before_lock, before_cache, after_lock, after_cache)?;
+            let bytes = review_preview_bytes(&check_bytes, &impact_bytes)?;
+            write_check_output(&bytes, output.as_deref())?;
+            if !check.decision.passed {
+                return Ok(ExitCode::from(2));
+            }
+            return Ok(ExitCode::SUCCESS);
+        }
         Command::Terminology {
             package,
             before_lock,
@@ -522,6 +581,35 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// A narrow preview of existing typed reports. Input values are already
+/// serialized JSON by the deterministic library, never user-provided strings.
+/// Do not label this envelope a signed receipt or complete consumer review.
+fn review_preview_bytes(check: &[u8], impact: &[u8]) -> io::Result<Vec<u8>> {
+    if check.len() > MAX_REVIEW_PREVIEW_PART_BYTES
+        || impact.len() > MAX_REVIEW_PREVIEW_PART_BYTES
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "review-preview report part exceeds 64 MiB limit",
+        ));
+    }
+    let mut output = Vec::with_capacity(
+        check
+            .len()
+            .checked_add(impact.len())
+            .and_then(|size| size.checked_add(512))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "report size overflow"))?,
+    );
+    output.extend_from_slice(
+        b"{\\n  \\"schema\\": 1,\\n  \\"scope\\": \\"structural-and-declared-graph-preview\\",\\n  \\"complete_consumer_contract_review\\": false,\\n  \\"atomic_cross_step_snapshot\\": false,\\n  \\"signed_receipt\\": false,\\n  \\"check\\": ",
+    );
+    output.extend_from_slice(check.strip_suffix(b"\\n").unwrap_or(check));
+    output.extend_from_slice(b",\\n  \\"impact\\": ");
+    output.extend_from_slice(impact.strip_suffix(b"\\n").unwrap_or(impact));
+    output.extend_from_slice(b"\\n}\\n");
+    Ok(output)
 }
 
 fn sanitize_runtime_diagnostic(error: &dyn std::fmt::Display) -> String {
