@@ -46,6 +46,31 @@ const RETAINED_RUN: &[u8] =
 const RETAINED_ARTIFACTS: &[u8] =
     include_bytes!("../../../tools/af02-verifier/tests/fixtures/cf10-artifacts.json");
 
+// This is diagnostic-only evidence. A 403, missing status, or transport error
+// must still fail the canonical authority reconstruction rather than become PASS.
+fn github_http_status(stderr: &[u8]) -> Option<u16> {
+    let output = std::str::from_utf8(stderr).ok()?;
+    output
+        .lines()
+        .filter_map(|line| line.strip_prefix("COMMANDF_GITHUB_HTTP_STATUS="))
+        .filter_map(|code| code.parse::<u16>().ok())
+        .find(|code| (100..=599).contains(code))
+}
+
+#[test]
+fn github_authority_http_observation_does_not_mistake_403_for_success() {
+    assert_eq!(
+        github_http_status(b"curl: (22) The requested URL returned error: 403\nCOMMANDF_GITHUB_HTTP_STATUS=403\n"),
+        Some(403)
+    );
+    assert_eq!(github_http_status(b"COMMANDF_GITHUB_HTTP_STATUS=000\n"), None);
+    assert_eq!(github_http_status(b"curl: (28) Connection timed out\n"), None);
+    assert_eq!(
+        github_http_status(b"COMMANDF_GITHUB_HTTP_STATUS=200\n"),
+        Some(200)
+    );
+}
+
 static GIT_FETCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn repository_root() -> PathBuf {
@@ -183,13 +208,17 @@ fn github_content_object_bytes(revision: &str, path: &str, expected_blob: &str) 
             "X-GitHub-Api-Version: 2022-11-28",
             "--header",
             "User-Agent: commandF-af02-authority-reconstruction",
+            "--write-out",
+            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\\n",
             &url,
         ])
         .output()
         .expect("fetch immutable GitHub authority object with curl");
     assert!(
         response.status.success(),
-        "immutable GitHub authority request failed for {revision}:{path}: {}",
+        "immutable GitHub authority request unavailable for {revision}:{path}; HTTP status={:?}, curl exit={:?}, stderr: {}",
+        github_http_status(&response.stderr),
+        response.status.code(),
         String::from_utf8_lossy(&response.stderr)
     );
     assert_eq!(
@@ -327,13 +356,17 @@ fn github_api_bytes(url: &str) -> Vec<u8> {
             "X-GitHub-Api-Version: 2022-11-28",
             "--header",
             "User-Agent: commandF-af02-authority-reconstruction",
+            "--write-out",
+            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\\n",
             url,
         ])
         .output()
         .expect("fetch live GitHub authority response with curl");
     assert!(
         response.status.success(),
-        "GitHub authority request failed for {url}: {}",
+        "GitHub authority request unavailable for {url}; HTTP status={:?}, curl exit={:?}, stderr: {}",
+        github_http_status(&response.stderr),
+        response.status.code(),
         String::from_utf8_lossy(&response.stderr)
     );
     response.stdout
