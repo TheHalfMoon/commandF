@@ -209,7 +209,7 @@ fn github_content_object_bytes(revision: &str, path: &str, expected_blob: &str) 
             "--header",
             "User-Agent: commandF-af02-authority-reconstruction",
             "--write-out",
-            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\\n",
+            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\n",
             &url,
         ])
         .output()
@@ -357,7 +357,7 @@ fn github_api_bytes(url: &str) -> Vec<u8> {
             "--header",
             "User-Agent: commandF-af02-authority-reconstruction",
             "--write-out",
-            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\\n",
+            "%{stderr}COMMANDF_GITHUB_HTTP_STATUS=%{http_code}\n",
             url,
         ])
         .output()
