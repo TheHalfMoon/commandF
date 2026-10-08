@@ -10,7 +10,7 @@ Every phase below names whether it is permitted **under current V2 authority** o
 | --- | --- | --- | --- | --- |
 | **FD-1** | Rule for when the AF-02 base gate's rejection may be overridden, and how the gate becomes amendable | P0, every dependency and workflow PR | (a) Keep the status quo: ad-hoc merges past a non-required failing check (as in #101). (b) A one-time founder-ratified bootstrap PR that adds an *amendment-record* admission path to the verifier, followed by making the gate required (FD-2). (c) Retire the gate. | **(b).** (a) is undocumented authority. (c) loses real protection. |
 | **FD-2** | Add `af02-base-verifier` to the required checks of ruleset 21652953, after FD-1(b) lands | Durable governance | — | Yes, but only after the amendment path is proven, or every dependency update deadlocks. |
-| **FD-3** | Accept `HISTORICAL_ARTIFACT_BYTES_UNAVAILABLE` as the terminal state for issue #100 and close it on the forward durable mechanism | Retained-authority clean-up | — | Yes. The bytes cannot be recovered, and spec 019 proves the search was honest. |
+| **FD-3** | Record permanent historical-byte unavailability and decide issue #100 disposition **only after** a forward evidence mechanism has been independently implemented and its retrieval/replay/retention tested | Retained-authority clean-up | Keep #100 open and linked to the proposed design until that qualification | Do not close #100 merely because the historical bytes are irrecoverable or a future design has been written. |
 | **FD-4** | CF-06 oracle repin target (6.10.4, 7.0.0, or a later release containing the #2554 fix) | Issue #15 | — | Defer. Close Dependabot #93. Repin only after upstream merges the fix and a full qualification runs. |
 | **FD-5** | Rights position for the `FHIR/ig-registry` data (no LICENSE file) | CF-17 catalog, G54 namespace masks | Ask HL7/FHIR infrastructure maintainers; treat as facts and not copyrightable expression (legal opinion needed); or do not use | Ask the maintainers in writing first. |
 | **FD-6** | commandF repository license | First release | Apache-2.0 (consistent with the founder's other repositories), MPL-2.0, or other | Founder's choice. Required before any release. |
@@ -57,7 +57,7 @@ Permitted under V2 now, except where FD-1 is required.
 | Grain (proposed seq.) | Output | Acceptance | Touches AF-02 authority? |
 | --- | --- | --- | --- |
 | 051 governance-amendment-path (Spec Kit, docs only) | The design of the amendment-record admission (migration proposal §3) | Independent review; FD-1 recorded on a PR | No (the spec is under `specs/051-*`) |
-| 051 implementation (bootstrap PR) | Verifier change, regression tests, workflow unchanged | Migration proposal §3 steps 3–7 | **Yes.** It is the one sanctioned bootstrap. |
+| 051 implementation (bootstrap PR) | Verifier change, regression tests, workflow unchanged | Migration proposal §3 steps 3–7; **specific exact-SHA founder exception must first be explicitly approved** | **Yes.** This is a proposed one-time bootstrap, not a currently authorized bypass. |
 | 052 status-ledger (docs + generator) | A generated `docs/STATUS_LEDGER.json` and `.md` deriving each Spec Kit's status from tree evidence (merge SHAs, closeout files) and live issue state at a recorded time | The generator is deterministic. The ledger diff is reviewed. It reconciles the audit §5.3 contradictions **without editing historical files**, by superseding them in the ledger. | No |
 | 053 equivalent-pattern audit (G49) | A record proving no remaining unverified-byte or unbounded-read consumer: a grep-based inventory plus tests | Each consumer path is listed with its verified-read evidence | No |
 | PR triage | Per audit §6 | Each closure is commented with a reason. Nothing is merged mechanically. | Some PRs (after FD-1) |
@@ -152,7 +152,7 @@ As in the diagram. Each needs its own Spec Kit, and each states its user-visible
 
 - Issue #15 / CF-06 repin: upstream #2554 is open, and FD-4 is required.
 - The CF-10 corpus (PR #11): depends on issue #15.
-- Issue #100 historical bytes: unrecoverable (FD-3 decides the terminal state).
+- Issue #100 historical bytes: unavailable, with no fabricated substitute. Keep the issue open until the forward mechanism is implemented, independently qualified, and FD-3 explicitly decides the truthful closure/disposition.
 - Any quantitative performance claim: AF-04.
 - Any accuracy, safety, or superiority claim: P9 and the bench falsification criteria.
 - D1 in any distribution: FD-7, D1-4 GO.

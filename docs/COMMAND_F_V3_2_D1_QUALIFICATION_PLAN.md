@@ -102,6 +102,7 @@ Option B launch contract:
 - `-m <verified local GGUF path>`;
 - no `-hf` or `--hf-*` flags, so the runtime cannot download;
 - web UI disabled;
+- no claim that loopback binding prevents outbound network connections: evaluate OS-level process/firewall egress restrictions and run network-observation tests on Windows/Linux/macOS; if containment is unavailable, state the residual risk and do not label the process `NO_EGRESS_PROVEN`;
 - fixed `--ctx-size`, `--threads`, and `--parallel 1`;
 - no `mmproj`.
 

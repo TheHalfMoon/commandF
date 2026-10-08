@@ -52,3 +52,14 @@ Status: **PLANNING_CANDIDATE / AUTHOR SELF-CRITIQUE / NOT AN INDEPENDENT VERIFIC
 | Jev | The CLI is available locally, but it requires a TypeSafe API key (hosted, paid). | Not run. `BLOCKED_COST_NOT_AUTHORIZED`. Not a PASS. |
 | Graft, pstack | Graft is installed locally but is not wired into this repository (PR #169 is open). pstack is not found. | Not used. |
 | Hosted reviewers (CodeRabbit, Cubic, Qodo) | May run automatically on the PR | Not qualification evidence under current governance |
+
+## 5. Independent architecture-review findings to resolve before merge (2026-10-08)
+
+This section records a separate architecture review of PR #187; it is **not** a human Code Owner approval, execution of Alibaba OCR, or an independent proof of code correctness. The existing self-critique remains accurately labeled as such.
+
+- **A-01 Evidence availability:** prior migration §4 incorrectly claimed objects under arbitrary `refs/evidence/**` would be replicated by every clone. Git's normal fetch refspec, shallow/single-branch clones, object retention, and provider availability make that untrue. The corrected proposal defaults to bounded reviewed evidence bytes on a canonical branch and demands independently tested recovery. The original historical artifact in issue #100 remains unavailable.
+- **A-02 Premature issue closure:** an unrecoverable artifact and a proposed future protocol do not equal a completed repair. Issue #100 stays open until forward mechanism qualification and an explicit truthful disposition decision.
+- **A-03 Governance scope:** an admin bypass capability is not itself founder authorization to override AF-02. FD-1 must refer to one exact candidate head, base, files, review, and failed gate evidence; any subsequent head change invalidates it.
+- **A-04 Model boundaries:** a loopback listener only limits inbound listener exposure; it does not prove that the child process cannot initiate outbound connections. The advisor plan now requires an observed offline/no-egress test and host-level restriction or an explicit documented isolation limitation.
+
+This planning correction does not claim human review, restore absent evidence, authorize workflow/ruleset changes, or migrate execution authority from V2.

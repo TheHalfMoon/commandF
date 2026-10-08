@@ -28,7 +28,7 @@ This proposal describes how execution authority could move from V2 to a qualifie
 | C4 | G01–G54 each have exactly one primary owner. | `COMMAND_F_V3_2_GAP_RECONCILIATION_LEDGER.md` re-verified against live specs |
 | C5 | No dependency cycle: no phase consumes later-phase evidence. | Roadmap §2 re-checked |
 | C6 | The live rulesets match the recorded snapshot, or the delta is recorded. | `gh api` readback committed as text |
-| C7 | Open issues #15 and #100 are dispositioned as in roadmap §5. | Issue comments |
+| C7 | Open issues #15 and #100 have accurate blocking statuses and linked evidence; #100 is not closed by an unimplemented forward proposal. | Live issue readback and issue comments |
 
 ## 3. AF-02 governance deadlock: legitimate resolution path (G51)
 
@@ -40,7 +40,7 @@ This proposal describes how execution authority could move from V2 to a qualifie
 
 ### 3.2 Why no purely mechanical path exists
 
-Any change to the gate is a change to an authority path, which the gate rejects. Adding the gate's acceptance logic in data is impossible, because data is never executed (spec 050). Therefore **a stronger authority than the gate is required exactly once**. In this repository that authority is the founder: the admin role with Code Owner review under ruleset 21652974. That is decision **FD-1**.
+Any change to the gate is a change to an authority path, which the gate rejects. Adding the gate's acceptance logic in data is impossible, because data is never executed (spec 050). Therefore **a stronger authority than the gate is required exactly once**. The repository offers a founder-admin bypass capability, but use of that capability is **not** automatically authorized merely because it exists. A single exceptional action requires a separate exact-base-and-head, exact-path, human-reviewed FD-1 approval recorded against the specific bootstrap PR; this plan is not that approval.
 
 ### 3.3 Proposed protocol: amendment records that live in the base, not the candidate
 
@@ -66,7 +66,7 @@ Cost: every authority change takes two PRs. This is deliberate friction for auth
 ### 3.4 Bootstrap procedure (one time)
 
 1. **Spec Kit 051** (docs only; touches no authority path; passes every gate): the design above, the threat model, and the test list.
-2. **FD-1 recorded**: a founder comment on the bootstrap PR naming the exact head SHA, the exact changed paths with before/after blob SHAs, and the statement that the AF-02 base-gate rejection on this head is overridden once.
+2. **FD-1 requested, not presumed**: after the exact candidate commit exists and independent review is available, request a separate founder comment on that specific bootstrap PR naming exact base and head commit SHAs, every changed authority path with before/after blob SHAs, and the one-time override scope. The founder must explicitly approve the precise exception before an admin bypass may be used. Any later head change invalidates that exception.
 3. **Bootstrap PR contents, limited to:**
    - `tools/af02-verifier/src/base_gate.rs` and a new `amendment.rs`, plus its module declaration;
    - tests;
@@ -101,41 +101,49 @@ After step 8, the class of decision in step 2 should never be needed again. All 
 - Reopening PR #146.
 - Rewriting specs 049 or 050.
 
-## 4. Issue #100: a durable, content-addressed authority mechanism
+## 4. Issue #100: historical unavailability and a forward durable-evidence design
 
-**Historical facts (immutable).**
+**Historical facts remain binding and are not repaired by planning.**
 
-- Artifact `9255732702` (`cf10-real-corpus-evidence`).
-- Run `31916124080`, conclusion `failure`.
-- Digest `sha256:9fdde985…af612`.
-- The bytes are unavailable (spec 019).
+- Artifact `9255732702` (`cf10-real-corpus-evidence`), run `31916124080`, historical conclusion `failure`.
+- Original artifact digest: `sha256:9fdde985bb5abbe53ec2bce2dadc5f65c95557f8848c9af68755fc81a45af612`.
+- The original artifact bytes are unavailable. The only truthful reconstruction result for those specific unavailable bytes is `HISTORICAL_ARTIFACT_BYTES_UNAVAILABLE`.
+- A new execution, an author-authored fixture, a semantically similar output, or a new manifest is **not** a replacement for those bytes.
+- Issue #100 **remains open** while the forward protocol is only a plan. FD-3 is a future disposition decision, not approval to close it now. A later issue closure can acknowledge the historical loss as permanent **only after** forward controls are implemented, tested, and independently reviewed; it must never claim that the historical proof succeeded or that its bytes were recovered.
 
-These are never re-labeled and never regenerated as a substitute.
+### 4.1 Storage and reachability are different requirements
 
-**Forward mechanism**, designed in a new grain and not in spec 017 or 019, which are kept as they are:
+The previous proposal of using `refs/evidence/**` alone is **withdrawn**. A standard clone usually fetches ordinary heads via its configured refspec; it does **not** imply fetching arbitrary `refs/evidence/**` namespaces. Git object hashing proves identity of bytes that are present, not availability, completeness, access control, retention, or independent authority. GitHub is not an unconditional permanent archive.
 
-1. **Deterministic evidence bundles.** A proof workflow writes a tar with:
-   - sorted entries;
-   - mtime 0;
-   - uid and gid 0;
-   - no extended attributes;
-   - either no compression or a pinned gzip implementation and level.
+**Preferred candidate for small, redistributable evidence:** reviewed, bounded content-addressed packets under a normal, protected canonical-branch path such as `evidence/retained/<digest>/` with a manifest, exact bytes, provenance, verification recipe, and rights/disclosure disposition. Each packet enters through a separate reviewed PR, not a CI self-write that edits `main` directly. File size, repository-growth limits, redaction, and data-rights checks are admission gates. Frozen packet paths are append-only under separately proven governance.
 
-   The bundle digest is the authority identity.
-2. **Durable storage in Git itself.**
-   - The bundle is committed to a dedicated ref namespace, `refs/evidence/<workflow>/<run-id>`, through an evidence commit.
-   - A ruleset blocks deletion and non-fast-forward on `refs/evidence/**`.
-   - Git objects are content-addressed and replicated by every clone. No dependence on Actions artifact retention remains.
-   - Bundles above a size cap (proposed: 25 MiB) store a manifest plus the digests of large inputs. Those large inputs must be independently re-acquirable by pinned identity.
-3. **Reconstructibility.** Every bundle carries a regeneration recipe: exact inputs, tool identities, and command. A verifier accepts either:
-   - (a) bytes whose digest matches; or
-   - (b) a regeneration that produces byte-identical output, recorded as `REGENERATED_IDENTICAL`.
+For large or restricted inputs, a manifest or Git LFS pointer **alone** is insufficient for an offline-replay claim. Before admitting an evidence identity, qualify a separate rights-compliant durable byte store and an independently mirrored recovery route, each digest-verified and retrieval-tested. If bytes cannot legally be retained or recovered, record `UNAVAILABLE` and do not issue reproducibility or proof claims.
 
-   A regeneration that is only semantically equivalent is `RECONSTRUCTED_SEMANTIC_EQUIVALENT_CANDIDATE` (spec 019's term). It is never accepted as the original.
-4. **Write path.**
-   - Only a dedicated workflow with `contents: write` may push `refs/evidence/**`, triggered on `main` pushes only and never on `pull_request_target`.
-   - The workflow is pinned by SHA and statically analyzed by zizmor.
-5. **Issue #100 terminal state (FD-3).** Close the issue as `HISTORICAL_ARTIFACT_BYTES_UNAVAILABLE`, with a link to the forward mechanism. Retained-authority reconstruction for that historical run stays permanently classified as unavailable. It is not reinterpreted as a pass.
+An optional dedicated evidence branch/ref may be evaluated later, but it is not durable proof until its fetch refspec, branch protection, non-deletion, clone behavior, authorization, independent mirror, retention, and disaster-recovery behavior have been demonstrated on the actual hosting provider.
+
+### 4.2 Retained-evidence record and verifier
+
+1. Each retained packet binds exact source/input identity, run identity and outcome (including failures), tool/build/rule versions, relevant policy, original artifact SHA-256, and an immutable Git tree/blob identity for the retained bytes.
+2. The packet is generated deterministically where applicable (sorted entries, fixed metadata, bounded archive layout, no environmental timestamps in semantic content). The verifier hashes **actual available bytes**, checks the declared source chain independently of candidate-authored expectations, and rejects conflicting evidence.
+3. The verification tool is built from an already-authorized base; a candidate's own new verifier logic cannot approve the candidate's packet. An independently reviewed adoption PR binds the bytes and the verifier identity.
+4. Reproduction produces a new execution receipt. Only byte-identical reconstruction can satisfy a byte-identity requirement; semantic similarity is an explicitly lower-authority research observation.
+5. The design must distinguish `HISTORICAL_UNAVAILABLE`, `PRESENT_VERIFIED`, `REGENERATED_BYTE_IDENTICAL`, `MISMATCH`, `UNSUPPORTED`, and `RETRIEVAL_FAILED`, without collapsing a missing required item into `PASS`.
+6. The proposal must explicitly address Git history growth, rights to redistribute source and benchmark artifacts, protected storage writes, key compromise, deletion and availability threats, and independent offline backup.
+
+### 4.3 Required end-to-end qualification before FD-3
+
+Prove all of these with retained execution evidence:
+
+- historical Actions artifact deleted, genuine retained bytes available in the durable store -> verified offline reconstruction;
+- historical artifact deleted and retained bytes absent -> `HISTORICAL_UNAVAILABLE`, never a green proof;
+- normal full clone, shallow clone, single-branch clone, and air-gapped copy -> each reports the actual fetch/replay requirements truthfully; missing objects are not assumed present;
+- removed/unreachable ref, tampered packet, mismatched digest, truncated/oversized archive, and rights-restricted item -> explicit fail-closed outcomes;
+- candidate-authored packet or verifier cannot self-certify past historical authority;
+- independent recovery path tested after simulated primary-host unavailability;
+- repeatable retention across the provider's Actions artifact expiry window;
+- new proof workflow does not silently gain privileged write authority on untrusted PR triggers.
+
+No storage change, workflow privilege increase, ruleset change, or history reinterpretation is authorized by this document. Those actions require their own Spec Kit, exact-head tests, rights disposition, independent review, and founder approval when applicable.
 
 ## 5. Migration steps and exit conditions
 
