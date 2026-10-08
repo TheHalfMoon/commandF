@@ -298,10 +298,7 @@ fn changed_v2_states(dir: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     states
 }
 
-fn run_review_preview(
-    states: &(PathBuf, PathBuf, PathBuf, PathBuf),
-    extra: &[&str],
-) -> Output {
+fn run_review_preview(states: &(PathBuf, PathBuf, PathBuf, PathBuf), extra: &[&str]) -> Output {
     let mut command = commandf();
     command.args([
         "review-preview",
@@ -369,10 +366,12 @@ fn review_preview_rejects_legacy_lock_without_writing_a_report() {
     let output = run_review_preview(&states, &["--output", output_path]);
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
-    assert!(!path.exists(), "cannot publish a partial preview on impact failure");
     assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("impact requires commandf.lock schema 2")
+        !path.exists(),
+        "cannot publish a partial preview on impact failure"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("impact requires commandf.lock schema 2")
     );
     let _ = fs::remove_dir_all(dir);
 }
@@ -383,11 +382,16 @@ fn review_preview_invalid_policy_is_operational_exit_one() {
         .args([
             "review-preview",
             "example.package",
-            "--before-lock", "before.lock",
-            "--before-cache", "before-cache",
-            "--after-lock", "after.lock",
-            "--after-cache", "after-cache",
-            "--fail-on", "unknown-policy",
+            "--before-lock",
+            "before.lock",
+            "--before-cache",
+            "before-cache",
+            "--after-lock",
+            "after.lock",
+            "--after-cache",
+            "after-cache",
+            "--fail-on",
+            "unknown-policy",
         ])
         .output()
         .expect("parse validation must execute");

@@ -587,9 +587,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
 /// serialized JSON by the deterministic library, never user-provided strings.
 /// Do not label this envelope a signed receipt or complete consumer review.
 fn review_preview_bytes(check: &[u8], impact: &[u8]) -> io::Result<Vec<u8>> {
-    if check.len() > MAX_REVIEW_PREVIEW_PART_BYTES
-        || impact.len() > MAX_REVIEW_PREVIEW_PART_BYTES
-    {
+    if check.len() > MAX_REVIEW_PREVIEW_PART_BYTES || impact.len() > MAX_REVIEW_PREVIEW_PART_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "review-preview report part exceeds 64 MiB limit",
