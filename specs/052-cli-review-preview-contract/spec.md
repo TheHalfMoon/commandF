@@ -35,3 +35,7 @@ No complete consumer-contract checking, graph-wide proof of safety, oracle escal
 ## Exit conditions
 
 Four focused integration tests pass for: (1) nonempty structural policy failure, (2) permissive policy retaining findings, (3) v1 lock operational failure without partial output, (4) invalid policy usage exit 1. All existing `check` behavior continues to pass. Windows plus real exact-head CI are necessary but not sufficient; applicable human approval and normal merge commit are required before canonical adoption. This candidate may be rejected or replaced when full V3.2 `commandf review` is independently implemented.
+
+## Typed-envelope qualification amendment
+
+A later executable refinement replaces manual JSON concatenation with a typed serializer in `commandf-pkg`. The composer independently validates both current subreport schemas, confirms the original policy decision via `validate_check_report`, and fails closed if the reported package name, before/after version, archive SHA-256, or graph-subject identity disagree between `check` and `impact`. This detects observable inconsistent-source combinations but does **not** prove a concurrent atomic snapshot; `atomic_cross_step_snapshot` remains `false`. The 64 MiB per-part bound remains in force. New negative tests exercise mismatched subject identity, digest-tampered cache and reproducible offline output. Exact-head CI and review evidence must be refreshed for this refinement.

@@ -13,6 +13,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
     build_context_graph, build_source_mapped_check_report, build_terminology_diff_report,
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
+    compose_review_preview,
     classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
     inspect_package, source_mapped_check_report_to_github_annotations_bytes, CheckDirection,
     CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage,
@@ -24,7 +25,6 @@ use commandf_pkg::{
 const MAX_CHECK_REPORT_INPUT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_SUSHI_INDEX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_RUNTIME_DIAGNOSTIC_CHARS: usize = 4_096;
-const MAX_REVIEW_PREVIEW_PART_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(
@@ -478,10 +478,9 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                     fail_on: fail_on.into(),
                 },
             )?;
-            let check_bytes = check.to_json_bytes()?;
             let impact_bytes =
                 impact::run(package, before_lock, before_cache, after_lock, after_cache)?;
-            let bytes = review_preview_bytes(&check_bytes, &impact_bytes)?;
+            let bytes = compose_review_preview(&check, &impact_bytes)?;
             write_check_output(&bytes, output.as_deref())?;
             if !check.decision.passed {
                 return Ok(ExitCode::from(2));
@@ -581,33 +580,6 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
         }
     }
     Ok(ExitCode::SUCCESS)
-}
-
-/// A narrow preview of existing typed reports. Input values are already
-/// serialized JSON by the deterministic library, never user-provided strings.
-/// Do not label this envelope a signed receipt or complete consumer review.
-fn review_preview_bytes(check: &[u8], impact: &[u8]) -> io::Result<Vec<u8>> {
-    if check.len() > MAX_REVIEW_PREVIEW_PART_BYTES || impact.len() > MAX_REVIEW_PREVIEW_PART_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "review-preview report part exceeds 64 MiB limit",
-        ));
-    }
-    let mut output = Vec::with_capacity(
-        check
-            .len()
-            .checked_add(impact.len())
-            .and_then(|size| size.checked_add(512))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "report size overflow"))?,
-    );
-    output.extend_from_slice(
-        b"{\n  \"schema\": 1,\n  \"scope\": \"structural-and-declared-graph-preview\",\n  \"complete_consumer_contract_review\": false,\n  \"atomic_cross_step_snapshot\": false,\n  \"signed_receipt\": false,\n  \"check\": ",
-    );
-    output.extend_from_slice(check.strip_suffix(b"\n").unwrap_or(check));
-    output.extend_from_slice(b",\n  \"impact\": ");
-    output.extend_from_slice(impact.strip_suffix(b"\n").unwrap_or(impact));
-    output.extend_from_slice(b"\n}\n");
-    Ok(output)
 }
 
 fn sanitize_runtime_diagnostic(error: &dyn std::fmt::Display) -> String {

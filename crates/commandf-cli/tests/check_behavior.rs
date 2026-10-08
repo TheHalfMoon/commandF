@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use commandf_pkg::{LockedPackage, Lockfile, PackageCache};
+use commandf_pkg::{compose_review_preview, CheckReport, LockedPackage, Lockfile, PackageCache};
 
 const BEFORE_HEX: &str = concat!(
     "1f8b08000000000002ffed944d4fc3300c86fb5350cea31f63b452cf70e60037c4216bbd35d0a655924e43d3fe3beed66d6c",
@@ -396,4 +396,82 @@ fn review_preview_invalid_policy_is_operational_exit_one() {
         .output()
         .expect("parse validation must execute");
     assert_eq!(output.status.code(), Some(1));
+}
+
+
+#[test]
+fn review_preview_is_byte_stable_across_offline_replays() {
+    let dir = unique_temp_dir("review-preview-stability");
+    let states = changed_v2_states(&dir);
+    let first = run_review_preview(&states, &[]);
+    let second = run_review_preview(&states, &[]);
+    assert_eq!(first.status.code(), Some(2));
+    assert_eq!(second.status.code(), Some(2));
+    assert_eq!(first.stdout, second.stdout);
+    assert!(!first.stdout.is_empty());
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_detects_subject_mismatch_before_publication() {
+    let dir = unique_temp_dir("review-preview-mismatch");
+    let states = changed_v2_states(&dir);
+    let check = run_check(&states.0, &states.1, &states.2, &states.3, &[]);
+    assert_eq!(check.status.code(), Some(2));
+    let parsed_check = CheckReport::from_json_slice(&check.stdout).expect("typed check");
+
+    let impact = commandf()
+        .args([
+            "impact",
+            "example.package",
+            "--before-lock",
+            states.0.to_str().expect("UTF-8"),
+            "--before-cache",
+            states.1.to_str().expect("UTF-8"),
+            "--after-lock",
+            states.2.to_str().expect("UTF-8"),
+            "--after-cache",
+            states.3.to_str().expect("UTF-8"),
+        ])
+        .output()
+        .expect("impact report");
+    assert_eq!(impact.status.code(), Some(0));
+    assert!(compose_review_preview(&parsed_check, &impact.stdout).is_ok());
+
+    let impact = String::from_utf8(impact.stdout).expect("UTF-8 impact");
+    let tampered = impact.replacen(
+        r#""package_name": "example.package""#,
+        r#""package_name": "different.package""#,
+        1,
+    );
+    assert_ne!(tampered, impact, "test fixture must actually alter identity");
+    let error = compose_review_preview(&parsed_check, tampered.as_bytes())
+        .expect_err("mismatched package identities must not be bundled");
+    assert!(error.to_string().contains("identities disagree"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_refuses_tampered_digest_cache_without_output() {
+    let dir = unique_temp_dir("review-preview-corrupt");
+    let states = changed_v2_states(&dir);
+    let after = decode_hex(AFTER_HEX);
+    let digest = PackageCache::digest(&after);
+    fs::write(
+        states.3.join("sha256").join(format!("{digest}.tgz")),
+        b"wrong archive bytes",
+    )
+    .expect("tamper locked cache");
+    let output_path = dir.join("result.json");
+    let output = run_review_preview(
+        &states,
+        &["--output", output_path.to_str().expect("UTF-8 output")],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(!output_path.exists());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cache object digest mismatch")
+    );
+    let _ = fs::remove_dir_all(dir);
 }

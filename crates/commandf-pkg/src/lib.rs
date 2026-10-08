@@ -15,6 +15,7 @@ mod check_error;
 mod check_github;
 mod check_model;
 mod check_sarif;
+mod review_preview;
 mod compatibility;
 mod compatibility_error;
 mod compatibility_model;
@@ -80,6 +81,7 @@ pub use check_github::{
 };
 pub use check_model::{CheckDecision, CheckDirection, CheckFailOn, CheckPolicy, CheckReport};
 pub use check_sarif::check_report_to_sarif_bytes;
+pub use review_preview::compose_review_preview;
 pub use compatibility_error::CompatibilityError;
 pub use compatibility_model::{
     CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
