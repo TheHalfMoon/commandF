@@ -13,11 +13,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
     build_context_graph, build_source_mapped_check_report, build_terminology_diff_report,
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
-    compose_review_preview,
-    classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
-    inspect_package, source_mapped_check_report_to_github_annotations_bytes, CheckDirection,
-    CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage,
-    Lockfile, PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
+    classify_structural_diff, compose_review_preview, diff_package_archives,
+    evaluate_compatibility_policy, inspect_package,
+    source_mapped_check_report_to_github_annotations_bytes, CheckDirection, CheckFailOn,
+    CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile,
+    PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
     StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState, VersionConstraint,
     MAX_SOURCE_MAPPED_REPORT_BYTES,
 };

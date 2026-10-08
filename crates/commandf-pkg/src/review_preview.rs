@@ -25,10 +25,7 @@ struct ReviewPreviewEnvelope<'a> {
 /// Compose typed internal reports, refusing mismatched input identities.
 /// Does not guarantee that independently read lock/cache files stayed unchanged
 /// between the two evaluations. The envelope states that limitation openly.
-pub fn compose_review_preview(
-    check: &CheckReport,
-    impact_bytes: &[u8],
-) -> io::Result<Vec<u8>> {
+pub fn compose_review_preview(check: &CheckReport, impact_bytes: &[u8]) -> io::Result<Vec<u8>> {
     let check_bytes = check
         .to_json_bytes()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -61,7 +58,9 @@ pub fn compose_review_preview(
         || impact.before_evidence.subject.identity != subject.before
         || impact.after_evidence.subject.identity != subject.after
     {
-        return Err(invalid("review-preview check and impact identities disagree"));
+        return Err(invalid(
+            "review-preview check and impact identities disagree",
+        ));
     }
 
     let envelope = ReviewPreviewEnvelope {

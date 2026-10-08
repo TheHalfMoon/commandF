@@ -15,7 +15,6 @@ mod check_error;
 mod check_github;
 mod check_model;
 mod check_sarif;
-mod review_preview;
 mod compatibility;
 mod compatibility_error;
 mod compatibility_model;
@@ -51,6 +50,7 @@ mod oracle_process;
 mod oracle_reconcile;
 mod registry;
 mod resolver;
+mod review_preview;
 mod source;
 mod source_map;
 mod source_map_error;
@@ -81,7 +81,6 @@ pub use check_github::{
 };
 pub use check_model::{CheckDecision, CheckDirection, CheckFailOn, CheckPolicy, CheckReport};
 pub use check_sarif::check_report_to_sarif_bytes;
-pub use review_preview::compose_review_preview;
 pub use compatibility_error::CompatibilityError;
 pub use compatibility_model::{
     CompatibilityDirection, CompatibilityFinding, CompatibilityReport, CompatibilitySeverity,
@@ -208,6 +207,7 @@ pub use oracle_reconcile::{
 };
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
+pub use review_preview::compose_review_preview;
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
 pub use source_map::{
     build_source_mapped_check_report, validate_source_mapped_check_report,

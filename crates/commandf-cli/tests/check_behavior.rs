@@ -398,7 +398,6 @@ fn review_preview_invalid_policy_is_operational_exit_one() {
     assert_eq!(output.status.code(), Some(1));
 }
 
-
 #[test]
 fn review_preview_is_byte_stable_across_offline_replays() {
     let dir = unique_temp_dir("review-preview-stability");
@@ -444,7 +443,10 @@ fn review_preview_detects_subject_mismatch_before_publication() {
         r#""package_name": "different.package""#,
         1,
     );
-    assert_ne!(tampered, impact, "test fixture must actually alter identity");
+    assert_ne!(
+        tampered, impact,
+        "test fixture must actually alter identity"
+    );
     let error = compose_review_preview(&parsed_check, tampered.as_bytes())
         .expect_err("mismatched package identities must not be bundled");
     assert!(error.to_string().contains("identities disagree"));
@@ -470,8 +472,6 @@ fn review_preview_refuses_tampered_digest_cache_without_output() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert!(!output_path.exists());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("cache object digest mismatch")
-    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cache object digest mismatch"));
     let _ = fs::remove_dir_all(dir);
 }
