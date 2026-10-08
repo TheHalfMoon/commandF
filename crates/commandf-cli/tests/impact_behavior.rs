@@ -165,8 +165,14 @@ fn review_preview_reuses_existing_diff_and_preserves_impact_evidence() {
         "\"before_evidence\"",
         "\"after_evidence\"",
     ] {
-        assert!(impact_text.contains(marker), "standalone impact missing {marker}");
-        assert!(preview_text.contains(marker), "preview impact missing {marker}");
+        assert!(
+            impact_text.contains(marker),
+            "standalone impact missing {marker}"
+        );
+        assert!(
+            preview_text.contains(marker),
+            "preview impact missing {marker}"
+        );
     }
     assert!(preview_text.contains("\"acme.subject\""));
     let _ = fs::remove_dir_all(root);
