@@ -83,12 +83,18 @@ fn assert_success(output: &Output, context: &str) -> serde_json::Value {
     })
 }
 
-fn assert_failure(output: &Output, context: &str) {
+fn assert_failure(output: &Output, context: &str, expected_diagnostic: &str) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !output.status.success(),
-        "{context} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        "{context} unexpectedly succeeded\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    // Cargo compile/link errors are not evidence that tampered corpus bytes were rejected.
+    // Require the verifier's own diagnostic and the expected rejection reason.
+    assert!(
+        stderr.contains("commandf-af02-verifier: ") && stderr.contains(expected_diagnostic),
+        "{context} did not reach the intended verifier rejection\nstdout:\n{stdout}\nstderr:\n{stderr}"
     );
 }
 
@@ -237,6 +243,7 @@ fn af02_t037_tampered_corpus_or_registry_cannot_self_green() {
             scratch.path(),
         ),
         "tampered corpus bytes must fail closed",
+        "assertion registry corpus_manifest_sha256 does not match exact corpus bytes",
     );
 
     let mut tampered_registry = fs::read(&assertions).expect("read checked-in assertion registry");
@@ -256,5 +263,6 @@ fn af02_t037_tampered_corpus_or_registry_cannot_self_green() {
             scratch.path(),
         ),
         "tampered assertion registry must fail closed",
+        "corpus JSON error:",
     );
 }
