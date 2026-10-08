@@ -5,12 +5,12 @@ Completion markers are evidence-controlled, not aspirational.
 
 ## Planning-only tasks in this Spec Kit
 
-- [x] P001 Read live base-verifier workflow and historical gap records 049 and 050 at observed \`main\` SHA \`f82565cca917d119e1c774b2c470e2ac20e0d6dd\`.
+- [x] P001 Read live base-verifier workflow and historical gap records 049 and 050 at observed `main` SHA `f82565cca917d119e1c774b2c470e2ac20e0d6dd`.
 - [x] P002 Specify a non-self-authorizing admission model and distinguish Git blob OIDs from SHA-256 packet digests.
 - [x] P003 Enumerate bootstrap and routine amendment flows, excluding ruleset/product code changes from this PR.
 - [x] P004 Define negative cases, external review and founder-decision boundaries.
 - [ ] P005 Qualify this exact planning PR with green required checks, applicable independent review, no unresolved substantive threads, and a lawful normal merge.
-- [ ] P006 Verify canonical post-merge \`main\`, rulesets and Spec Kit identity; do not automatically promote the proposal to execution authority.
+- [ ] P006 Verify canonical post-merge `main`, rulesets and Spec Kit identity; do not automatically promote the proposal to execution authority.
 
 ## Future implementation authorization (not granted)
 
