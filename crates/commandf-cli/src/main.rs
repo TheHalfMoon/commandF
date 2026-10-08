@@ -478,8 +478,13 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                     fail_on: fail_on.into(),
                 },
             )?;
-            let impact_bytes =
-                impact::run(package, before_lock, before_cache, after_lock, after_cache)?;
+            let impact_bytes = impact::from_existing_diff(
+                &diff,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
+            )?;
             let bytes = compose_review_preview(&check, &impact_bytes)?;
             write_check_output(&bytes, output.as_deref())?;
             if !check.decision.passed {

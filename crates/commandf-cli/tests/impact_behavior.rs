@@ -119,6 +119,60 @@ fn impact_reports_reverse_package_exposure_for_changed_dependency() {
 }
 
 #[test]
+fn review_preview_reuses_existing_diff_and_preserves_impact_evidence() {
+    let root = unique_temp_dir("review-preview-impact");
+    let (before_lock, before_cache, after_lock, after_cache) = write_impact_state(&root);
+
+    let impact = run_impact_for(
+        "acme.shared",
+        &before_lock,
+        &before_cache,
+        &after_lock,
+        &after_cache,
+    );
+    assert_success(&impact);
+    let preview = commandf()
+        .args([
+            "review-preview",
+            "acme.shared",
+            "--before-lock",
+            before_lock.to_str().unwrap(),
+            "--before-cache",
+            before_cache.to_str().unwrap(),
+            "--after-lock",
+            after_lock.to_str().unwrap(),
+            "--after-cache",
+            after_cache.to_str().unwrap(),
+            "--fail-on",
+            "none",
+        ])
+        .env("HTTP_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env("NO_PROXY", "")
+        .output()
+        .expect("offline review-preview must run");
+    assert_success(&preview);
+
+    let impact_text = String::from_utf8(impact.stdout).expect("impact JSON");
+    let preview_text = String::from_utf8(preview.stdout).expect("preview JSON");
+    assert!(preview_text.contains("\"complete_consumer_contract_review\": false"));
+    assert!(preview_text.contains("\"atomic_cross_step_snapshot\": false"));
+    assert!(preview_text.contains("\"signed_receipt\": false"));
+    for marker in [
+        "\"package_name\": \"acme.shared\"",
+        "\"package_impacts\"",
+        "\"unresolved_boundaries\"",
+        "\"before_evidence\"",
+        "\"after_evidence\"",
+    ] {
+        assert!(impact_text.contains(marker), "standalone impact missing {marker}");
+        assert!(preview_text.contains(marker), "preview impact missing {marker}");
+    }
+    assert!(preview_text.contains("\"acme.subject\""));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn impact_rejects_schema_v1_and_corrupt_cache_without_stdout() {
     let schema_root = unique_temp_dir("schema-v1");
     let (before_lock, before_cache, after_lock, after_cache) = write_impact_state(&schema_root);
