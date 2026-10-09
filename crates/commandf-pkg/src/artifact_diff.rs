@@ -11,7 +11,7 @@ use crate::{
     },
     artifact_diff_structure::compare_structure_definition,
     artifact_scan::scan_package_resources,
-    inspect_package, PackageInspection, ResourceArtifact,
+    inspect_package, ArtifactError, PackageInspection, ResourceArtifact,
 };
 
 struct Side {
@@ -210,7 +210,14 @@ fn load_side(
     digest: &str,
     bytes: &[u8],
 ) -> Result<Side, StructuralDiffError> {
-    let inspection = inspect_package(package_name, version, digest, bytes)?;
+    let inspection = inspect_package(package_name, version, digest, bytes).map_err(|error| {
+        match error {
+            ArtifactError::DuplicateResourceFilename { file } => {
+                StructuralDiffError::DuplicateResourceFilename { file }
+            }
+            other => StructuralDiffError::Artifact(other),
+        }
+    })?;
     let mut raw = BTreeMap::new();
     for resource in scan_package_resources(bytes)? {
         let value = serde_json::from_slice(&resource.bytes).map_err(|source| {
