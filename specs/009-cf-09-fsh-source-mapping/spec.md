@@ -171,7 +171,10 @@ V1 bounds are enforced in the core library as well as CLI entry points:
 CheckReport input <= 64 MiB
 SUSHI index <= 16 MiB
 SUSHI entries <= 100,000
+Mapped FSH source scan <= 64 MiB per source file
 ```
+
+For mapped FSH sources, the scan opens the current canonical source file, rejects files whose reported size exceeds 64 MiB **before** counting lines, and reads no more than the bound plus one byte so concurrent growth fails closed. Over-limit input is a dedicated `SourceTooLarge` operational error, with no source location or host-absolute file path emitted in the diagnostic. This is a bounded local input-size policy; it does not provide a cryptographic freshness proof or prevent another process from changing a source file after validation. Unmapped findings do not require reading unrelated FSH files.
 
 Persisted source-map validation also rejects an entry count above 100,000 and requires every serialized mapped path to remain component-wise beneath its declared `source_index.fsh_root` unless that root is `.`.
 
