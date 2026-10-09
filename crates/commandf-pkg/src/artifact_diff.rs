@@ -210,14 +210,13 @@ fn load_side(
     digest: &str,
     bytes: &[u8],
 ) -> Result<Side, StructuralDiffError> {
-    let inspection = inspect_package(package_name, version, digest, bytes).map_err(|error| {
-        match error {
+    let inspection =
+        inspect_package(package_name, version, digest, bytes).map_err(|error| match error {
             ArtifactError::DuplicateResourceFilename { file } => {
                 StructuralDiffError::DuplicateResourceFilename { file }
             }
             other => StructuralDiffError::Artifact(other),
-        }
-    })?;
+        })?;
     let mut raw = BTreeMap::new();
     for resource in scan_package_resources(bytes)? {
         let value = serde_json::from_slice(&resource.bytes).map_err(|source| {
