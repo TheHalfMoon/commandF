@@ -19,6 +19,7 @@ SECONDARY = "https://packages2.fhir.org/web"
 MAX_LOCK_BYTES = 16 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_COMPARABLE_PACKAGES = 4096
+MAX_NETWORK_PROBE_PACKAGES = 16
 PACKAGE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,199}\Z")
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\Z")
 
@@ -271,11 +272,17 @@ def main(argv=None) -> int:
         if not args.all:
             validate_identity(args.name, args.version)
         packages = load_packages(args.lock)
+        if args.all and len(packages) > MAX_NETWORK_PROBE_PACKAGES:
+            raise InvalidInput(
+                "network --all exceeds 16 packages; select an exact name/version"
+            )
         if not args.all:
             packages = [p for p in packages
                         if (p["name"], p["version"]) == (args.name, args.version)]
             if not packages:
                 raise InvalidInput("exact package not present in lock")
+        # Lock ordering is not an input to diagnosis or network request ordering.
+        packages.sort(key=lambda package: (package["name"], package["version"]))
         results = [check_package(p) for p in packages]
         worst = (
             "SOURCE_IDENTITY_CONFLICT" if any(

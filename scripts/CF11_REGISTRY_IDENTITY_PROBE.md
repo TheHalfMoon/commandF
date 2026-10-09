@@ -11,8 +11,14 @@ qualification oracle, and never replaces the cf11-multi-version-proof assertion.
       --lock /path/to/commandf.lock \
       --name hl7.fhir.uv.ips --version 2.0.1 > /tmp/cf11-observation.json
 
-Use --all instead of --name and --version to compare every package in the lock.
-This can download up to 128 MiB per endpoint per package. The probe downloads each bounded archive to a private temporary file and deletes it immediately after hashing; it never extracts or executes it.
+Use --all instead of --name and --version to compare every package in the lock,
+**up to 16 exact package identities**; larger inputs fail before any download.
+For larger locks, select a single exact --name/--version instead.
+This can download up to 128 MiB per endpoint per package (up to 32 requests
+and 4 GiB of network transfer in the documented worst case with --all);
+the probe downloads each bounded archive to a private temporary file and
+deletes it immediately after hashing; it never extracts or executes it.
+Requests are ordered by exact name/version instead of relying on lockfile order.
 
 ## Classification
 

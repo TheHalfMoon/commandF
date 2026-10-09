@@ -124,6 +124,59 @@ class IdentityProbeTests(unittest.TestCase):
             self.assertEqual(probe.fetch_digest(
                 "https://packages.fhir.org/pkg/1.0.0")["reason"], "TRANSPORT")
 
+    def test_all_network_probe_limit_fails_before_any_download(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commandf.lock"
+            packages = [
+                {"name": f"test.pkg{i}", "version": "1.0.0", "sha256": "a" * 64}
+                for i in range(probe.MAX_NETWORK_PROBE_PACKAGES + 1)
+            ]
+            path.write_text(json.dumps({"schema": 2, "packages": packages}))
+            output = io.StringIO()
+            with mock.patch.object(probe, "check_package") as fetch:
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(probe.main(["--lock", str(path), "--all"]), 4)
+                fetch.assert_not_called()
+            self.assertNotIn(tmp, output.getvalue())
+            self.assertIn("exceeds 16 packages", output.getvalue())
+
+    def test_single_exact_package_allowed_in_large_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commandf.lock"
+            packages = [
+                {"name": f"test.pkg{i}", "version": "1.0.0", "sha256": "a" * 64}
+                for i in range(probe.MAX_NETWORK_PROBE_PACKAGES + 1)
+            ]
+            path.write_text(json.dumps({"schema": 2, "packages": packages}))
+            with mock.patch.object(probe, "check_package", return_value={
+                "classification": "SOURCE_BYTES_IDENTICAL"
+            }) as fetch:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    code = probe.main([
+                        "--lock", str(path), "--name", "test.pkg16",
+                        "--version", "1.0.0"
+                    ])
+            self.assertEqual(code, 0)
+            fetch.assert_called_once()
+            self.assertEqual(fetch.call_args.args[0]["name"], "test.pkg16")
+
+    def test_all_network_probe_is_sorted_for_reproducible_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commandf.lock"
+            packages = [
+                {"name": "z.pkg", "version": "2.0.0", "sha256": "a" * 64},
+                {"name": "a.pkg", "version": "1.0.0", "sha256": "a" * 64}
+            ]
+            path.write_text(json.dumps({"schema": 2, "packages": packages}))
+            seen = []
+            def probe_package(package):
+                seen.append(package["name"])
+                return {"classification": "SOURCE_BYTES_IDENTICAL"}
+            with mock.patch.object(probe, "check_package", side_effect=probe_package):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(probe.main(["--lock", str(path), "--all"]), 0)
+            self.assertEqual(seen, ["a.pkg", "z.pkg"])
+
     def test_result_exit_codes(self):
         # Assert fail-closed and clean CLI errors without external network.
         with tempfile.TemporaryDirectory() as tmp:
