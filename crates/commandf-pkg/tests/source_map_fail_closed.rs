@@ -146,6 +146,27 @@ fn missing_and_non_file_sources_fail_closed() {
 }
 
 #[test]
+fn mapped_sparse_oversized_fsh_file_fails_before_reporting_location() {
+    let repo = repo_with_source("example.fsh");
+    let path = repo.path().join("input/fsh/example.fsh");
+    fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .expect("open FSH")
+        .set_len(64 * 1024 * 1024 + 1)
+        .expect("make sparse oversized FSH");
+    assert!(matches!(
+        build_source_mapped_check_report(
+            &report(),
+            &index_bytes("example.fsh"),
+            repo.path(),
+            Path::new("input/fsh")
+        ),
+        Err(SourceMapError::SourceTooLarge { maximum: 67_108_864 })
+    ));
+}
+
+#[test]
 fn source_range_beyond_current_file_fails_closed() {
     let repo = repo_with_source("example.fsh");
     let stale = serde_json::to_vec(&json!([{

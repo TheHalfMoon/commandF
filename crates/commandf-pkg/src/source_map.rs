@@ -303,17 +303,36 @@ fn parse_sushi_index(
     Ok(index)
 }
 
+const MAX_FSH_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
+
 fn source_line_count(path: &Path) -> Result<u64, SourceMapError> {
+    source_line_count_with_limit(path, MAX_FSH_SOURCE_BYTES)
+}
+
+fn source_line_count_with_limit(path: &Path, maximum: u64) -> Result<u64, SourceMapError> {
     let mut file = fs::File::open(path)?;
+    if file.metadata()?.len() > maximum {
+        return Err(SourceMapError::SourceTooLarge { maximum });
+    }
+
     let mut buffer = [0_u8; 64 * 1024];
+    let mut read_bytes = 0_u64;
     let mut newline_count = 0_u64;
     let mut saw_byte = false;
     let mut last_byte = None;
 
     loop {
-        let read = file.read(&mut buffer)?;
+        // Always probe one byte after the bound: the file can grow
+        // between metadata() and read(), without authorization to scan it.
+        let available = maximum.saturating_sub(read_bytes).saturating_add(1);
+        let read_limit = available.min(buffer.len() as u64) as usize;
+        let read = file.read(&mut buffer[..read_limit])?;
         if read == 0 {
             break;
+        }
+        read_bytes += read as u64;
+        if read_bytes > maximum {
+            return Err(SourceMapError::SourceTooLarge { maximum });
         }
         saw_byte = true;
         newline_count += buffer[..read].iter().filter(|byte| **byte == b'\n').count() as u64;
@@ -411,6 +430,36 @@ fn sha256_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fsh_line_count_preserves_in_limit_eof_and_trailing_newline() {
+        let directory = tempfile::tempdir().expect("temporary FSH root");
+        let path = directory.path().join("example.fsh");
+        fs::write(&path, b"line one\nline two").expect("write FSH");
+        assert_eq!(source_line_count_with_limit(&path, 17).expect("exact"), 2);
+        assert!(matches!(
+            source_line_count_with_limit(&path, 16),
+            Err(SourceMapError::SourceTooLarge { maximum: 16 })
+        ));
+        fs::write(&path, b"line one\nline two\n").expect("write trailing newline");
+        assert_eq!(source_line_count_with_limit(&path, 18).expect("exact"), 2);
+        fs::write(&path, b"").expect("write empty FSH");
+        assert_eq!(source_line_count_with_limit(&path, 0).expect("empty"), 0);
+    }
+
+    #[test]
+    fn sparse_oversized_fsh_is_rejected_before_line_scan() {
+        let directory = tempfile::tempdir().expect("temporary FSH root");
+        let path = directory.path().join("large.fsh");
+        fs::File::create(&path)
+            .expect("create FSH")
+            .set_len(MAX_FSH_SOURCE_BYTES + 1)
+            .expect("sparse oversized FSH");
+        assert!(matches!(
+            source_line_count(&path),
+            Err(SourceMapError::SourceTooLarge { maximum: MAX_FSH_SOURCE_BYTES })
+        ));
+    }
 
     #[test]
     fn source_map_report_size_limit_is_inclusive() {
