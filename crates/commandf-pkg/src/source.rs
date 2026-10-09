@@ -169,10 +169,7 @@ mod tests {
             read_limited_archive(&path, u64::MAX).expect("clamped read"),
             b"abcd"
         );
-        assert_eq!(
-            read_limited_archive(&path, 4).expect("exact read"),
-            b"abcd"
-        );
+        assert_eq!(read_limited_archive(&path, 4).expect("exact read"), b"abcd");
         assert!(matches!(
             read_limited_archive(&path, 3),
             Err(PackageError::InvalidRequest(_))
