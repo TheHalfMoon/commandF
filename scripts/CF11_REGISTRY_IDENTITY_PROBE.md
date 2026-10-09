@@ -44,3 +44,35 @@ become success. Response bytes themselves are not retained.
 This candidate does not alter V2 resolver, protected AF-02 files or
 GitHub workflow enforcement. Review, signed DCO, explicit governance approvals
 where applicable and exact-head CI are separately required before adoption.
+
+## Compare two recorded lockfiles without network
+
+When both resolutions produced an actual lockfile (for example, from a
+future authorized failure-evidence capture), the same helper supports a
+deterministic, offline contrast:
+
+    python3 scripts/cf11_registry_identity_probe.py \
+      --lock /path/to/first/commandf.lock \
+      --compare-lock /path/to/second/commandf.lock > /tmp/lock-contrast.json
+
+This mode performs **no HTTP requests** and reports:
+- whether exact package identity, digest, declared dependencies, root sets
+  and schema are semantically identical;
+- whether source strings agree;
+- exactly which validated package name/version and SHA-256 pairs differ;
+- if dependencies differ, a Boolean flag (not the possibly private values);
+- normalized source kinds (primary/secondary/other-redacted), not raw URLs.
+
+The offline comparison exits 0 for IDENTICAL, 2 for
+PROVENANCE_ONLY_DIFFERENCE or SEMANTIC_LOCK_DIFFERENCE, and 4 for
+INVALID_INPUT. Both inputs are read with the existing 16-MiB limit;
+each may contain at most 4096 exact package identities. Invalid
+dependencies, missing source, duplicate package identities, or malformed
+roots do not produce a PASS. The root names, raw dependency values,
+local paths and noncanonical source strings are never echoed.
+
+This does **not** automatically collect historical failing CI lockfiles.
+The previously failed real-package-graph job produced no retained lock
+artifacts; absent evidence must never be reconstructed or invented.
+Integrating pre-assertion capture into the protected workflow still requires
+its independent G51/FD-1 authority and review.

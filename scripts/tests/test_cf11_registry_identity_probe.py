@@ -1,5 +1,7 @@
 """Offline positive/negative tests for the non-authoritative CF11 registry probe."""
+import contextlib
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -138,6 +140,159 @@ class IdentityProbeTests(unittest.TestCase):
                 self.assertEqual(probe.main(["--lock", str(path), "--all"]), 2)
             self.assertEqual(probe.main(["--lock", str(path), "--name",
                                          "bad/name", "--version", "1.0.0"]), 4)
+
+
+class LockComparisonTests(unittest.TestCase):
+    def setUp(self):
+        self.first = {
+            "schema": 2,
+            "roots": ["hl7.fhir.uv.ips@2.0.1"],
+            "packages": [{
+                "name": "hl7.fhir.uv.ips",
+                "version": "2.0.1",
+                "sha256": "a" * 64,
+                "source": "https://packages.fhir.org/hl7.fhir.uv.ips/2.0.1",
+                "dependencies": {"hl7.fhir.r4.core": "4.0.1"}
+            }]
+        }
+
+    def run_compare(self, second):
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "first.lock"
+            b = Path(tmp) / "second.lock"
+            a.write_text(json.dumps(self.first))
+            b.write_text(json.dumps(second))
+            return probe.compare_locks(a, b)
+
+    def test_identical_is_pass(self):
+        result = self.run_compare(self.first)
+        self.assertEqual(result["overall"], "IDENTICAL")
+        self.assertTrue(result["semantic_lock_identity_identical"])
+        self.assertEqual(result["differences"], [])
+
+    def test_archive_mismatch_is_not_downgraded_to_same_package_identity(self):
+        second = json.loads(json.dumps(self.first))
+        second["packages"][0]["sha256"] = "b" * 64
+        second["packages"][0]["source"] = (
+            "https://packages2.fhir.org/web/hl7.fhir.uv.ips-2.0.1.tgz"
+        )
+        result = self.run_compare(second)
+        self.assertEqual(result["overall"], "SEMANTIC_LOCK_DIFFERENCE")
+        self.assertFalse(result["semantic_lock_identity_identical"])
+        self.assertEqual(result["differences"][0]["sha256_first"], "a" * 64)
+        self.assertEqual(result["differences"][0]["sha256_second"], "b" * 64)
+        self.assertEqual(result["differences"][0]["dependencies_equal"], True)
+        self.assertEqual(result["differences"][0]["source_kind_second"], "secondary")
+
+    def test_source_only_disagreement_is_exposed_not_collapsed(self):
+        second = json.loads(json.dumps(self.first))
+        second["packages"][0]["source"] = (
+            "https://packages2.fhir.org/web/hl7.fhir.uv.ips-2.0.1.tgz"
+        )
+        result = self.run_compare(second)
+        self.assertEqual(result["overall"], "PROVENANCE_ONLY_DIFFERENCE")
+        self.assertTrue(result["semantic_lock_identity_identical"])
+        self.assertFalse(result["transport_provenance_identical"])
+        self.assertTrue(result["differences"][0]["digest_equal"])
+
+    def test_dependencies_mismatch_is_semantic_mismatch(self):
+        second = json.loads(json.dumps(self.first))
+        second["packages"][0]["dependencies"]["hl7.fhir.r4.core"] = "5.0.0"
+        result = self.run_compare(second)
+        self.assertEqual(result["overall"], "SEMANTIC_LOCK_DIFFERENCE")
+        self.assertFalse(result["differences"][0]["dependencies_equal"])
+
+    def test_roots_or_schema_mismatch_is_semantic_mismatch(self):
+        for key, value in [("roots", ["different@1.0.0"]), ("schema", 1)]:
+            with self.subTest(key=key):
+                second = json.loads(json.dumps(self.first))
+                second[key] = value
+                self.assertEqual(self.run_compare(second)["overall"],
+                                 "SEMANTIC_LOCK_DIFFERENCE")
+
+    def test_missing_package_identity_is_semantic_mismatch(self):
+        second = json.loads(json.dumps(self.first))
+        second["packages"].append({
+            "name": "hl7.fhir.r4.core", "version": "4.0.1",
+            "sha256": "c" * 64, "source": "local",
+            "dependencies": {}
+        })
+        result = self.run_compare(second)
+        self.assertFalse(result["semantic_lock_identity_identical"])
+        self.assertEqual(result["package_counts"]["second"], 2)
+        self.assertFalse(result["differences"][0]["present_in_first"])
+
+    def test_source_paths_are_never_disclosed(self):
+        second = json.loads(json.dumps(self.first))
+        sensitive = "/Users/private-name/a/secret-token.txt"
+        second["packages"][0]["source"] = sensitive
+        result = self.run_compare(second)
+        serialized = json.dumps(result)
+        self.assertNotIn("private-name", serialized)
+        self.assertNotIn("secret-token", serialized)
+        self.assertEqual(result["differences"][0]["source_kind_second"],
+                         "other-redacted")
+
+    def test_boolean_schema_cannot_masquerade_as_integer_version(self):
+        second = json.loads(json.dumps(self.first))
+        second["schema"] = True
+        with self.assertRaisesRegex(probe.InvalidInput, "unsupported lockfile"):
+            self.run_compare(second)
+
+    def test_invalid_roots_fail_closed_without_path_echo(self):
+        for roots in (None, "private-path", ["valid", 7]):
+            with self.subTest(roots=roots):
+                second = json.loads(json.dumps(self.first))
+                second["roots"] = roots
+                with self.assertRaisesRegex(probe.InvalidInput, "valid roots"):
+                    self.run_compare(second)
+
+    def test_invalid_dependencies_or_source_fail_closed(self):
+        for field, value in [("dependencies", ["not-object"]),
+                             ("dependencies", {"dep": 3}),
+                             ("source", None)]:
+            with self.subTest(field=field):
+                second = json.loads(json.dumps(self.first))
+                second["packages"][0][field] = value
+                with self.assertRaises(probe.InvalidInput):
+                    self.run_compare(second)
+
+    def test_duplicate_exact_identity_rejected(self):
+        second = json.loads(json.dumps(self.first))
+        second["packages"].append(second["packages"][0])
+        with self.assertRaises(probe.InvalidInput):
+            self.run_compare(second)
+
+    def test_too_many_identities_rejected(self):
+        second = json.loads(json.dumps(self.first))
+        with mock.patch.object(probe, "MAX_COMPARABLE_PACKAGES", 0):
+            with self.assertRaisesRegex(probe.InvalidInput, "too many"):
+                self.run_compare(second)
+
+    def test_cli_offline_exit_codes_and_no_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.lock"
+            b = Path(tmp) / "b.lock"
+            a.write_text(json.dumps(self.first))
+            b.write_text(json.dumps(self.first))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(probe.main(["--lock", str(a),
+                                             "--compare-lock", str(b)]), 0)
+            self.assertEqual(json.loads(out.getvalue())["overall"], "IDENTICAL")
+            second = json.loads(json.dumps(self.first))
+            second["packages"][0]["sha256"] = "b" * 64
+            b.write_text(json.dumps(second))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(probe.main(["--lock", str(a),
+                                             "--compare-lock", str(b)]), 2)
+            self.assertNotIn(tmp, out.getvalue())
+            self.assertFalse("source_url" in out.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(probe.main(["--lock", str(a),
+                                             "--compare-lock", str(b),
+                                             "--all"]), 4)
 
 
 if __name__ == "__main__":
