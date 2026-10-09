@@ -103,15 +103,23 @@ impl PackageSource for LocalMirrorSource {
 
 fn read_limited_archive(path: &Path, max_bytes: u64) -> Result<Vec<u8>, PackageError> {
     let file = File::open(path)?;
+    // Reject oversized regular files before reading their contents.
+    // Still keep the bounded streaming check for growth after metadata().
+    let max_bytes = max_bytes.min(MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES);
+    reject_archive_size(file.metadata()?.len(), max_bytes)?;
     let mut bytes = Vec::new();
-    file.take(max_bytes.saturating_add(1))
-        .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > max_bytes {
+    file.take(max_bytes + 1).read_to_end(&mut bytes)?;
+    reject_archive_size(bytes.len() as u64, max_bytes)?;
+    Ok(bytes)
+}
+
+fn reject_archive_size(size: u64, max_bytes: u64) -> Result<(), PackageError> {
+    if size > max_bytes {
         return Err(PackageError::InvalidRequest(format!(
             "package archive exceeds the maximum supported size of {max_bytes} bytes"
         )));
     }
-    Ok(bytes)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -135,6 +143,40 @@ mod tests {
             .contains("package archive exceeds the maximum supported size of 3 bytes"));
         assert!(!error.to_string().contains(&path.display().to_string()));
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn sparse_oversized_archive_fails_before_streaming() {
+        let directory = tempfile::tempdir().expect("temporary mirror root");
+        let path = directory.path().join("large.tgz");
+        File::create(&path)
+            .expect("create sparse archive")
+            .set_len(MAX_COMPRESSED_PACKAGE_ARCHIVE_BYTES + 1)
+            .expect("expand sparse archive");
+        let error = read_limited_archive(&path, u64::MAX)
+            .expect_err("oversized mirror archive must be refused early");
+        assert!(matches!(error, PackageError::InvalidRequest(_)));
+        assert!(error.to_string().contains("package archive exceeds"));
+        assert!(!error.to_string().contains(&path.display().to_string()));
+    }
+
+    #[test]
+    fn mirror_bounded_reader_rejects_oversized_limits_and_preserves_exact_bound() {
+        let directory = tempfile::tempdir().expect("temporary mirror root");
+        let path = directory.path().join("small.tgz");
+        fs::write(&path, b"abcd").expect("write archive");
+        assert_eq!(
+            read_limited_archive(&path, u64::MAX).expect("clamped read"),
+            b"abcd"
+        );
+        assert_eq!(
+            read_limited_archive(&path, 4).expect("exact read"),
+            b"abcd"
+        );
+        assert!(matches!(
+            read_limited_archive(&path, 3),
+            Err(PackageError::InvalidRequest(_))
+        ));
     }
 
     #[test]
