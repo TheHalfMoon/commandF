@@ -7,6 +7,11 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use commandf_pkg::{run_hl7_oracle_adapter, Hl7OracleInvocation};
 
+// A quick shell adapter may be delayed by heavily parallel macOS test jobs.
+// The production timeout remains caller-controlled; the separate 20/100 ms
+// timeout tests below still assert prompt fail-closed process termination.
+const QUICK_ADAPTER_TEST_TIMEOUT: Duration = Duration::from_secs(5);
+
 const GOOD_REPORT: &str = r#"{"schema":1,"oracle":{"project":"hapifhir/org.hl7.fhir.core","release":"6.10.2","source_commit":"d06577dbc5c62c74a2a8823fbc4830a3024d5b0b"},"left":{"url":"http://example.org/StructureDefinition/test","version":null,"id":"test","type":"Patient"},"right":{"url":"http://example.org/StructureDefinition/test","version":null,"id":"test","type":"Patient"},"states":{"metadata":"not_changed","definitions":"not_changed","content":"unknown","content_interpretation":"unknown"},"messages":[]}"#;
 
 fn unique_temp_dir(label: &str) -> PathBuf {
@@ -65,8 +70,15 @@ fn executable_adapter_accepts_valid_pinned_json() {
     write_executable(&adapter, &format!("printf '%s\\n' '{}'", GOOD_REPORT));
     let (core, left, right) = package_inputs(&root);
 
-    let report = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
-        .expect("valid adapter report");
+    let report = invoke(
+        &adapter,
+        None,
+        &core,
+        &left,
+        &right,
+        QUICK_ADAPTER_TEST_TIMEOUT,
+    )
+    .expect("valid adapter report");
     assert_eq!(report.schema, 1);
     assert!(report.messages.is_empty());
     let _ = fs::remove_dir_all(root);
@@ -94,8 +106,15 @@ fn malformed_adapter_json_fails_closed() {
     write_executable(&adapter, "printf 'not-json\\n'");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
-        .expect_err("malformed JSON must fail");
+    let error = invoke(
+        &adapter,
+        None,
+        &core,
+        &left,
+        &right,
+        QUICK_ADAPTER_TEST_TIMEOUT,
+    )
+    .expect_err("malformed JSON must fail");
     assert!(error.to_string().contains("oracle report JSON is invalid"));
     let _ = fs::remove_dir_all(root);
 }
@@ -123,8 +142,15 @@ fn nonzero_adapter_exit_fails_closed_with_bounded_stderr() {
     write_executable(&adapter, "printf 'adapter failed' >&2; exit 7");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(1))
-        .expect_err("nonzero exit must fail");
+    let error = invoke(
+        &adapter,
+        None,
+        &core,
+        &left,
+        &right,
+        QUICK_ADAPTER_TEST_TIMEOUT,
+    )
+    .expect_err("nonzero exit must fail");
     let message = error.to_string();
     assert!(message.contains("code Some(7)"));
     assert!(message.contains("adapter failed"));
