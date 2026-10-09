@@ -13,7 +13,9 @@ pub(crate) fn read_lockfile(path: &Path) -> Result<Lockfile, Box<dyn std::error:
     let oversized = || {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("lockfile exceeds the maximum supported size of {MAX_LOCKFILE_INPUT_BYTES} bytes"),
+            format!(
+                "lockfile exceeds the maximum supported size of {MAX_LOCKFILE_INPUT_BYTES} bytes"
+            ),
         )
     };
     if file.metadata()?.len() > MAX_LOCKFILE_INPUT_BYTES {
