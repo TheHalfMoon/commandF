@@ -480,7 +480,13 @@ fn review_preview_refuses_tampered_digest_cache_without_output() {
 fn review_preview_sarif_includes_real_findings_and_graph_impact() {
     let dir = unique_temp_dir("review-preview-sarif-fail");
     let states = changed_v2_states(&dir);
-    let check = run_check(&states.0, &states.1, &states.2, &states.3, &["--format", "sarif"]);
+    let check = run_check(
+        &states.0,
+        &states.1,
+        &states.2,
+        &states.3,
+        &["--format", "sarif"],
+    );
     assert_eq!(check.status.code(), Some(2));
     let result = run_review_preview(&states, &["--format", "sarif"]);
     assert_eq!(result.status.code(), Some(2));
@@ -492,7 +498,10 @@ fn review_preview_sarif_includes_real_findings_and_graph_impact() {
         r#""ruleId""#,
         r#""commandf.decision.passed": false"#,
     ] {
-        assert!(standalone.contains(marker), "standalone SARIF lacks {marker}");
+        assert!(
+            standalone.contains(marker),
+            "standalone SARIF lacks {marker}"
+        );
         assert!(report.contains(marker), "preview SARIF lacks {marker}");
     }
     for marker in [
@@ -519,8 +528,12 @@ fn review_preview_sarif_policy_pass_writes_complete_atomic_file() {
     let result = run_review_preview(
         &states,
         &[
-            "--format", "sarif", "--fail-on", "none",
-            "--output", path.to_str().expect("UTF-8 path"),
+            "--format",
+            "sarif",
+            "--fail-on",
+            "none",
+            "--output",
+            path.to_str().expect("UTF-8 path"),
         ],
     );
     assert_eq!(result.status.code(), Some(0));
@@ -546,14 +559,16 @@ fn review_preview_sarif_rejects_corrupt_cache_without_partial_output() {
     let path = dir.join("report.sarif");
     let result = run_review_preview(
         &states,
-        &["--format", "sarif", "--output", path.to_str().expect("UTF-8 path")],
+        &[
+            "--format",
+            "sarif",
+            "--output",
+            path.to_str().expect("UTF-8 path"),
+        ],
     );
     assert_eq!(result.status.code(), Some(1));
     assert!(result.stdout.is_empty());
     assert!(!path.exists());
-    assert!(
-        String::from_utf8_lossy(&result.stderr).contains("cache object digest mismatch")
-    );
+    assert!(String::from_utf8_lossy(&result.stderr).contains("cache object digest mismatch"));
     let _ = fs::remove_dir_all(dir);
 }
-

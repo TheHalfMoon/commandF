@@ -133,7 +133,9 @@ pub fn compose_review_preview_sarif(
     let mut output = serde_json::to_vec_pretty(&sarif)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     if output.len() > MAX_PART_BYTES * 3 {
-        return Err(invalid("review-preview combined SARIF exceeds 192 MiB limit"));
+        return Err(invalid(
+            "review-preview combined SARIF exceeds 192 MiB limit",
+        ));
     }
     output.push(b'\n');
     Ok(output)
