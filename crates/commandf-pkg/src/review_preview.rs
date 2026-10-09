@@ -6,8 +6,12 @@
 use std::io;
 
 use serde::Serialize;
+use serde_json::{json, Value};
 
-use crate::{validate_check_report, CheckReport, ContextGraphReport, ImpactReport, Lockfile};
+use crate::{
+    check_report_to_sarif_bytes, validate_check_report, CheckReport, ContextGraphReport,
+    ImpactReport, Lockfile,
+};
 
 const MAX_PART_BYTES: usize = 64 * 1024 * 1024;
 
@@ -76,6 +80,63 @@ pub fn compose_review_preview(check: &CheckReport, impact_bytes: &[u8]) -> io::R
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+
+/// Emit a genuine SARIF 2.1.0 log using the existing deterministic
+/// compatibility projection, carrying the independently verified graph
+/// impact under one run-level property. This is not a full consumer review.
+pub fn compose_review_preview_sarif(
+    check: &CheckReport,
+    impact_bytes: &[u8],
+) -> io::Result<Vec<u8>> {
+    // Reuse all existing typed report, schema and identity consistency checks.
+    // Do not create a second weaker path to emit SARIF.
+    let preview_bytes = compose_review_preview(check, impact_bytes)?;
+    let preview: Value = serde_json::from_slice(&preview_bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let impact = preview
+        .get("impact")
+        .cloned()
+        .ok_or_else(|| invalid("review-preview missing verified impact report"))?;
+
+    let raw_sarif = check_report_to_sarif_bytes(check)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if raw_sarif.len() > MAX_PART_BYTES {
+        return Err(invalid("review-preview SARIF report exceeds 64 MiB limit"));
+    }
+    let mut sarif: Value = serde_json::from_slice(&raw_sarif)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let runs = sarif
+        .get_mut("runs")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| invalid("review-preview SARIF runs missing"))?;
+    if runs.len() != 1 {
+        return Err(invalid("review-preview SARIF must contain one run"));
+    }
+    let properties = runs[0]
+        .get_mut("properties")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| invalid("review-preview SARIF run properties missing"))?;
+    properties.insert("commandf.reviewPreviewSchema".to_owned(), json!(1));
+    properties.insert(
+        "commandf.previewScope".to_owned(),
+        json!("structural-and-declared-graph-preview"),
+    );
+    properties.insert(
+        "commandf.completeConsumerContractReview".to_owned(),
+        json!(false),
+    );
+    properties.insert("commandf.atomicCrossStepSnapshot".to_owned(), json!(false));
+    properties.insert("commandf.signedReceipt".to_owned(), json!(false));
+    properties.insert("commandf.impactReport".to_owned(), impact);
+
+    let mut output = serde_json::to_vec_pretty(&sarif)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if output.len() > MAX_PART_BYTES * 3 {
+        return Err(invalid("review-preview combined SARIF exceeds 192 MiB limit"));
+    }
+    output.push(b'\n');
+    Ok(output)
 }
 
 fn invalid(message: &'static str) -> io::Error {

@@ -475,3 +475,85 @@ fn review_preview_refuses_tampered_digest_cache_without_output() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("cache object digest mismatch"));
     let _ = fs::remove_dir_all(dir);
 }
+
+#[test]
+fn review_preview_sarif_includes_real_findings_and_graph_impact() {
+    let dir = unique_temp_dir("review-preview-sarif-fail");
+    let states = changed_v2_states(&dir);
+    let check = run_check(&states.0, &states.1, &states.2, &states.3, &["--format", "sarif"]);
+    assert_eq!(check.status.code(), Some(2));
+    let result = run_review_preview(&states, &["--format", "sarif"]);
+    assert_eq!(result.status.code(), Some(2));
+    assert!(result.stderr.is_empty());
+    let report = String::from_utf8(result.stdout).expect("SARIF report");
+    let standalone = String::from_utf8(check.stdout).expect("standalone SARIF report");
+    for marker in [
+        r#""version": "2.1.0""#,
+        r#""ruleId""#,
+        r#""commandf.decision.passed": false"#,
+    ] {
+        assert!(standalone.contains(marker), "standalone SARIF lacks {marker}");
+        assert!(report.contains(marker), "preview SARIF lacks {marker}");
+    }
+    for marker in [
+        r#""commandf.previewScope": "structural-and-declared-graph-preview""#,
+        r#""commandf.completeConsumerContractReview": false"#,
+        r#""commandf.atomicCrossStepSnapshot": false"#,
+        r#""commandf.signedReceipt": false"#,
+        r#""commandf.impactReport": {"#,
+        r#""subject": {"#,
+        r#""before_evidence": {"#,
+        r#""after_evidence": {"#,
+    ] {
+        assert!(report.contains(marker), "preview SARIF lacks {marker}");
+    }
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_sarif_policy_pass_writes_complete_atomic_file() {
+    let dir = unique_temp_dir("review-preview-sarif-pass");
+    let states = changed_v2_states(&dir);
+    let path = dir.join("review.sarif");
+    fs::write(&path, b"old-SARIF").expect("seed stale output");
+    let result = run_review_preview(
+        &states,
+        &[
+            "--format", "sarif", "--fail-on", "none",
+            "--output", path.to_str().expect("UTF-8 path"),
+        ],
+    );
+    assert_eq!(result.status.code(), Some(0));
+    assert!(result.stdout.is_empty());
+    let sarif = fs::read_to_string(&path).expect("complete SARIF");
+    assert!(sarif.contains(r#""commandf.decision.passed": true"#));
+    assert!(sarif.contains(r#""commandf.impactReport": {"#));
+    assert!(!sarif.contains("old-SARIF"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_sarif_rejects_corrupt_cache_without_partial_output() {
+    let dir = unique_temp_dir("review-preview-sarif-corrupt");
+    let states = changed_v2_states(&dir);
+    let after = decode_hex(AFTER_HEX);
+    let digest = PackageCache::digest(&after);
+    fs::write(
+        states.3.join("sha256").join(format!("{digest}.tgz")),
+        b"invalid cached archive",
+    )
+    .expect("tamper archive");
+    let path = dir.join("report.sarif");
+    let result = run_review_preview(
+        &states,
+        &["--format", "sarif", "--output", path.to_str().expect("UTF-8 path")],
+    );
+    assert_eq!(result.status.code(), Some(1));
+    assert!(result.stdout.is_empty());
+    assert!(!path.exists());
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("cache object digest mismatch")
+    );
+    let _ = fs::remove_dir_all(dir);
+}
+

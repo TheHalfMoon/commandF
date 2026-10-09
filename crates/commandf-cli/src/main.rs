@@ -13,7 +13,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
     build_context_graph, build_source_mapped_check_report, build_terminology_diff_report,
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
-    classify_structural_diff, compose_review_preview, diff_package_archives,
+    classify_structural_diff, compose_review_preview, compose_review_preview_sarif,
+    diff_package_archives,
     evaluate_compatibility_policy, inspect_package,
     source_mapped_check_report_to_github_annotations_bytes, CheckDirection, CheckFailOn,
     CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile,
@@ -134,6 +135,9 @@ enum Command {
         direction: CheckDirectionArg,
         #[arg(long, value_enum, default_value = "breaking")]
         fail_on: CheckFailOnArg,
+        #[arg(long)]
+        #[arg(long, value_enum, default_value = "json")]
+        format: CheckOutputFormat,
         #[arg(long)]
         output: Option<PathBuf>,
     },
@@ -458,6 +462,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             after_cache,
             direction,
             fail_on,
+            format,
             output,
         } => {
             // Preview is explicitly non-atomic across the two read paths. Both
@@ -485,7 +490,10 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 after_lock,
                 after_cache,
             )?;
-            let bytes = compose_review_preview(&check, &impact_bytes)?;
+            let bytes = match format {
+                CheckOutputFormat::Json => compose_review_preview(&check, &impact_bytes)?,
+                CheckOutputFormat::Sarif => compose_review_preview_sarif(&check, &impact_bytes)?,
+            };
             write_check_output(&bytes, output.as_deref())?;
             if !check.decision.passed {
                 return Ok(ExitCode::from(2));

@@ -207,7 +207,7 @@ pub use oracle_reconcile::{
 };
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
-pub use review_preview::compose_review_preview;
+pub use review_preview::{compose_review_preview, compose_review_preview_sarif};
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
 pub use source_map::{
     build_source_mapped_check_report, validate_source_mapped_check_report,
