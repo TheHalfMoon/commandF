@@ -162,7 +162,9 @@ fn mapped_sparse_oversized_fsh_file_fails_before_reporting_location() {
             repo.path(),
             Path::new("input/fsh")
         ),
-        Err(SourceMapError::SourceTooLarge { maximum: 67_108_864 })
+        Err(SourceMapError::SourceTooLarge {
+            maximum: 67_108_864
+        })
     ));
 }
 

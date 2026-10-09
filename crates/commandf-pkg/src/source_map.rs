@@ -457,7 +457,9 @@ mod tests {
             .expect("sparse oversized FSH");
         assert!(matches!(
             source_line_count(&path),
-            Err(SourceMapError::SourceTooLarge { maximum: MAX_FSH_SOURCE_BYTES })
+            Err(SourceMapError::SourceTooLarge {
+                maximum: MAX_FSH_SOURCE_BYTES
+            })
         ));
     }
 
