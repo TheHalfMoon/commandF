@@ -13,10 +13,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use commandf_pkg::{
     build_context_graph, build_source_mapped_check_report, build_terminology_diff_report,
     check_report_to_github_annotations_bytes, check_report_to_sarif_bytes,
-    classify_structural_diff, diff_package_archives, evaluate_compatibility_policy,
-    inspect_package, source_mapped_check_report_to_github_annotations_bytes, CheckDirection,
-    CheckFailOn, CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage,
-    Lockfile, PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
+    classify_structural_diff, compose_review_preview, compose_review_preview_sarif,
+    diff_package_archives, evaluate_compatibility_policy, inspect_package,
+    source_mapped_check_report_to_github_annotations_bytes, CheckDirection, CheckFailOn,
+    CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile,
+    PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
     StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState, VersionConstraint,
     MAX_SOURCE_MAPPED_REPORT_BYTES,
 };
@@ -118,6 +119,27 @@ enum Command {
         output: Option<PathBuf>,
     },
     Gate(gate::GateArgs),
+    /// Partial preview: existing deterministic check + graph impact, not consumer-contract review.
+    ReviewPreview {
+        package: String,
+        #[arg(long)]
+        before_lock: PathBuf,
+        #[arg(long)]
+        before_cache: PathBuf,
+        #[arg(long)]
+        after_lock: PathBuf,
+        #[arg(long)]
+        after_cache: PathBuf,
+        #[arg(long, value_enum, default_value = "both")]
+        direction: CheckDirectionArg,
+        #[arg(long, value_enum, default_value = "breaking")]
+        fail_on: CheckFailOnArg,
+        #[arg(long)]
+        #[arg(long, value_enum, default_value = "json")]
+        format: CheckOutputFormat,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     Terminology {
         package: String,
         #[arg(long)]
@@ -243,7 +265,9 @@ fn main() -> ExitCode {
     let command = std::env::args_os().nth(1);
     let normalize_usage_exit = matches!(
         command.as_deref(),
-        Some(value) if value == OsStr::new("check") || value == OsStr::new("gate")
+        Some(value) if value == OsStr::new("check")
+                || value == OsStr::new("gate")
+                || value == OsStr::new("review-preview")
     );
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
@@ -429,6 +453,52 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             return Ok(ExitCode::from(2));
         }
         Command::Gate(args) => return gate::run(args),
+        Command::ReviewPreview {
+            package,
+            before_lock,
+            before_cache,
+            after_lock,
+            after_cache,
+            direction,
+            fail_on,
+            format,
+            output,
+        } => {
+            // Preview is explicitly non-atomic across the two read paths. Both
+            // subreports verify cached archive bytes, but they are not a signed
+            // receipt or a frozen consumer-contract judgment.
+            let diff = build_diff_report(
+                package.clone(),
+                before_lock.clone(),
+                before_cache.clone(),
+                after_lock.clone(),
+                after_cache.clone(),
+            )?;
+            let classification = classify_structural_diff(&diff)?;
+            let check = evaluate_compatibility_policy(
+                &classification,
+                CheckPolicy {
+                    direction: direction.into(),
+                    fail_on: fail_on.into(),
+                },
+            )?;
+            let impact_bytes = impact::from_existing_diff(
+                &diff,
+                before_lock,
+                before_cache,
+                after_lock,
+                after_cache,
+            )?;
+            let bytes = match format {
+                CheckOutputFormat::Json => compose_review_preview(&check, &impact_bytes)?,
+                CheckOutputFormat::Sarif => compose_review_preview_sarif(&check, &impact_bytes)?,
+            };
+            write_check_output(&bytes, output.as_deref())?;
+            if !check.decision.passed {
+                return Ok(ExitCode::from(2));
+            }
+            return Ok(ExitCode::SUCCESS);
+        }
         Command::Terminology {
             package,
             before_lock,

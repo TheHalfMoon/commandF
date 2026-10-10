@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use commandf_pkg::{LockedPackage, Lockfile, PackageCache};
+use commandf_pkg::{compose_review_preview, CheckReport, LockedPackage, Lockfile, PackageCache};
 
 const BEFORE_HEX: &str = concat!(
     "1f8b08000000000002ffed944d4fc3300c86fb5350cea31f63b452cf70e60037c4216bbd35d0a655924e43d3fe3beed66d6c",
@@ -284,4 +284,291 @@ fn corrupted_cache_is_operational_exit_one_not_policy_exit_two() {
         "stderr: {stderr}"
     );
     let _ = fs::remove_dir_all(&dir);
+}
+
+fn changed_v2_states(dir: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
+    let states = changed_states(dir);
+    for lock_path in [&states.0, &states.2] {
+        let before = Lockfile::from_slice(&fs::read(lock_path).expect("read test lock"))
+            .expect("parse test lock");
+        let v2 = Lockfile::new_v2(before.roots, before.packages, vec![]);
+        fs::write(lock_path, v2.to_bytes().expect("serialize v2 lock"))
+            .expect("upgrade test lock schema");
+    }
+    states
+}
+
+fn run_review_preview(states: &(PathBuf, PathBuf, PathBuf, PathBuf), extra: &[&str]) -> Output {
+    let mut command = commandf();
+    command.args([
+        "review-preview",
+        "example.package",
+        "--before-lock",
+        states.0.to_str().expect("UTF-8 path"),
+        "--before-cache",
+        states.1.to_str().expect("UTF-8 path"),
+        "--after-lock",
+        states.2.to_str().expect("UTF-8 path"),
+        "--after-cache",
+        states.3.to_str().expect("UTF-8 path"),
+    ]);
+    command.args(extra);
+    command
+        .env("HTTP_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env("NO_PROXY", "")
+        .output()
+        .expect("commandf review-preview must execute")
+}
+
+#[test]
+fn review_preview_fail_closed_policy_emits_both_existing_reports() {
+    let dir = unique_temp_dir("review-preview-fail");
+    let states = changed_v2_states(&dir);
+    let output = run_review_preview(&states, &[]);
+    assert_eq!(output.status.code(), Some(2));
+    let report = String::from_utf8(output.stdout).expect("UTF-8 preview");
+    assert!(report.starts_with("{\n"));
+    assert!(report.contains("\"complete_consumer_contract_review\": false"));
+    assert!(report.contains("\"atomic_cross_step_snapshot\": false"));
+    assert!(report.contains("\"signed_receipt\": false"));
+    assert!(report.contains("\"check\": {"));
+    assert!(report.contains("\"impact\": {"));
+    assert!(report.contains("\"passed\": false"));
+    assert!(!report.contains("\"findings\": []"));
+    assert!(report.ends_with("}\n"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_policy_pass_preserves_findings_and_atomic_output() {
+    let dir = unique_temp_dir("review-preview-pass");
+    let states = changed_v2_states(&dir);
+    let path = dir.join("result.json");
+    fs::write(&path, b"old-result").expect("write stale report");
+    let output_path = path.to_str().expect("UTF-8 output");
+    let output = run_review_preview(&states, &["--fail-on", "none", "--output", output_path]);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
+    let report = fs::read_to_string(&path).expect("read bounded preview");
+    assert!(report.contains("\"passed\": true"));
+    assert!(report.contains("\"impact\": {"));
+    assert!(!report.contains("old-result"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_rejects_legacy_lock_without_writing_a_report() {
+    let dir = unique_temp_dir("review-preview-lock-v1");
+    let states = changed_states(&dir);
+    let path = dir.join("result.json");
+    let output_path = path.to_str().expect("UTF-8 output");
+    let output = run_review_preview(&states, &["--output", output_path]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(
+        !path.exists(),
+        "cannot publish a partial preview on impact failure"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("impact requires commandf.lock schema 2")
+    );
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_invalid_policy_is_operational_exit_one() {
+    let output = commandf()
+        .args([
+            "review-preview",
+            "example.package",
+            "--before-lock",
+            "before.lock",
+            "--before-cache",
+            "before-cache",
+            "--after-lock",
+            "after.lock",
+            "--after-cache",
+            "after-cache",
+            "--fail-on",
+            "unknown-policy",
+        ])
+        .output()
+        .expect("parse validation must execute");
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn review_preview_is_byte_stable_across_offline_replays() {
+    let dir = unique_temp_dir("review-preview-stability");
+    let states = changed_v2_states(&dir);
+    let first = run_review_preview(&states, &[]);
+    let second = run_review_preview(&states, &[]);
+    assert_eq!(first.status.code(), Some(2));
+    assert_eq!(second.status.code(), Some(2));
+    assert_eq!(first.stdout, second.stdout);
+    assert!(!first.stdout.is_empty());
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_detects_subject_mismatch_before_publication() {
+    let dir = unique_temp_dir("review-preview-mismatch");
+    let states = changed_v2_states(&dir);
+    let check = run_check(&states.0, &states.1, &states.2, &states.3, &[]);
+    assert_eq!(check.status.code(), Some(2));
+    let parsed_check = CheckReport::from_json_slice(&check.stdout).expect("typed check");
+
+    let impact = commandf()
+        .args([
+            "impact",
+            "example.package",
+            "--before-lock",
+            states.0.to_str().expect("UTF-8"),
+            "--before-cache",
+            states.1.to_str().expect("UTF-8"),
+            "--after-lock",
+            states.2.to_str().expect("UTF-8"),
+            "--after-cache",
+            states.3.to_str().expect("UTF-8"),
+        ])
+        .output()
+        .expect("impact report");
+    assert_eq!(impact.status.code(), Some(0));
+    assert!(compose_review_preview(&parsed_check, &impact.stdout).is_ok());
+
+    let impact = String::from_utf8(impact.stdout).expect("UTF-8 impact");
+    let tampered = impact.replacen(
+        r#""package_name": "example.package""#,
+        r#""package_name": "different.package""#,
+        1,
+    );
+    assert_ne!(
+        tampered, impact,
+        "test fixture must actually alter identity"
+    );
+    let error = compose_review_preview(&parsed_check, tampered.as_bytes())
+        .expect_err("mismatched package identities must not be bundled");
+    assert!(error.to_string().contains("identities disagree"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_refuses_tampered_digest_cache_without_output() {
+    let dir = unique_temp_dir("review-preview-corrupt");
+    let states = changed_v2_states(&dir);
+    let after = decode_hex(AFTER_HEX);
+    let digest = PackageCache::digest(&after);
+    fs::write(
+        states.3.join("sha256").join(format!("{digest}.tgz")),
+        b"wrong archive bytes",
+    )
+    .expect("tamper locked cache");
+    let output_path = dir.join("result.json");
+    let output = run_review_preview(
+        &states,
+        &["--output", output_path.to_str().expect("UTF-8 output")],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(!output_path.exists());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cache object digest mismatch"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_sarif_includes_real_findings_and_graph_impact() {
+    let dir = unique_temp_dir("review-preview-sarif-fail");
+    let states = changed_v2_states(&dir);
+    let check = run_check(
+        &states.0,
+        &states.1,
+        &states.2,
+        &states.3,
+        &["--format", "sarif"],
+    );
+    assert_eq!(check.status.code(), Some(2));
+    let result = run_review_preview(&states, &["--format", "sarif"]);
+    assert_eq!(result.status.code(), Some(2));
+    assert!(result.stderr.is_empty());
+    let report = String::from_utf8(result.stdout).expect("SARIF report");
+    let standalone = String::from_utf8(check.stdout).expect("standalone SARIF report");
+    for marker in [
+        r#""version": "2.1.0""#,
+        r#""ruleId""#,
+        r#""commandf.decision.passed": false"#,
+    ] {
+        assert!(
+            standalone.contains(marker),
+            "standalone SARIF lacks {marker}"
+        );
+        assert!(report.contains(marker), "preview SARIF lacks {marker}");
+    }
+    for marker in [
+        r#""commandf.previewScope": "structural-and-declared-graph-preview""#,
+        r#""commandf.completeConsumerContractReview": false"#,
+        r#""commandf.atomicCrossStepSnapshot": false"#,
+        r#""commandf.signedReceipt": false"#,
+        r#""commandf.impactReport": {"#,
+        r#""subject": {"#,
+        r#""before_evidence": {"#,
+        r#""after_evidence": {"#,
+    ] {
+        assert!(report.contains(marker), "preview SARIF lacks {marker}");
+    }
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_sarif_policy_pass_writes_complete_atomic_file() {
+    let dir = unique_temp_dir("review-preview-sarif-pass");
+    let states = changed_v2_states(&dir);
+    let path = dir.join("review.sarif");
+    fs::write(&path, b"old-SARIF").expect("seed stale output");
+    let result = run_review_preview(
+        &states,
+        &[
+            "--format",
+            "sarif",
+            "--fail-on",
+            "none",
+            "--output",
+            path.to_str().expect("UTF-8 path"),
+        ],
+    );
+    assert_eq!(result.status.code(), Some(0));
+    assert!(result.stdout.is_empty());
+    let sarif = fs::read_to_string(&path).expect("complete SARIF");
+    assert!(sarif.contains(r#""commandf.decision.passed": true"#));
+    assert!(sarif.contains(r#""commandf.impactReport": {"#));
+    assert!(!sarif.contains("old-SARIF"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn review_preview_sarif_rejects_corrupt_cache_without_partial_output() {
+    let dir = unique_temp_dir("review-preview-sarif-corrupt");
+    let states = changed_v2_states(&dir);
+    let after = decode_hex(AFTER_HEX);
+    let digest = PackageCache::digest(&after);
+    fs::write(
+        states.3.join("sha256").join(format!("{digest}.tgz")),
+        b"invalid cached archive",
+    )
+    .expect("tamper archive");
+    let path = dir.join("report.sarif");
+    let result = run_review_preview(
+        &states,
+        &[
+            "--format",
+            "sarif",
+            "--output",
+            path.to_str().expect("UTF-8 path"),
+        ],
+    );
+    assert_eq!(result.status.code(), Some(1));
+    assert!(result.stdout.is_empty());
+    assert!(!path.exists());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("cache object digest mismatch"));
+    let _ = fs::remove_dir_all(dir);
 }

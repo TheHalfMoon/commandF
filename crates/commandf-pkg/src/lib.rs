@@ -50,6 +50,7 @@ mod oracle_process;
 mod oracle_reconcile;
 mod registry;
 mod resolver;
+mod review_preview;
 mod source;
 mod source_map;
 mod source_map_error;
@@ -206,6 +207,7 @@ pub use oracle_reconcile::{
 };
 pub use registry::FhirRegistrySource;
 pub use resolver::Resolver;
+pub use review_preview::{compose_review_preview, compose_review_preview_sarif};
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};
 pub use source_map::{
     build_source_mapped_check_report, validate_source_mapped_check_report,
