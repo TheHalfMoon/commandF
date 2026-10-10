@@ -1,5 +1,6 @@
 mod gate;
 mod impact;
+mod lock_compare;
 mod lock_input;
 mod oracle;
 
@@ -259,6 +260,13 @@ enum PkgCommand {
         #[arg(long, default_value = "commandf.lock")]
         lock: PathBuf,
     },
+    /// Compare two verified-lock representations without trusting transport URLs.
+    CompareLocks {
+        #[arg(long)]
+        first_lock: PathBuf,
+        #[arg(long)]
+        second_lock: PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -324,6 +332,16 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 let cache = PackageCache::new(cache);
                 lockfile.verify_cache(&cache)?;
                 println!("verified {} packages", lockfile.packages.len());
+            }
+            PkgCommand::CompareLocks {
+                first_lock,
+                second_lock,
+            } => {
+                let (bytes, equivalent) = lock_compare::run(&first_lock, &second_lock)?;
+                io::stdout().write_all(&bytes)?;
+                if !equivalent {
+                    return Ok(ExitCode::from(2));
+                }
             }
         },
         Command::Inspect {
