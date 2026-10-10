@@ -20,6 +20,8 @@ pub enum ArtifactError {
     InvalidResourceType(String),
     #[error("field {field} in {file} must be a string when present")]
     InvalidStringField { file: String, field: String },
+    #[error("duplicate package resource filename: {file}")]
+    DuplicateResourceFilename { file: String },
     #[error("duplicate canonical identity {identity}: {first} and {second}")]
     DuplicateCanonical {
         identity: String,

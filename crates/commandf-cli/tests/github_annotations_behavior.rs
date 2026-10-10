@@ -139,6 +139,10 @@ fn github_annotations_oversized_input_fails_before_json_parse() {
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("byte limit"));
+    assert!(
+        !stderr.contains(&report.display().to_string()),
+        "oversize diagnostics must not reveal an absolute host path"
+    );
 }
 
 #[test]
