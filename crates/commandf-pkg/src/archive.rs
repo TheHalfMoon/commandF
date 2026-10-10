@@ -84,6 +84,7 @@ fn read_manifest_with_limits(
     let bounded = BoundedReader::new(decoder, max_decompressed_bytes);
     let mut archive = Archive::new(bounded);
     let mut entry_count = 0_usize;
+    let mut manifest = None;
 
     for entry in archive.entries()? {
         entry_count += 1;
@@ -99,6 +100,11 @@ fn read_manifest_with_limits(
         if normalized != Path::new("package/package.json") {
             continue;
         }
+        if manifest.is_some() {
+            return Err(PackageError::InvalidRequest(
+                "package archive contains duplicate package/package.json manifests".to_owned(),
+            ));
+        }
         if entry.size() > MAX_MANIFEST_BYTES {
             return Err(PackageError::ManifestTooLarge);
         }
@@ -109,10 +115,10 @@ fn read_manifest_with_limits(
         if body.len() as u64 > MAX_MANIFEST_BYTES {
             return Err(PackageError::ManifestTooLarge);
         }
-        return Ok(serde_json::from_str(&body)?);
+        manifest = Some(serde_json::from_str(&body)?);
     }
 
-    Err(PackageError::MissingManifest)
+    manifest.ok_or(PackageError::MissingManifest)
 }
 
 #[cfg(test)]
@@ -161,6 +167,76 @@ mod tests {
             manifest_scan_decompressed_limit(usize::MAX),
             MAX_MANIFEST_SCAN_DECOMPRESSED_BYTES
         );
+    }
+
+    #[test]
+    fn duplicate_identical_manifest_must_fail_closed() {
+        let manifest = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let bytes = archive_with_entries(&[
+            ("package/package.json", manifest),
+            ("package/package.json", manifest),
+        ]);
+        let error = read_manifest_with_limits(&bytes, 1024 * 1024, 100).unwrap_err();
+        assert!(matches!(error, PackageError::InvalidRequest(_)), "{error}");
+    }
+
+    #[test]
+    fn duplicate_conflicting_manifest_must_fail_closed() {
+        let valid = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let conflicting = br#"{"name":"acme.other","version":"2.0.0","dependencies":{}}"#;
+        let bytes = archive_with_entries(&[
+            ("package/package.json", valid),
+            ("package/other.json", br#"{}"#),
+            ("package/package.json", conflicting),
+        ]);
+        let error = read_manifest_with_limits(&bytes, 1024 * 1024, 100).unwrap_err();
+        assert!(matches!(error, PackageError::InvalidRequest(_)), "{error}");
+    }
+
+    #[test]
+    fn complete_archive_scan_accepts_one_manifest_followed_by_resources() {
+        let manifest = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let bytes = archive_with_entries(&[
+            ("package/package.json", manifest),
+            ("package/StructureDefinition-example.json", br#"{}"#),
+        ]);
+        let parsed = read_manifest_with_limits(&bytes, 1024 * 1024, 100).unwrap();
+        assert_eq!(parsed.name, "acme.root");
+        assert_eq!(parsed.version, "1.0.0");
+    }
+
+    #[test]
+    fn normalized_duplicate_manifest_path_is_rejected() {
+        let manifest = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let bytes = archive_with_entries(&[
+            ("package/package.json", manifest),
+            ("./package/package.json", manifest),
+        ]);
+        let error = read_manifest_with_limits(&bytes, 1024 * 1024, 100).unwrap_err();
+        assert!(matches!(error, PackageError::InvalidRequest(_)), "{error}");
+    }
+
+    #[test]
+    fn archive_entry_limit_applies_after_first_manifest() {
+        let manifest = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let bytes = archive_with_entries(&[
+            ("package/package.json", manifest),
+            ("package/first.json", br#"{}"#),
+            ("package/second.json", br#"{}"#),
+        ]);
+        let error = read_manifest_with_limits(&bytes, 1024 * 1024, 2).unwrap_err();
+        assert!(matches!(error, PackageError::InvalidRequest(_)), "{error}");
+    }
+
+    #[test]
+    fn decompressed_limit_applies_after_first_manifest() {
+        let manifest = br#"{"name":"acme.root","version":"1.0.0","dependencies":{}}"#;
+        let padding = vec![42_u8; 128 * 1024];
+        let bytes = archive_with_entries(&[
+            ("package/package.json", manifest),
+            ("package/big.json", &padding),
+        ]);
+        assert!(read_manifest_with_limits(&bytes, 4096, 100).is_err());
     }
 
     #[test]
