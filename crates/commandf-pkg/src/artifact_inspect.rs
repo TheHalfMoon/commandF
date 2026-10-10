@@ -22,7 +22,13 @@ pub fn inspect_package(
     }
 
     let mut resources = Vec::new();
+    let mut filenames = BTreeSet::new();
     for scanned in scan_package_resources(archive_bytes)? {
+        if !filenames.insert(scanned.filename.clone()) {
+            return Err(ArtifactError::DuplicateResourceFilename {
+                file: scanned.filename,
+            });
+        }
         resources.push(parse_resource(&scanned.filename, &scanned.bytes)?);
     }
 
