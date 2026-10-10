@@ -127,8 +127,15 @@ fn oversized_adapter_stdout_fails_before_json_parsing() {
     write_executable(&adapter, "head -c 8388609 /dev/zero");
     let (core, left, right) = package_inputs(&root);
 
-    let error = invoke(&adapter, None, &core, &left, &right, Duration::from_secs(2))
-        .expect_err("oversized stdout must fail");
+    let error = invoke(
+        &adapter,
+        None,
+        &core,
+        &left,
+        &right,
+        QUICK_ADAPTER_TEST_TIMEOUT,
+    )
+    .expect_err("oversized stdout must fail");
     let message = error.to_string();
     assert!(message.contains("stdout exceeded limit"), "{message}");
     let _ = fs::remove_dir_all(root);
