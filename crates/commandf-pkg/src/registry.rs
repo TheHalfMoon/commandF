@@ -22,15 +22,29 @@ struct RegistryMetadata {
     versions: BTreeMap<String, serde_json::Value>,
 }
 
+/// Official allowlisted FHIR registry selection for bounded origin diagnostics.
+///
+/// The default preserves the existing primary-then-secondary fallback; explicit
+/// selections never cross to the other origin after a transport error.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum RegistryOrigin {
+    #[default]
+    Automatic,
+    PrimaryOnly,
+    SecondaryOnly,
+}
+
 #[derive(Clone)]
 pub struct FhirRegistrySource {
     agent: Agent,
+    origin: RegistryOrigin,
 }
 
 impl Default for FhirRegistrySource {
     fn default() -> Self {
         Self {
             agent: agent_with_timeout(REQUEST_TIMEOUT),
+            origin: RegistryOrigin::Automatic,
         }
     }
 }
@@ -40,8 +54,23 @@ impl FhirRegistrySource {
         Self::default()
     }
 
-    fn endpoints() -> [&'static str; 2] {
-        [PRIMARY, SECONDARY]
+    /// Construct a source pinned to an exact, built-in registry origin.
+    ///
+    /// Automatic preserves primary-first fallback. Neither other variant
+    /// performs cross-origin fallback, preventing silent digest substitution.
+    pub fn with_origin(origin: RegistryOrigin) -> Self {
+        Self {
+            agent: agent_with_timeout(REQUEST_TIMEOUT),
+            origin,
+        }
+    }
+
+    fn endpoints(&self) -> &'static [&'static str] {
+        match self.origin {
+            RegistryOrigin::Automatic => &[PRIMARY, SECONDARY],
+            RegistryOrigin::PrimaryOnly => &[PRIMARY],
+            RegistryOrigin::SecondaryOnly => &[SECONDARY],
+        }
     }
 
     fn metadata_from(
@@ -194,7 +223,7 @@ impl PackageSource for FhirRegistrySource {
 
     fn available_versions(&self, name: &PackageName) -> Result<Vec<Version>, PackageError> {
         let mut errors = Vec::new();
-        for endpoint in Self::endpoints() {
+        for endpoint in self.endpoints() {
             match self.metadata_from(endpoint, name) {
                 Ok(metadata) => {
                     let parsed = metadata
@@ -229,7 +258,7 @@ impl PackageSource for FhirRegistrySource {
         version: &Version,
     ) -> Result<PackageArchive, PackageError> {
         let mut errors = Vec::new();
-        for endpoint in Self::endpoints() {
+        for endpoint in self.endpoints() {
             match self.archive_from(endpoint, name, version) {
                 Ok(archive) => return Ok(archive),
                 Err(error) => errors.push(format!("{endpoint}: {error}")),
@@ -252,6 +281,31 @@ mod tests {
 
     fn version() -> Version {
         Version::parse("8.0.1").unwrap()
+    }
+
+    #[test]
+    fn default_origin_preserves_existing_fallback_order() {
+        assert_eq!(FhirRegistrySource::new().endpoints(), &[PRIMARY, SECONDARY]);
+        assert_eq!(
+            FhirRegistrySource::default().endpoints(),
+            &[PRIMARY, SECONDARY]
+        );
+        assert_eq!(
+            FhirRegistrySource::with_origin(RegistryOrigin::Automatic).endpoints(),
+            &[PRIMARY, SECONDARY]
+        );
+    }
+
+    #[test]
+    fn explicit_origin_never_configures_cross_origin_fallback() {
+        assert_eq!(
+            FhirRegistrySource::with_origin(RegistryOrigin::PrimaryOnly).endpoints(),
+            &[PRIMARY]
+        );
+        assert_eq!(
+            FhirRegistrySource::with_origin(RegistryOrigin::SecondaryOnly).endpoints(),
+            &[SECONDARY]
+        );
     }
 
     #[test]
