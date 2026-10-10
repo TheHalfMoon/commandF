@@ -34,6 +34,9 @@ pub enum SourceMapError {
     #[error("mapped FSH source does not exist as a regular file: {0}")]
     MissingSource(String),
 
+    #[error("FSH source exceeds the maximum supported size of {maximum} bytes")]
+    SourceTooLarge { maximum: u64 },
+
     #[error("mapped FSH source escapes the configured source root: {0}")]
     SourceEscape(String),
 

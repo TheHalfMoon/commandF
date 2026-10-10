@@ -454,10 +454,10 @@ fn build_baseline() -> authority::AuthorityBaseline {
         "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652953",
         authority::ASSURANCE_RULESET_ID,
     );
-    let review = canonical_ruleset_view(
-        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974",
-        authority::REVIEW_RULESET_ID,
-    );
+    // Reconstruct immutable AF-02 v2 approval=1 history from its frozen
+    // fixture. The founder's later approval-free LIVE rule is proved
+    // independently below; it must not overwrite the historic v2 record.
+    let review = parse_json_no_duplicates(REVIEW_RULESET).unwrap();
     let (oracle_model, cf06_donor, cf06_workflow) = canonical_cf06_sources();
 
     project_authority(
@@ -485,6 +485,76 @@ fn build_baseline() -> authority::AuthorityBaseline {
         retained_projection,
     )
     .unwrap()
+}
+
+const REVIEW_FREE_RULESET_POLICY: &[u8] =
+    include_bytes!("../../../specs/053-af02-review-free-live-policy/review-policy.json");
+
+fn live_review_free_policy_matches(live: &Value) -> bool {
+    let expected = parse_json_no_duplicates(REVIEW_FREE_RULESET_POLICY)
+        .expect("pinned approval-free policy must be unambiguous JSON");
+    let observed = json!({
+        "id": live.get("id"), "name": live.get("name"),
+        "source": live.get("source"), "source_type": live.get("source_type"),
+        "target": live.get("target"), "enforcement": live.get("enforcement"),
+        "conditions": live.get("conditions"), "rules": live.get("rules"),
+        "bypass_actors": live.get("bypass_actors"),
+    });
+    observed == expected
+}
+
+#[test]
+fn founder_review_free_policy_is_current_exact_github_authority() {
+    let live = canonical_ruleset_view(
+        "https://api.github.com/repos/TheHalfMoon/commandF/rulesets/21652974",
+        authority::REVIEW_RULESET_ID,
+    );
+    assert!(
+        live_review_free_policy_matches(&live),
+        "live governance drifted from explicitly pinned approval-free policy"
+    );
+
+    // Exactly one accepted current policy. No self-approval or silent
+    // acceptance of reintroduced review gates or weakened PR protection.
+    let changes = [
+        (
+            "/rules/0/parameters/required_approving_review_count",
+            json!(1),
+        ),
+        ("/rules/0/parameters/require_code_owner_review", json!(true)),
+        (
+            "/rules/0/parameters/require_last_push_approval",
+            json!(true),
+        ),
+        (
+            "/rules/0/parameters/dismiss_stale_reviews_on_push",
+            json!(true),
+        ),
+        (
+            "/rules/0/parameters/required_review_thread_resolution",
+            json!(true),
+        ),
+        (
+            "/rules/0/parameters/require_extra_approval_for_unattributed_changes",
+            json!(true),
+        ),
+        (
+            "/rules/0/parameters/allowed_merge_methods",
+            json!(["squash"]),
+        ),
+        ("/conditions/ref_name/include", json!(["refs/heads/dev"])),
+        ("/bypass_actors", json!([])),
+    ];
+    for (pointer, alternate) in changes {
+        let mut changed = live.clone();
+        *changed
+            .pointer_mut(pointer)
+            .expect("current live policy field") = alternate;
+        assert!(
+            !live_review_free_policy_matches(&changed),
+            "mutated live policy was improperly accepted at {pointer}"
+        );
+    }
 }
 
 fn duplicate_probe(bytes: &[u8]) -> Vec<u8> {

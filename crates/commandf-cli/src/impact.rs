@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use commandf_pkg::{
     build_context_graph, build_impact_report, diff_package_archives, LockedPackage, Lockfile,
-    PackageCache, PackageName,
+    PackageCache, PackageName, StructuralDiffReport,
 };
 
 pub fn run(
@@ -34,9 +34,47 @@ pub fn run(
         &after_locked.sha256,
         &after_bytes,
     )?;
-    let before_graph = build_context_graph(&before_lockfile, &before_cache)?;
-    let after_graph = build_context_graph(&after_lockfile, &after_cache)?;
-    let report = build_impact_report(&diff, &before_graph, &after_graph)?;
+    build_from_locked_diff(
+        &diff,
+        &before_lockfile,
+        &before_cache,
+        &after_lockfile,
+        &after_cache,
+    )
+}
+
+/// Build graph impact using the caller's already-verified structural diff.
+/// Lockfile and cached archive graph identities remain independently checked.
+pub fn from_existing_diff(
+    diff: &StructuralDiffReport,
+    before_lock: PathBuf,
+    before_cache: PathBuf,
+    after_lock: PathBuf,
+    after_cache: PathBuf,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let before_lockfile = crate::lock_input::read_lockfile(&before_lock)?;
+    let after_lockfile = crate::lock_input::read_lockfile(&after_lock)?;
+    require_lock_v2(&before_lockfile, "before")?;
+    require_lock_v2(&after_lockfile, "after")?;
+    build_from_locked_diff(
+        diff,
+        &before_lockfile,
+        &PackageCache::new(before_cache),
+        &after_lockfile,
+        &PackageCache::new(after_cache),
+    )
+}
+
+fn build_from_locked_diff(
+    diff: &StructuralDiffReport,
+    before_lockfile: &Lockfile,
+    before_cache: &PackageCache,
+    after_lockfile: &Lockfile,
+    after_cache: &PackageCache,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let before_graph = build_context_graph(before_lockfile, before_cache)?;
+    let after_graph = build_context_graph(after_lockfile, after_cache)?;
+    let report = build_impact_report(diff, &before_graph, &after_graph)?;
     Ok(report.to_json_bytes()?)
 }
 

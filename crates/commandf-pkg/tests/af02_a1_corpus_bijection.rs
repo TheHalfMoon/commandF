@@ -21,10 +21,19 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn run(root: &Path, program: &str, args: &[&str]) -> Output {
-    Command::new(program)
-        .args(args)
-        .current_dir(root)
+fn run(root: &Path, program: &str, args: &[&str], target_dir: &Path) -> Output {
+    let mut command = Command::new(program);
+    command.args(args).current_dir(root);
+
+    // Nested cargo builds must not inherit a deep checkout's default Windows target path.
+    // The caller owns a short-lived, per-test directory and removes it after all probes.
+    #[cfg(windows)]
+    command.env("CARGO_TARGET_DIR", target_dir);
+
+    #[cfg(not(windows))]
+    let _ = target_dir;
+
+    command
         .output()
         .unwrap_or_else(|error| panic!("failed to run {program} {args:?}: {error}"))
 }
@@ -35,6 +44,7 @@ fn validate_corpus(
     schema: &Path,
     assertions: &Path,
     surface: &Path,
+    target_dir: &Path,
 ) -> Output {
     run(
         root,
@@ -53,6 +63,7 @@ fn validate_corpus(
             surface.to_str().expect("surface path must be UTF-8"),
             root.to_str().expect("repo root must be UTF-8"),
         ],
+        target_dir,
     )
 }
 
@@ -72,12 +83,18 @@ fn assert_success(output: &Output, context: &str) -> serde_json::Value {
     })
 }
 
-fn assert_failure(output: &Output, context: &str) {
+fn assert_failure(output: &Output, context: &str, expected_diagnostic: &str) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !output.status.success(),
-        "{context} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        "{context} unexpectedly succeeded\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    // Cargo compile/link errors are not evidence that tampered corpus bytes were rejected.
+    // Require the verifier's own diagnostic and the expected rejection reason.
+    assert!(
+        stderr.contains("commandf-af02-verifier: ") && stderr.contains(expected_diagnostic),
+        "{context} did not reach the intended verifier rejection\nstdout:\n{stdout}\nstderr:\n{stderr}"
     );
 }
 
@@ -88,9 +105,20 @@ fn af02_t037_checked_in_corpus_proves_bijection_bounds_and_no_phi() {
     let schema = root.join(CORPUS_SCHEMA);
     let assertions = root.join(ASSERTION_REGISTRY);
     let surface = root.join(SURFACE_POLICY);
+    let nested_target = tempfile::Builder::new()
+        .prefix("cf-a1-target-")
+        .tempdir()
+        .expect("create short-lived nested cargo target");
 
     let report = assert_success(
-        &validate_corpus(&root, &corpus, &schema, &assertions, &surface),
+        &validate_corpus(
+            &root,
+            &corpus,
+            &schema,
+            &assertions,
+            &surface,
+            nested_target.path(),
+        ),
         "checked-in corpus/assertion pair must validate",
     );
     assert_eq!(
@@ -206,8 +234,16 @@ fn af02_t037_tampered_corpus_or_registry_cannot_self_green() {
     let tampered_corpus_path = scratch.path().join("corpus-manifest.json");
     fs::write(&tampered_corpus_path, &tampered_corpus).expect("write tampered corpus");
     assert_failure(
-        &validate_corpus(&root, &tampered_corpus_path, &schema, &assertions, &surface),
+        &validate_corpus(
+            &root,
+            &tampered_corpus_path,
+            &schema,
+            &assertions,
+            &surface,
+            scratch.path(),
+        ),
         "tampered corpus bytes must fail closed",
+        "assertion registry corpus_manifest_sha256 does not match exact corpus bytes",
     );
 
     let mut tampered_registry = fs::read(&assertions).expect("read checked-in assertion registry");
@@ -218,7 +254,15 @@ fn af02_t037_tampered_corpus_or_registry_cannot_self_green() {
     let tampered_registry_path = scratch.path().join("assertion-registry.json");
     fs::write(&tampered_registry_path, &tampered_registry).expect("write tampered registry");
     assert_failure(
-        &validate_corpus(&root, &corpus, &schema, &tampered_registry_path, &surface),
+        &validate_corpus(
+            &root,
+            &corpus,
+            &schema,
+            &tampered_registry_path,
+            &surface,
+            scratch.path(),
+        ),
         "tampered assertion registry must fail closed",
+        "corpus JSON error:",
     );
 }
