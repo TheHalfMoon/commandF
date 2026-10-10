@@ -49,3 +49,42 @@ fabricated as PASS. Historical AF-01 and AF-02 v2 one-approval records
 describe the past and must not be treated as the live review policy.
 See specs/053-af02-review-free-live-policy/ for pinned live rule
 verification and immutable historical authority separation.
+
+<!-- graft:start -->
+## Graft — optional local repository context
+
+When installed and current, prefer Graft as a **local, read-only
+navigation aid** for source exploration; it never supplies merge,
+clinical, source authenticity, or policy approval evidence.
+Verified on the authorized Mac: `graft --version` = `0.21.1`
+(2026-10-10). A generated graph is **not** included in Git and
+must not be assumed fresh or present on every workstation.
+
+- Check `graft --version` and `graft check` for the active checkout
+  before treating indexed references as current. When the cache is
+  missing or stale, the user may run ordinary `graft build` locally;
+  this is the deterministic $0 code-graph mode, without `--deep`.
+  Do not claim a build occurred if it was not executed.
+- Helpful documented no-key commands: `graft map`,
+  `graft ask "question" --source`, `graft skeleton <file>`,
+  `graft callers <symbol>`, `graft grep "pattern"`, and
+  `graft blast`. Validate critical findings against live source.
+- `graft init` **modifies agent instruction/configuration files**;
+  never silently run it merely to create a cache. Review its planned
+  changes separately and preserve all existing AGENTS.md and
+  project-specific rules.
+- Keep regenerable `graft/` outputs out of commits; use a
+  local-only exclusion or disposable graph if needed. Do not put
+  credentials, research patient data, or repository secrets in
+  generated graph content.
+- Do not request paid external LLM calls or use `graft build --deep`
+  absent an explicitly authorized zero-cost local model.
+  No external enrichment, telemetry claims, provider results, or
+  code-review PASS may be invented.
+
+These Graft notes do not supersede exact-head signed/DCO
+discipline, genuine GitHub CI, deterministic validators, founder
+governance or the separately protected AF-02 authority rules.
+Alibaba OCR and Jev are separate optional reviews when actually
+available and executed; unavailable checks are NOT_RUN.
+<!-- graft:end -->
