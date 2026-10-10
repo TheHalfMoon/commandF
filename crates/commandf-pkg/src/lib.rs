@@ -43,6 +43,7 @@ mod impact;
 mod impact_error;
 mod impact_model;
 mod lock;
+mod lock_compare;
 mod model;
 mod oracle_error;
 mod oracle_model;
@@ -190,6 +191,7 @@ pub use impact_model::{
     ImpactSide, ImpactSubject, ImpactUnresolvedBoundary,
 };
 pub use lock::{LockedPackage, Lockfile, ResolvedDependency};
+pub use lock_compare::compare_cf11_lockfiles;
 pub use model::{PackageName, PackageRequest, VersionConstraint};
 pub use oracle_error::OracleError;
 pub use oracle_model::{
