@@ -280,3 +280,24 @@ The twenty-second CF-17 package is `specs/046-cf17-telemetry-partition/`. Its au
 The twenty-third CF-17 record is `specs/047-cf17-exit-frontier/`. It recomputes the CF-17 requirement table after telemetry. It is not execution authority. It does not authorize a registry catalog, a scale claim, CF-18, issue #100 recovery, or an issue #15 pin change.
 
 The twenty-fourth CF-17 record is `specs/048-cf17-catalog-source-gap/`. It records that a bounded catalog Spec Kit cannot be shaped yet, because the authorized hosts do not name a catalog document and `package-feeds.json` has no pinned commit or rights record. It is not execution authority. It does not authorize a catalog client, AF-03, AF-04, CF-18, issue #100 recovery, or an issue #15 pin change.
+
+## K. 2026-10-08 V3.2 master-plan redesign candidate
+
+The following artifacts were produced from a whole-repository audit against canonical `main` at `f82565cca917d119e1c774b2c470e2ac20e0d6dd`:
+
+- `docs/COMMAND_F_V3_2_REPOSITORY_AUDIT_2026-10-08.md`
+- `docs/COMMAND_F_V3_2_SOURCE_QUALIFICATION_MATRIX_2026-10-08.md`
+- `docs/COMMAND_F_MASTER_ARCHITECTURE_V3_2_CANDIDATE.md`
+- `docs/COMMAND_F_V3_2_GAP_RECONCILIATION_LEDGER.md`
+- `docs/COMMAND_F_V3_2_D1_QUALIFICATION_PLAN.md`
+- `docs/COMMAND_F_V3_2_PRODUCT_AND_UX_PLAN.md`
+- `research/COMMANDFBENCH_V3_2_PLAN.md`
+- `docs/COMMAND_F_V3_2_EXECUTION_ROADMAP.md`
+- `docs/COMMAND_F_V3_2_CANONICAL_MIGRATION_PROPOSAL.md`
+- `docs/COMMAND_F_V3_2_INDEPENDENT_CRITICAL_REVIEW.md`
+
+They are **planning candidates only**. They do not supersede V2, do not edit any existing Spec Kit or AF-02 authority path, close no issue, and authorize no implementation. They add G51, G52, G54 and G55 to G01–G50 and amend G29, G41, G43, G44, and G48 in place. They name founder decisions FD-1 to FD-10. Migration follows `COMMAND_F_V3_2_CANONICAL_MIGRATION_PROPOSAL.md` by amending `specs/018-v3-1-authority-migration/`, not by creating a parallel kit.
+
+### 2026-10-10 source/current-state reconciliation
+
+See `docs/COMMAND_F_V3_2_FRONTIER_DELTA_2026-10-10.md` for the signed candidate's current-state reconciliation. The original 2026-10-08 audit and SHAs are historical records; G53 now names the implemented approval-free governance policy, while the original V3.2 explanation/accessibility candidate is proposed as G55. G51 planning docs are merged, but FD-1/FD-2 and V3.2 execution authority are NOT granted.
