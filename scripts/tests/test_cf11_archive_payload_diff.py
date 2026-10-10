@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import gzip
+import hashlib
 import importlib.util
 import io
 import json
@@ -10,6 +11,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE = Path(__file__).resolve().parents[1] / "cf11_archive_payload_diff.py"
 spec = importlib.util.spec_from_file_location("archive_probe", MODULE)
@@ -59,6 +61,56 @@ class ArchiveDifferenceTests(unittest.TestCase):
         self.assertEqual(result["overall"], "ARCHIVE_BYTES_DIFFERENT_CONTENT_IDENTICAL")
         self.assertEqual(result["common_changed_files"], 0)
         self.assertEqual(probe.main(["--first", str(a), "--second", str(b)]), 2)
+
+    def test_archive_digest_and_parsed_members_use_one_file_snapshot(self):
+        """Path replacement must not mix digest A with extracted members B."""
+        first = archive([("package/package.json", MANIFEST),
+                         ("package/blob.bin", b"first")])
+        second = archive([("package/package.json", MANIFEST),
+                          ("package/blob.bin", b"second")])
+        path = self.write("switchable.tgz", first)
+        original_open = Path.open
+        opens = []
+
+        def switching_open(candidate, *args, **kwargs):
+            if candidate == path and args == ("rb",):
+                opens.append(True)
+                return io.BytesIO(first if len(opens) == 1 else second)
+            return original_open(candidate, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", switching_open):
+            record = probe.archive_index(path)
+
+        # The digested snapshot and parsed members MUST refer to one input.
+        # The old implementation opened the archive twice; replacing it
+        # between those reads yielded a false cross-snapshot diagnosis.
+        self.assertEqual(len(opens), 1)
+        self.assertEqual(record["files"]["package/blob.bin"],
+                         hashlib.sha256(b"first").hexdigest())
+        self.assertEqual(record["archive_sha256"],
+                         hashlib.sha256(first).hexdigest())
+
+    def test_archive_growing_after_stat_still_hits_stream_bound(self):
+        """A small path stat cannot authorize an oversized replacement body."""
+        compressed = archive([("package/package.json", MANIFEST),
+                              ("package/blob.bin", b"x" * 1200)])
+        archive_path = self.write("small-on-disk.tgz", b"x")
+        old_limit = probe.MAX_ARCHIVE_BYTES
+        probe.MAX_ARCHIVE_BYTES = len(compressed) - 1
+        original_open = Path.open
+
+        def changed_open(candidate, *args, **kwargs):
+            if candidate == archive_path and args == ("rb",):
+                return io.BytesIO(compressed)
+            return original_open(candidate, *args, **kwargs)
+
+        try:
+            with mock.patch.object(Path, "open", changed_open):
+                with self.assertRaisesRegex(probe.InvalidArchive,
+                                            "compressed archive size limit"):
+                    probe.archive_index(archive_path)
+        finally:
+            probe.MAX_ARCHIVE_BYTES = old_limit
 
     def test_identical_payload_but_executable_permission_differs(self):
         def with_mode(mode):

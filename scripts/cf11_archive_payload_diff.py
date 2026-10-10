@@ -43,6 +43,27 @@ class LimitedDecodedStream:
         return block
 
 
+
+class BoundedHashedRawStream:
+    """Hash and bound the exact compressed bytes used by the gzip/TAR parser."""
+
+    def __init__(self, source, limit=None):
+        self.source = source
+        self.limit = MAX_ARCHIVE_BYTES if limit is None else limit
+        self.total = 0
+        self.digest = hashlib.sha256()
+
+    def read(self, size=-1):
+        if size < 0:
+            size = self.limit - self.total + 1
+        block = self.source.read(min(size, self.limit - self.total + 1))
+        self.total += len(block)
+        if self.total > self.limit:
+            raise InvalidArchive("compressed archive size limit")
+        self.digest.update(block)
+        return block
+
+
 def canonical_member_name(raw: str) -> str:
     while raw.startswith("./"):
         raw = raw[2:]
@@ -85,17 +106,14 @@ def archive_index(path: Path) -> dict:
     size = path.stat().st_size
     if size == 0 or size > MAX_ARCHIVE_BYTES:
         raise InvalidArchive("compressed archive size limit")
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(BLOCK_BYTES), b""):
-            digest.update(block)
     files = {}
     file_metadata = {}
     directories = {}
     manifest = None
     member_count = 0
     with path.open("rb") as raw:
-        with gzip.GzipFile(fileobj=raw) as gz:
+        hashed_raw = BoundedHashedRawStream(raw)
+        with gzip.GzipFile(fileobj=hashed_raw) as gz:
             decoded = LimitedDecodedStream(gz)
             with tarfile.open(fileobj=decoded, mode="r|") as tar:
                 for member in tar:
@@ -146,7 +164,7 @@ def archive_index(path: Path) -> dict:
                 pass
     if manifest is None:
         raise InvalidArchive("missing package manifest")
-    return {"archive_sha256": digest.hexdigest(), "files": files,
+    return {"archive_sha256": hashed_raw.digest.hexdigest(), "files": files,
             "file_metadata": file_metadata, "directories": directories,
             "members": member_count, "manifest": manifest}
 

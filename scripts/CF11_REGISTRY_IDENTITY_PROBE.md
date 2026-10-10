@@ -112,6 +112,11 @@ misrepresenting the difference as compression-only.
 Each input is capped at 128 MiB compressed; decompression is capped
 at 896 MiB **including TAR headers and trailing decoded bytes**, and
 member scanning is capped at 50,000. The manifest is capped at 1 MiB.
+The raw compressed SHA-256 and the gzip/TAR member parser now read
+**the same single file handle in one bounded stream**, avoiding
+misattribution if a local evidence file is replaced between a separate
+hashing pass and parsing pass. This does not guarantee an atomic
+snapshot against concurrent in-place modification of that handle.
 Duplicate normalized filenames, unsafe paths, unsupported nonregular
 members, missing/ambiguous manifest identity, duplicate JSON keys,
 corrupted gzip/CRC, and boundary violations produce INVALID_ARCHIVE
