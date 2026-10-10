@@ -52,6 +52,17 @@ impl PackageSource for MemorySource {
 }
 
 fn package_tgz(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Vec<u8> {
+    package_tgz_with_extra_evidence(name, version, dependencies, None)
+}
+
+/// Builds two archives with the same parsed FHIR identity/dependencies but
+/// potentially different raw bytes, mirroring a cross-registry source conflict.
+fn package_tgz_with_extra_evidence(
+    name: &str,
+    version: &str,
+    dependencies: &[(&str, &str)],
+    extra_evidence: Option<&[u8]>,
+) -> Vec<u8> {
     let dependencies: BTreeMap<_, _> = dependencies
         .iter()
         .map(|(name, version)| ((*name).to_owned(), (*version).to_owned()))
@@ -72,9 +83,72 @@ fn package_tgz(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Vec<
         header.set_mode(0o644);
         header.set_cksum();
         builder.append(&header, Cursor::new(body)).unwrap();
+
+        if let Some(extra_evidence) = extra_evidence {
+            let mut header = Header::new_gnu();
+            header
+                .set_path("package/other/publication-request.json")
+                .unwrap();
+            header.set_size(extra_evidence.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append(&header, Cursor::new(extra_evidence))
+                .unwrap();
+        }
         builder.finish().unwrap();
     }
     encoder.finish().unwrap()
+}
+
+#[test]
+fn identical_name_version_and_dependencies_do_not_hide_cross_source_byte_conflict() {
+    // Synthetic-only regression inspired by #214. Neither package is a
+    // canonical registry snapshot or a substitution for independent evidence.
+    let request = PackageRequest::parse("acme.example@1.0.0").unwrap();
+    let mut primary = MemorySource::default();
+    primary.add("acme.example", "1.0.0", &[]);
+    let mut secondary = MemorySource::default();
+    secondary.packages.insert(
+        ("acme.example".to_owned(), "1.0.0".to_owned()),
+        package_tgz_with_extra_evidence(
+            "acme.example",
+            "1.0.0",
+            &[],
+            Some(br#"{"publication-request":"synthetic"}"#),
+        ),
+    );
+
+    let first_dir = tempdir().unwrap();
+    let second_dir = tempdir().unwrap();
+    let first_cache = PackageCache::new(first_dir.path());
+    let second_cache = PackageCache::new(second_dir.path());
+    let first = Resolver::new(&primary, &first_cache)
+        .resolve(vec![request.clone()])
+        .unwrap();
+    let second = Resolver::new(&secondary, &second_cache)
+        .resolve(vec![request])
+        .unwrap();
+
+    first.verify_cache(&first_cache).unwrap();
+    second.verify_cache(&second_cache).unwrap();
+    assert_eq!(first.schema, second.schema);
+    assert_eq!(first.roots, second.roots);
+    assert_eq!(first.packages.len(), 1);
+    assert_eq!(second.packages.len(), 1);
+    assert_eq!(first.packages[0].name, second.packages[0].name);
+    assert_eq!(first.packages[0].version, second.packages[0].version);
+    assert_eq!(
+        first.packages[0].dependencies,
+        second.packages[0].dependencies
+    );
+
+    // This must never silently collapse two independently verified, but
+    // differently sourced, byte identities into one canonical claim.
+    assert_ne!(first.packages[0].sha256, second.packages[0].sha256);
+    assert_ne!(first.to_bytes().unwrap(), second.to_bytes().unwrap());
+    assert!(first.verify_cache(&second_cache).is_err());
+    assert!(second.verify_cache(&first_cache).is_err());
 }
 
 #[test]
