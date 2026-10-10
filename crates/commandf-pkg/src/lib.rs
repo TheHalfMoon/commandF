@@ -207,7 +207,7 @@ pub use oracle_process::{
 pub use oracle_reconcile::{
     parse_hl7_oracle_report, reconcile_hl7_oracle, validate_hl7_oracle_report,
 };
-pub use registry::FhirRegistrySource;
+pub use registry::{FhirRegistrySource, RegistryOrigin};
 pub use resolver::Resolver;
 pub use review_preview::{compose_review_preview, compose_review_preview_sarif};
 pub use source::{LocalMirrorSource, PackageArchive, PackageSource};

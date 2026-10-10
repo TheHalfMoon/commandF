@@ -18,7 +18,7 @@ use commandf_pkg::{
     diff_package_archives, evaluate_compatibility_policy, inspect_package,
     source_mapped_check_report_to_github_annotations_bytes, CheckDirection, CheckFailOn,
     CheckPolicy, CheckReport, FhirRegistrySource, LocalMirrorSource, LockedPackage, Lockfile,
-    PackageCache, PackageName, PackageRequest, Resolver, SourceMappedCheckReport,
+    PackageCache, PackageName, PackageRequest, RegistryOrigin, Resolver, SourceMappedCheckReport,
     StructuralDiffReport, TerminologyDiffReport, TerminologyPackageState, VersionConstraint,
     MAX_SOURCE_MAPPED_REPORT_BYTES,
 };
@@ -242,6 +242,24 @@ impl From<CheckFailOnArg> for CheckFailOn {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+enum RegistryOriginArg {
+    #[default]
+    Automatic,
+    Primary,
+    Secondary,
+}
+
+impl From<RegistryOriginArg> for RegistryOrigin {
+    fn from(value: RegistryOriginArg) -> Self {
+        match value {
+            RegistryOriginArg::Automatic => Self::Automatic,
+            RegistryOriginArg::Primary => Self::PrimaryOnly,
+            RegistryOriginArg::Secondary => Self::SecondaryOnly,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum PkgCommand {
     Resolve {
@@ -249,6 +267,9 @@ enum PkgCommand {
         packages: Vec<String>,
         #[arg(long)]
         source_dir: Option<PathBuf>,
+        /// Restrict resolution to one official origin (no cross-origin fallback).
+        #[arg(long, value_enum, default_value = "automatic")]
+        registry_origin: RegistryOriginArg,
         #[arg(long, default_value = ".commandf/cache")]
         cache: PathBuf,
         #[arg(long, default_value = "commandf.lock")]
@@ -307,9 +328,17 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
             PkgCommand::Resolve {
                 packages,
                 source_dir,
+                registry_origin,
                 cache,
                 lock,
             } => {
+                if source_dir.is_some() && registry_origin != RegistryOriginArg::Automatic {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "--registry-origin primary/secondary cannot be combined with --source-dir",
+                    )
+                    .into());
+                }
                 let requests = packages
                     .iter()
                     .map(|package| PackageRequest::parse(package))
@@ -318,7 +347,11 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                 let lockfile = if let Some(source_dir) = source_dir {
                     Resolver::new(&LocalMirrorSource::new(source_dir), &cache).resolve(requests)?
                 } else {
-                    Resolver::new(&FhirRegistrySource::new(), &cache).resolve(requests)?
+                    Resolver::new(
+                        &FhirRegistrySource::with_origin(registry_origin.into()),
+                        &cache,
+                    )
+                    .resolve(requests)?
                 };
                 fs::write(&lock, lockfile.to_bytes()?)?;
                 println!(
