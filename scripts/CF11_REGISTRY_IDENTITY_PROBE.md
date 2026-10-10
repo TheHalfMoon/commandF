@@ -97,12 +97,17 @@ to distinguish gzip/TAR envelope differences from changed file payloads:
 The archive comparator never downloads, extracts, executes, or writes
 archive members. It reports raw SHA-256 for each input, a coarse class
 (ARCHIVE_BYTES_IDENTICAL, ARCHIVE_BYTES_DIFFERENT_CONTENT_IDENTICAL,
-ARCHIVE_CONTENT_DIVERGENCE), counts of added/removed/changed member
-payloads, whether manifest identity/dependencies match, and a fixed
+ARCHIVE_METADATA_DIVERGENCE, ARCHIVE_CONTENT_DIVERGENCE), counts
+of added/removed/changed member payloads, changed regular-file TAR
+metadata (including executable permissions) and directory metadata,
+whether manifest identity/dependencies match, and a fixed
 allowlist of changed manifest field **names**, not their values.
 A byte difference is **always exit 2** even when member contents appear
 equivalent; never use file-payload similarity as authority to
-substitute one compressed archive for another.
+substitute one compressed archive for another. Payload-identical
+archives with differing file permissions, ownership or other recorded
+TAR/PAX metadata report ARCHIVE_METADATA_DIVERGENCE instead of
+misrepresenting the difference as compression-only.
 
 Each input is capped at 128 MiB compressed; decompression is capped
 at 896 MiB **including TAR headers and trailing decoded bytes**, and

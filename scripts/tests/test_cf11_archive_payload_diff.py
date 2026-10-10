@@ -60,6 +60,65 @@ class ArchiveDifferenceTests(unittest.TestCase):
         self.assertEqual(result["common_changed_files"], 0)
         self.assertEqual(probe.main(["--first", str(a), "--second", str(b)]), 2)
 
+    def test_identical_payload_but_executable_permission_differs(self):
+        def with_mode(mode):
+            target = io.BytesIO()
+            with gzip.GzipFile(fileobj=target, mode="wb", mtime=0) as gz:
+                with tarfile.open(fileobj=gz, mode="w|") as tar:
+                    for name, data, permission in [
+                        ("package/package.json", MANIFEST, 0o644),
+                        ("package/install.sh", b"echo harmless", mode),
+                    ]:
+                        member = tarfile.TarInfo(name)
+                        member.mode = permission
+                        member.size = len(data)
+                        tar.addfile(member, io.BytesIO(data))
+            return target.getvalue()
+
+        a = self.write("regular.tgz", with_mode(0o644))
+        b = self.write("executable.tgz", with_mode(0o755))
+        result = probe.compare_archives(a, b)
+        self.assertEqual(result["overall"], "ARCHIVE_METADATA_DIVERGENCE")
+        self.assertEqual(result["common_changed_files"], 0)
+        self.assertEqual(result["common_changed_file_metadata"], 1)
+
+    def test_directory_permission_change_is_metadata_divergence(self):
+        def with_directory_mode(mode):
+            target = io.BytesIO()
+            with gzip.GzipFile(fileobj=target, mode="wb", mtime=0) as gz:
+                with tarfile.open(fileobj=gz, mode="w|") as tar:
+                    directory = tarfile.TarInfo("package/")
+                    directory.type = tarfile.DIRTYPE
+                    directory.mode = mode
+                    tar.addfile(directory)
+                    manifest = tarfile.TarInfo("package/package.json")
+                    manifest.size = len(MANIFEST)
+                    tar.addfile(manifest, io.BytesIO(MANIFEST))
+            return target.getvalue()
+
+        a = self.write("restricted.tgz", with_directory_mode(0o700))
+        b = self.write("open.tgz", with_directory_mode(0o755))
+        result = probe.compare_archives(a, b)
+        self.assertEqual(result["overall"], "ARCHIVE_METADATA_DIVERGENCE")
+        self.assertEqual(result["common_changed_files"], 0)
+        self.assertEqual(result["common_changed_file_metadata"], 0)
+        self.assertEqual(result["common_changed_directory_metadata"], 1)
+        self.assertEqual(result["directories"], {"first": 1, "second": 1})
+
+    def test_duplicate_directory_headers_are_not_silent(self):
+        target = io.BytesIO()
+        with gzip.GzipFile(fileobj=target, mode="wb", mtime=0) as gz:
+            with tarfile.open(fileobj=gz, mode="w|") as tar:
+                for dirname in ("package/", "./package/"):
+                    entry = tarfile.TarInfo(dirname)
+                    entry.type = tarfile.DIRTYPE
+                    tar.addfile(entry)
+                manifest = tarfile.TarInfo("package/package.json")
+                manifest.size = len(MANIFEST)
+                tar.addfile(manifest, io.BytesIO(MANIFEST))
+        with self.assertRaisesRegex(probe.InvalidArchive, "duplicate"):
+            probe.archive_index(self.write("duplicate-directory.tgz", target.getvalue()))
+
     def test_real_payload_difference_with_manifest_metadata(self):
         first = MANIFEST
         second = json.dumps({"name": "hl7.fhir.uv.ips", "version": "2.0.1",

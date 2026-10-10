@@ -62,6 +62,25 @@ def manifest_unique_keys(pairs):
     return result
 
 
+def member_metadata_digest(member: tarfile.TarInfo) -> str:
+    """Hash security-relevant TAR metadata without exposing its raw values."""
+    fields = {
+        "type": member.type.decode("ascii", "backslashreplace"),
+        "mode": member.mode,
+        "uid": member.uid,
+        "gid": member.gid,
+        "uname": member.uname,
+        "gname": member.gname,
+        "mtime": member.mtime,
+        "linkname": member.linkname,
+        "devmajor": member.devmajor,
+        "devminor": member.devminor,
+        "pax_headers": member.pax_headers,
+    }
+    canonical = json.dumps(fields, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def archive_index(path: Path) -> dict:
     size = path.stat().st_size
     if size == 0 or size > MAX_ARCHIVE_BYTES:
@@ -71,6 +90,8 @@ def archive_index(path: Path) -> dict:
         for block in iter(lambda: stream.read(BLOCK_BYTES), b""):
             digest.update(block)
     files = {}
+    file_metadata = {}
+    directories = {}
     manifest = None
     member_count = 0
     with path.open("rb") as raw:
@@ -83,12 +104,14 @@ def archive_index(path: Path) -> dict:
                         raise InvalidArchive("TAR member count limit")
                     name = canonical_member_name(member.name.rstrip("/") if member.isdir()
                                                  else member.name)
+                    if name in files or name in directories:
+                        raise InvalidArchive("duplicate normalized TAR member")
+                    metadata_digest = member_metadata_digest(member)
                     if member.isdir():
+                        directories[name] = metadata_digest
                         continue
                     if not member.isfile():
                         raise InvalidArchive("unsupported TAR member type")
-                    if name in files:
-                        raise InvalidArchive("duplicate normalized TAR member")
                     if name == "package/package.json" and member.size > MAX_MANIFEST_BYTES:
                         raise InvalidArchive("manifest byte limit")
                     stream = tar.extractfile(member)
@@ -106,6 +129,7 @@ def archive_index(path: Path) -> dict:
                             if len(manifest_bytes) > MAX_MANIFEST_BYTES:
                                 raise InvalidArchive("manifest byte limit")
                     files[name] = content_digest.hexdigest()
+                    file_metadata[name] = metadata_digest
                     if manifest_bytes is not None:
                         try:
                             manifest = json.loads(
@@ -123,6 +147,7 @@ def archive_index(path: Path) -> dict:
     if manifest is None:
         raise InvalidArchive("missing package manifest")
     return {"archive_sha256": digest.hexdigest(), "files": files,
+            "file_metadata": file_metadata, "directories": directories,
             "members": member_count, "manifest": manifest}
 
 
@@ -131,6 +156,12 @@ def compare_archives(first: Path, second: Path) -> dict:
     a_names, b_names = a["files"].keys(), b["files"].keys()
     common = a_names & b_names
     content_equal = a["files"] == b["files"]
+    metadata_equal = (
+        a["file_metadata"] == b["file_metadata"]
+        and a["directories"] == b["directories"]
+    )
+    dir_names_a, dir_names_b = a["directories"].keys(), b["directories"].keys()
+    common_dirs = dir_names_a & dir_names_b
     bytes_equal = a["archive_sha256"] == b["archive_sha256"]
     af, bf = a["manifest"], b["manifest"]
     absent = object()
@@ -140,7 +171,9 @@ def compare_archives(first: Path, second: Path) -> dict:
     return {
         "schema": "commandf.cf11-archive-payload-comparison/v1",
         "overall": ("ARCHIVE_BYTES_IDENTICAL" if bytes_equal
-                    else "ARCHIVE_BYTES_DIFFERENT_CONTENT_IDENTICAL" if content_equal
+                    else "ARCHIVE_BYTES_DIFFERENT_CONTENT_IDENTICAL"
+                    if content_equal and metadata_equal
+                    else "ARCHIVE_METADATA_DIVERGENCE" if content_equal
                     else "ARCHIVE_CONTENT_DIVERGENCE"),
         "archive_sha256_first": a["archive_sha256"],
         "archive_sha256_second": b["archive_sha256"],
@@ -152,6 +185,15 @@ def compare_archives(first: Path, second: Path) -> dict:
         "manifest_other_fields_changed": bool(differing - KNOWN_MANIFEST_FIELDS),
         "tar_members": {"first": a["members"], "second": b["members"]},
         "regular_files": {"first": len(a_names), "second": len(b_names)},
+        "directories": {"first": len(dir_names_a), "second": len(dir_names_b)},
+        "first_only_directories": len(dir_names_a - dir_names_b),
+        "second_only_directories": len(dir_names_b - dir_names_a),
+        "common_changed_directory_metadata": sum(
+            a["directories"][name] != b["directories"][name] for name in common_dirs
+        ),
+        "common_changed_file_metadata": sum(
+            a["file_metadata"][name] != b["file_metadata"][name] for name in common
+        ),
         "first_only_files": len(a_names - b_names),
         "second_only_files": len(b_names - a_names),
         "common_changed_files": sum(a["files"][name] != b["files"][name] for name in common),
