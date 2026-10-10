@@ -391,3 +391,120 @@ fn lockfile_is_byte_stable_for_equivalent_multi_version_dependency_graphs() {
 
     assert_eq!(first, second);
 }
+
+#[test]
+fn identical_package_identity_and_dependencies_do_not_alias_distinct_origin_archive_bytes() {
+    // Motivated by real dual-origin IPS 2.0.1 drift: the official registries
+    // declare the same name/version/dependencies but publish different TAR
+    // members and manifests. This test is fully synthetic and offline.
+    let make_archive = |published: bool| {
+        let mut manifest = serde_json::json!({
+            "name": "acme.root",
+            "version": "1.0.0",
+            "dependencies": {"acme.dep": "1.0.0"},
+            "url": if published {
+                "https://example.test/official/1.0.0"
+            } else {
+                "file:///private/build/draft"
+            },
+        });
+        if !published {
+            manifest["notForPublication"] = serde_json::json!(true);
+        }
+        let bytes = serde_json::to_vec(&manifest).expect("manifest JSON");
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        {
+            let mut tar = Builder::new(&mut encoder);
+            let mut header = Header::new_gnu();
+            header
+                .set_path("package/package.json")
+                .expect("tar manifest path");
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append(&header, Cursor::new(bytes))
+                .expect("tar manifest");
+            if !published {
+                let publication_request = b"offline private publisher request";
+                let mut extra = Header::new_gnu();
+                extra
+                    .set_path("package/other/publication-request.json")
+                    .expect("tar extra path");
+                extra.set_size(publication_request.len() as u64);
+                extra.set_mode(0o644);
+                extra.set_cksum();
+                tar.append(&extra, Cursor::new(publication_request))
+                    .expect("tar extra member");
+            }
+            tar.finish().expect("finalize tar");
+        }
+        encoder.finish().expect("gzip archive")
+    };
+    let mut first = MemorySource::default();
+    let mut second = MemorySource::default();
+    for source in [&mut first, &mut second] {
+        source.add("acme.dep", "1.0.0", &[]);
+    }
+    first.packages.insert(
+        ("acme.root".to_owned(), "1.0.0".to_owned()),
+        make_archive(false),
+    );
+    second.packages.insert(
+        ("acme.root".to_owned(), "1.0.0".to_owned()),
+        make_archive(true),
+    );
+    let first_dir = tempdir().expect("first isolated cache");
+    let second_dir = tempdir().expect("second isolated cache");
+    let first_cache = PackageCache::new(first_dir.path());
+    let second_cache = PackageCache::new(second_dir.path());
+    let request = PackageRequest::parse("acme.root@1.0.0").expect("root request");
+    let first_lock = Resolver::new(&first, &first_cache)
+        .resolve(vec![request.clone()])
+        .expect("resolve first archive");
+    let second_lock = Resolver::new(&second, &second_cache)
+        .resolve(vec![request])
+        .expect("resolve second archive");
+    first_lock
+        .verify_cache(&first_cache)
+        .expect("first exact bytes");
+    second_lock
+        .verify_cache(&second_cache)
+        .expect("second exact bytes");
+
+    let first_root = first_lock
+        .packages
+        .iter()
+        .find(|item| item.name == "acme.root")
+        .expect("first root");
+    let second_root = second_lock
+        .packages
+        .iter()
+        .find(|item| item.name == "acme.root")
+        .expect("second root");
+
+    assert_eq!(first_lock.roots, second_lock.roots);
+    assert_eq!(
+        first_lock.resolved_dependencies,
+        second_lock.resolved_dependencies
+    );
+    assert_eq!(first_root.name, second_root.name);
+    assert_eq!(first_root.version, second_root.version);
+    assert_eq!(first_root.dependencies, second_root.dependencies);
+    assert_eq!(first_root.source, second_root.source);
+    assert_ne!(
+        first_root.sha256, second_root.sha256,
+        "different TAR member bytes must not collapse to the same digest"
+    );
+    assert_ne!(
+        first_lock.to_bytes().unwrap(),
+        second_lock.to_bytes().unwrap()
+    );
+    assert!(
+        first_lock.verify_cache(&second_cache).is_err(),
+        "cross-origin archive contents cannot satisfy the other lock digest"
+    );
+    assert!(
+        second_lock.verify_cache(&first_cache).is_err(),
+        "the rejection must be symmetric"
+    );
+}
