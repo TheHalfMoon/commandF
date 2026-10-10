@@ -216,36 +216,46 @@ fn validated_secondary_redirect(
     Ok(expected)
 }
 
+/// Run each policy-allowed origin once, in priority order, and retain every
+/// failed origin if no acquisition succeeds. This must not claim that network
+/// acquisition errors are archive-byte or semantic-lock disagreements.
+fn try_origins<T>(
+    endpoints: &[&str],
+    mut acquire: impl FnMut(&str) -> Result<T, String>,
+) -> Result<T, Vec<String>> {
+    let mut failures = Vec::new();
+    for endpoint in endpoints {
+        match acquire(endpoint) {
+            Ok(value) => return Ok(value),
+            Err(error) => failures.push(format!("{endpoint}: {error}")),
+        }
+    }
+    Err(failures)
+}
+
 impl PackageSource for FhirRegistrySource {
     fn source_id(&self) -> String {
         "fhir-package-registry".to_owned()
     }
 
     fn available_versions(&self, name: &PackageName) -> Result<Vec<Version>, PackageError> {
-        let mut errors = Vec::new();
-        for endpoint in self.endpoints() {
-            match self.metadata_from(endpoint, name) {
-                Ok(metadata) => {
-                    let parsed = metadata
-                        .versions
-                        .keys()
-                        .map(|raw| Version::parse(raw))
-                        .collect::<Result<Vec<_>, _>>();
-                    match parsed {
-                        Ok(mut versions) => {
-                            versions.sort();
-                            return Ok(versions);
-                        }
-                        Err(error) => errors.push(format!("{endpoint}: {error}")),
-                    }
-                }
-                Err(error) => errors.push(format!("{endpoint}: {error}")),
-            }
-        }
-        Err(PackageError::Registry(format!(
-            "metadata lookup for {name} failed; {}",
-            errors.join("; ")
-        )))
+        try_origins(self.endpoints(), |endpoint| {
+            let metadata = self.metadata_from(endpoint, name)?;
+            let mut versions = metadata
+                .versions
+                .keys()
+                .map(|raw| Version::parse(raw))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            versions.sort();
+            Ok(versions)
+        })
+        .map_err(|errors| {
+            PackageError::Registry(format!(
+                "metadata lookup for {name} failed; {}",
+                errors.join("; ")
+            ))
+        })
     }
 
     fn archive(&self, name: &PackageName, version: &Version) -> Result<Vec<u8>, PackageError> {
@@ -257,17 +267,15 @@ impl PackageSource for FhirRegistrySource {
         name: &PackageName,
         version: &Version,
     ) -> Result<PackageArchive, PackageError> {
-        let mut errors = Vec::new();
-        for endpoint in self.endpoints() {
-            match self.archive_from(endpoint, name, version) {
-                Ok(archive) => return Ok(archive),
-                Err(error) => errors.push(format!("{endpoint}: {error}")),
-            }
-        }
-        Err(PackageError::Registry(format!(
-            "download for {name}@{version} failed; {}",
-            errors.join("; ")
-        )))
+        try_origins(self.endpoints(), |endpoint| {
+            self.archive_from(endpoint, name, version)
+        })
+        .map_err(|errors| {
+            PackageError::Registry(format!(
+                "download for {name}@{version} failed; {}",
+                errors.join("; ")
+            ))
+        })
     }
 }
 
@@ -305,6 +313,77 @@ mod tests {
         assert_eq!(
             FhirRegistrySource::with_origin(RegistryOrigin::SecondaryOnly).endpoints(),
             &[SECONDARY]
+        );
+    }
+
+    #[test]
+    fn automatic_mode_uses_secondary_only_after_primary_transport_failure() {
+        let source = FhirRegistrySource::new();
+        let mut contacted = Vec::new();
+        let obtained = try_origins(source.endpoints(), |endpoint| {
+            contacted.push(endpoint.to_owned());
+            if endpoint == PRIMARY {
+                Err("simulated DNS lookup unavailable".to_owned())
+            } else {
+                Ok("secondary-content-addressed-object")
+            }
+        })
+        .unwrap();
+        assert_eq!(obtained, "secondary-content-addressed-object");
+        assert_eq!(contacted, [PRIMARY, SECONDARY]);
+    }
+
+    #[test]
+    fn successful_primary_never_contacts_secondary() {
+        let source = FhirRegistrySource::new();
+        let mut contacted = Vec::new();
+        let obtained = try_origins(source.endpoints(), |endpoint| {
+            contacted.push(endpoint.to_owned());
+            Ok("primary-content-addressed-object")
+        })
+        .unwrap();
+        assert_eq!(obtained, "primary-content-addressed-object");
+        assert_eq!(contacted, [PRIMARY]);
+    }
+
+    #[test]
+    fn explicit_origin_stays_pinned_on_dns_failure_and_never_falls_back() {
+        for (origin, expected) in [
+            (RegistryOrigin::PrimaryOnly, PRIMARY),
+            (RegistryOrigin::SecondaryOnly, SECONDARY),
+        ] {
+            let source = FhirRegistrySource::with_origin(origin);
+            let mut contacted = Vec::new();
+            let errors = try_origins::<()>(source.endpoints(), |endpoint| {
+                contacted.push(endpoint.to_owned());
+                Err("simulated DNS lookup unavailable".to_owned())
+            })
+            .unwrap_err();
+            assert_eq!(contacted, [expected]);
+            assert_eq!(
+                errors,
+                [format!("{expected}: simulated DNS lookup unavailable")]
+            );
+        }
+    }
+
+    #[test]
+    fn all_unavailable_origins_report_both_failures_without_fake_lock_identity() {
+        let source = FhirRegistrySource::new();
+        let mut contacted = Vec::new();
+        let errors = try_origins::<String>(source.endpoints(), |endpoint| {
+            contacted.push(endpoint.to_owned());
+            Err("simulated DNS lookup unavailable".to_owned())
+        })
+        .unwrap_err();
+        assert_eq!(contacted, [PRIMARY, SECONDARY]);
+        assert_eq!(errors.len(), 2);
+        assert_eq!(
+            errors,
+            [
+                format!("{PRIMARY}: simulated DNS lookup unavailable"),
+                format!("{SECONDARY}: simulated DNS lookup unavailable")
+            ]
         );
     }
 
