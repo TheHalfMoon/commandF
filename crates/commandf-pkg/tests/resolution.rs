@@ -500,11 +500,41 @@ fn identical_package_identity_and_dependencies_do_not_alias_distinct_origin_arch
         second_lock.to_bytes().unwrap()
     );
     assert!(
-        first_lock.verify_cache(&second_cache).is_err(),
-        "cross-origin archive contents cannot satisfy the other lock digest"
+        matches!(
+            first_lock.verify_cache(&second_cache),
+            Err(PackageError::CacheMissing(_))
+        ),
+        "the other cache does not contain the expected digest object"
     );
     assert!(
-        second_lock.verify_cache(&first_cache).is_err(),
-        "the rejection must be symmetric"
+        matches!(
+            second_lock.verify_cache(&first_cache),
+            Err(PackageError::CacheMissing(_))
+        ),
+        "the missing-object rejection is symmetric"
+    );
+
+    // Distinguish a missing cross-origin object from actual content tampering:
+    // write the other origin bytes under the digest expected by this lock.
+    let first_object = first_cache
+        .root()
+        .join("sha256")
+        .join(format!("{}.tgz", first_root.sha256));
+    let second_object = second_cache
+        .root()
+        .join("sha256")
+        .join(format!("{}.tgz", second_root.sha256));
+    let other_bytes = std::fs::read(&second_object).expect("verified second cache bytes");
+    std::fs::write(&first_object, other_bytes).expect("tamper first cache digest object");
+    let error = first_lock
+        .verify_cache(&first_cache)
+        .expect_err("changed bytes under expected digest must fail closed");
+    assert!(
+        matches!(
+            error,
+            PackageError::CacheDigestMismatch { expected, found, .. }
+                if expected == first_root.sha256 && found == second_root.sha256
+        ),
+        "wrong bytes at a present digest path must report a digest mismatch"
     );
 }
