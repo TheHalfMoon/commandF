@@ -82,3 +82,43 @@ The previously failed real-package-graph job produced no retained lock
 artifacts; absent evidence must never be reconstructed or invented.
 Integrating pre-assertion capture into the protected workflow still requires
 its independent G51/FD-1 authority and review.
+
+
+## Compare saved gzip/TAR archive payloads without network
+
+The separate **read-only and non-authoritative** Python-stdlib companion
+accepts two locally saved exact archive blobs, allowing investigators
+to distinguish gzip/TAR envelope differences from changed file payloads:
+
+    python3 scripts/cf11_archive_payload_diff.py \
+      --first /private/evidence/primary.tgz \
+      --second /private/evidence/secondary.tgz > /private/evidence/payload-diff.json
+
+The archive comparator never downloads, extracts, executes, or writes
+archive members. It reports raw SHA-256 for each input, a coarse class
+(ARCHIVE_BYTES_IDENTICAL, ARCHIVE_BYTES_DIFFERENT_CONTENT_IDENTICAL,
+ARCHIVE_CONTENT_DIVERGENCE), counts of added/removed/changed member
+payloads, whether manifest identity/dependencies match, and a fixed
+allowlist of changed manifest field **names**, not their values.
+A byte difference is **always exit 2** even when member contents appear
+equivalent; never use file-payload similarity as authority to
+substitute one compressed archive for another.
+
+Each input is capped at 128 MiB compressed; decompression is capped
+at 896 MiB **including TAR headers and trailing decoded bytes**, and
+member scanning is capped at 50,000. The manifest is capped at 1 MiB.
+Duplicate normalized filenames, unsafe paths, unsupported nonregular
+members, missing/ambiguous manifest identity, duplicate JSON keys,
+corrupted gzip/CRC, and boundary violations produce INVALID_ARCHIVE
+(exit 4); OS exceptions are not echoed.
+
+The comparator does not emit member filenames, ZIP/TAR paths,
+manifest URLs or content, local evidence paths, tokens or dependency
+values. It is a diagnostic only, not an acceptance oracle or a
+replacement for exact raw archive digest checks and retained CI proof.
+This tool cannot retrospectively recover missing historical CI archives.
+
+Offline regression tests:
+
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+      -s scripts/tests -p 'test_cf11_archive_payload_diff.py' -v
