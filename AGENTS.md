@@ -28,4 +28,24 @@ commandF is interoperability infrastructure. Review and implementation must pres
 
 ## Change discipline
 
-Keep changes small and stackable. One independently reviewable, user-visible slice per PR. Do not merge a stack until CI and required reviewers are green for the exact candidate state.
+Keep changes small and stackable. Each PR must have a bounded, testable
+scope and independently reproducible evidence. Merge only after the
+**current exact-head required CI checks are successful**, no known
+substantive technical failures remain, and the signed/DCO candidate
+qualifies under active GitHub rules. Use only a normal merge commit
+with an expected-head guard; never use rebase, squash, direct push,
+force-push, or bypass.
+
+**Founder governance decision effective 2026-10-10:** CommandF requires
+**zero human/Code Owner review approvals**. GitHub review ruleset
+21652974 retains the pull-request and merge-commit requirement, but
+no longer requires human approvals, last-push approval, stale-review
+dismissal, or review-thread resolution. The separate assurance ruleset
+21652953 still enforces strict rust, assurance-proof, and scorecard
+checks, along with deletion and non-fast-forward protection.
+Alibaba Open Code Review and Jev are independent engineering inputs
+when truly executable; unavailable providers are NOT_RUN, never
+fabricated as PASS. Historical AF-01 and AF-02 v2 one-approval records
+describe the past and must not be treated as the live review policy.
+See specs/053-af02-review-free-live-policy/ for pinned live rule
+verification and immutable historical authority separation.

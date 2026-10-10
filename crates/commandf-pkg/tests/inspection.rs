@@ -53,6 +53,40 @@ fn rebuilds_inventory_from_resources_and_ignores_derived_index() {
 }
 
 #[test]
+fn rejects_duplicate_noncanonical_resource_filename_deterministically() {
+    let first = br#"{"resourceType":"Patient","id":"first"}"#;
+    let second = br#"{"resourceType":"Patient","id":"second"}"#;
+    let bytes = archive_with_entries(&[
+        ("package/Patient-example.json", first),
+        ("package/Patient-example.json", second),
+    ]);
+
+    for _ in 0..2 {
+        let error = inspect(&bytes).expect_err("duplicate filename must fail");
+        assert!(matches!(
+            error,
+            ArtifactError::DuplicateResourceFilename { file }
+                if file == "Patient-example.json"
+        ));
+    }
+}
+
+#[test]
+fn noncanonical_resources_with_distinct_filenames_remain_valid() {
+    let first = br#"{"resourceType":"Patient","id":"first"}"#;
+    let second = br#"{"resourceType":"Patient","id":"second"}"#;
+    let bytes = archive_with_entries(&[
+        ("package/Patient-first.json", first),
+        ("package/Patient-second.json", second),
+    ]);
+
+    let report = inspect(&bytes).expect("distinct filenames");
+    assert_eq!(report.resources.len(), 2);
+    assert_eq!(report.resources[0].filename, "Patient-first.json");
+    assert_eq!(report.resources[1].filename, "Patient-second.json");
+}
+
+#[test]
 fn rejects_duplicate_versioned_canonical_identity() {
     let first = br#"{"resourceType":"ValueSet","id":"a","url":"https://example.org/ValueSet/shared","version":"1.0.0"}"#;
     let second = br#"{"resourceType":"CodeSystem","id":"b","url":"https://example.org/ValueSet/shared","version":"1.0.0"}"#;
