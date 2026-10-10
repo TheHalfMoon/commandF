@@ -619,13 +619,22 @@ fn sanitize_runtime_diagnostic(error: &dyn std::fmt::Display) -> String {
 
 fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
     let file = fs::File::open(path)?;
-    let mut bytes = Vec::new();
-    file.take(max_bytes + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > max_bytes {
-        return Err(io::Error::new(
+    // Fail before allocating for an already-oversized regular file, while
+    // retaining a one-byte probe in case it grows after metadata().
+    let oversized = || {
+        io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("input exceeds {max_bytes} byte limit: {}", path.display()),
-        ));
+            format!("input exceeds {max_bytes} byte limit"),
+        )
+    };
+    if file.metadata()?.len() > max_bytes {
+        return Err(oversized());
+    }
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(oversized());
     }
     Ok(bytes)
 }
