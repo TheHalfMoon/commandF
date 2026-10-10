@@ -159,9 +159,21 @@ def archive_index(path: Path) -> dict:
                                 or any(not isinstance(manifest.get(key), str)
                                        or not manifest[key] for key in ("name", "version"))):
                             raise InvalidArchive("invalid package manifest identity")
-            # Force gzip trailer/CRC validation and count bytes beyond the TAR terminator.
-            while decoded.read(BLOCK_BYTES):
-                pass
+                # TAR's streaming reader buffers bytes beyond the EOF marker:
+                # inspect those bytes rather than silently discarding them.
+                while True:
+                    trailing = tar.fileobj.read(BLOCK_BYTES)
+                    if not trailing:
+                        break
+                    if any(trailing):
+                        raise InvalidArchive("nonzero trailing TAR data")
+            # Force gzip CRC/trailer validation, including concatenated members.
+            while True:
+                trailing = decoded.read(BLOCK_BYTES)
+                if not trailing:
+                    break
+                if any(trailing):
+                    raise InvalidArchive("nonzero trailing TAR data")
     if manifest is None:
         raise InvalidArchive("missing package manifest")
     return {"archive_sha256": hashed_raw.digest.hexdigest(), "files": files,

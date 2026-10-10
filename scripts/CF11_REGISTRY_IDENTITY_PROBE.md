@@ -119,8 +119,11 @@ hashing pass and parsing pass. This does not guarantee an atomic
 snapshot against concurrent in-place modification of that handle.
 Duplicate normalized filenames, unsafe paths, unsupported nonregular
 members, missing/ambiguous manifest identity, duplicate JSON keys,
-corrupted gzip/CRC, and boundary violations produce INVALID_ARCHIVE
-(exit 4); OS exceptions are not echoed.
+nonzero trailing data after the TAR end marker (including extra gzip
+members), corrupted gzip/CRC, and boundary violations produce
+INVALID_ARCHIVE (exit 4); OS exceptions are not echoed. Legitimate
+zero-filled TAR padding is allowed and still included in the
+compressed raw SHA-256.
 
 The comparator does not emit member filenames, ZIP/TAR paths,
 manifest URLs or content, local evidence paths, tokens or dependency

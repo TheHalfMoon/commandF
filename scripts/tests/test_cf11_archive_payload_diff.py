@@ -90,6 +90,27 @@ class ArchiveDifferenceTests(unittest.TestCase):
         self.assertEqual(record["archive_sha256"],
                          hashlib.sha256(first).hexdigest())
 
+    def test_appended_gzip_member_with_hidden_payload_is_rejected(self):
+        normal = archive([("package/package.json", MANIFEST)])
+        injected = normal + gzip.compress(b"unscanned-secondary-payload", mtime=0)
+        archive_path = self.write("appended-gzip.tgz", injected)
+        with self.assertRaisesRegex(probe.InvalidArchive, "trailing"):
+            probe.archive_index(archive_path)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exit_code = probe.main(["--first", str(archive_path),
+                                    "--second", str(archive_path)])
+        self.assertEqual(exit_code, 4)
+        self.assertEqual(json.loads(output.getvalue())["overall"], "INVALID_ARCHIVE")
+        self.assertNotIn("unscanned", output.getvalue())
+
+    def test_nonzero_trailing_tar_data_in_single_gzip_is_rejected(self):
+        first = archive([("package/package.json", MANIFEST)])
+        tar_data = gzip.decompress(first) + b"unscanned-data-after-tar-padding"
+        archive_path = self.write("tar-trailing.tgz", gzip.compress(tar_data))
+        with self.assertRaisesRegex(probe.InvalidArchive, "trailing"):
+            probe.archive_index(archive_path)
+
     def test_archive_growing_after_stat_still_hits_stream_bound(self):
         """A small path stat cannot authorize an oversized replacement body."""
         compressed = archive([("package/package.json", MANIFEST),
