@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -49,16 +49,25 @@ impl PackageCache {
         temporary.write_all(bytes)?;
         temporary.as_file().sync_all()?;
 
-        if let Err(error) = temporary.persist(&path) {
-            if path.exists() {
-                self.verify(&digest)?;
-                return Ok(digest);
-            }
-            return Err(PackageError::Io(error.into()));
-        }
-
-        self.verify(&digest)?;
+        self.publish_new_object(temporary, &path, &digest)?;
         Ok(digest)
+    }
+
+    /// Publish only if the digest path has not already been created.
+    ///
+    /// A racing writer may publish this exact digest first. Never replace it:
+    /// verify those already-published bytes and fail closed if they differ.
+    fn publish_new_object(
+        &self,
+        temporary: NamedTempFile,
+        path: &Path,
+        digest: &str,
+    ) -> Result<(), PackageError> {
+        match temporary.persist_noclobber(path) {
+            Ok(_) => self.verify(digest),
+            Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => self.verify(digest),
+            Err(error) => Err(PackageError::Io(error.error)),
+        }
     }
 
     pub fn verify(&self, digest: &str) -> Result<(), PackageError> {
@@ -192,6 +201,93 @@ mod tests {
             .read_verified_bounded(&digest, u64::MAX)
             .expect_err("oversized caller limit must not bypass global bound");
         assert!(matches!(error, PackageError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn publication_cannot_replace_corrupted_digest_object_from_racing_writer() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = PackageCache::new(directory.path());
+        let expected = b"approved archive bytes";
+        let digest = PackageCache::digest(expected);
+        let parent = cache.root().join("sha256");
+        fs::create_dir_all(&parent).unwrap();
+
+        let mut temporary = NamedTempFile::new_in(&parent).unwrap();
+        temporary.write_all(expected).unwrap();
+        temporary.as_file().sync_all().unwrap();
+
+        let object = cache.object_path(&digest);
+        // Deterministically simulate a competitor publishing under this path
+        // after the caller has prepared its temp file but before publication.
+        fs::write(&object, b"untrusted archive bytes").unwrap();
+
+        let error = cache
+            .publish_new_object(temporary, &object, &digest)
+            .expect_err("must not overwrite or silently repair corruption");
+        assert!(matches!(
+            error,
+            PackageError::CacheDigestMismatch { expected, .. } if expected == digest
+        ));
+        assert_eq!(
+            fs::read(&object).unwrap(),
+            b"untrusted archive bytes",
+            "the competing object must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn publication_accepts_verified_object_from_racing_writer() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = PackageCache::new(directory.path());
+        let expected = b"approved archive bytes";
+        let digest = PackageCache::digest(expected);
+        let parent = cache.root().join("sha256");
+        fs::create_dir_all(&parent).unwrap();
+
+        let mut temporary = NamedTempFile::new_in(&parent).unwrap();
+        temporary.write_all(expected).unwrap();
+        temporary.as_file().sync_all().unwrap();
+        let object = cache.object_path(&digest);
+        fs::write(&object, expected).unwrap();
+
+        cache
+            .publish_new_object(temporary, &object, &digest)
+            .expect("racing writer published the exact verified object");
+        assert_eq!(cache.read_verified(&digest).unwrap(), expected);
+    }
+
+    #[test]
+    fn concurrent_writes_to_the_same_digest_reuse_verified_complete_bytes() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let directory = tempfile::tempdir().expect("temp directory");
+        let cache = Arc::new(PackageCache::new(directory.path()));
+        let bytes = Arc::new(vec![0x3Au8; 64 * 1024]);
+        let count = 12;
+        let barrier = Arc::new(Barrier::new(count));
+        let handles: Vec<_> = (0..count)
+            .map(|_| {
+                let cache = Arc::clone(&cache);
+                let bytes = Arc::clone(&bytes);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    cache.put(&bytes).expect("concurrent publish succeeds")
+                })
+            })
+            .collect();
+
+        let expected = PackageCache::digest(&bytes);
+        for handle in handles {
+            assert_eq!(handle.join().expect("writer thread"), expected);
+        }
+        assert_eq!(cache.read_verified(&expected).unwrap(), *bytes);
+        let objects = fs::read_dir(cache.root().join("sha256"))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(objects.len(), 1, "no leaked temp or duplicate objects");
     }
 
     #[test]
