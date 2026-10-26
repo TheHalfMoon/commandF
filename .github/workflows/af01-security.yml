@@ -207,7 +207,7 @@ jobs:
           print(json.dumps(proof, indent=2, sort_keys=True))
           PY
       - name: Audit workflows and Actions with zizmor
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2 / zizmor 1.29.0
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.6.2 / zizmor 1.29.0
         with:
           inputs: .
           collect: all
